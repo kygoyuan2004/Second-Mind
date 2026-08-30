@@ -1,0 +1,40 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+secrets/*
+!secrets/*.example
+
+# Runtime state (never commit a real vault, index, chat, draft, or audit log)
+data/*
+!data/.gitkeep
+vault/*
+!vault/.gitkeep
+*.jsonl
+*.log
+*.pid
+
+# Dependencies and generated assets
+node_modules/
+public/vendor/
+coverage/
+.nyc_output/
+
+# Local sync/client state
+.obsidian/
+.trash/
+.sync/
+.livesync/
+
+# Build and editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Local deployment overrides
+compose.override.yaml
+docker-compose.override.yml
+deploy/local/

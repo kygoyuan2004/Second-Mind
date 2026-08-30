@@ -1,0 +1,57 @@
+# Optional local-build-only overlay for official Obsidian Headless Sync.
+# The upstream package is open beta and marked UNLICENSED. Do not publish the
+# resulting image; each operator must build it locally and accept upstream terms.
+
+services:
+  app:
+    environment:
+      SYNC_PROVIDER: obsidian-headless
+      SYNC_DISPLAY_NAME: Obsidian Headless Sync
+
+  obsidian-sync:
+    build:
+      context: .
+      dockerfile: docker/obsidian-sync.Dockerfile
+      args:
+        OBSIDIAN_HEADLESS_VERSION: "${OBSIDIAN_HEADLESS_VERSION:-0.0.14}"
+    image: vaultmind-obsidian-sync:local
+    pull_policy: never
+    restart: unless-stopped
+    init: true
+    user: "${VAULTMIND_UID:-1000}:${VAULTMIND_GID:-1000}"
+    working_dir: /vault
+    environment:
+      # Keep both conventional home-based and XDG-based CLI state inside the
+      # private config volume, regardless of which convention upstream uses.
+      HOME: /config
+      XDG_CONFIG_HOME: /config
+    command:
+      - sync
+      - --path
+      - /vault
+      - --continuous
+    volumes:
+      - type: bind
+        source: "${VAULT_HOST_PATH:-./vault}"
+        target: /vault
+        bind:
+          create_host_path: false
+      # Authentication and the server-side Vault link/E2EE state never enter
+      # the repository or the application's filesystem view.
+      - obsidian-sync-config:/config
+      - obsidian-sync-vault-state:/vault/.obsidian
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+    pids_limit: 128
+    stop_grace_period: 30s
+
+volumes:
+  obsidian-sync-config:
+    name: vaultmind-obsidian-sync-config
+  obsidian-sync-vault-state:
+    name: vaultmind-obsidian-sync-vault-state

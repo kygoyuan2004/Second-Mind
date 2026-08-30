@@ -1,0 +1,24 @@
+# Replace @DOMAIN@ and @PORT@. Keep VaultMind bound to 127.0.0.1 and set
+# TRUST_PROXY=true plus SECURE_COOKIE=true in its environment.
+@DOMAIN@ {
+    encode zstd gzip
+
+    request_body {
+        max_size 25MB
+    }
+
+    reverse_proxy 127.0.0.1:@PORT@ {
+        header_up Host {host}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Proto https
+        header_up X-Forwarded-For {remote_host}
+        flush_interval -1
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+        -Server
+    }
+}

@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta id="app-description" name="description" content="VaultMind：面向 Obsidian 知识库的 AI 检索、日记、计划与学习记录工作台。">
+    <meta name="theme-color" content="#F5F5F7">
+    <title>VaultMind</title>
+    <link rel="stylesheet" href="./vendor/katex/katex.min.css?v=0.18.4">
+    <link rel="stylesheet" href="./knowledge.css?v=1.0.0">
+  </head>
+  <body class="knowledge-body">
+    <a class="skip-link" href="#knowledge-main">跳到知识库</a>
+
+    <div class="knowledge-aurora" data-aurora-layer aria-hidden="true">
+      <span data-aurora-orb="blue"></span>
+      <span data-aurora-orb="purple"></span>
+      <span data-aurora-orb="cyan"></span>
+    </div>
+
+    <header class="site-header subpage-header knowledge-header">
+      <a class="knowledge-brand" href="/" aria-label="VaultMind 首页">
+        <span class="knowledge-brand-mark" aria-hidden="true">VM</span>
+        <span class="knowledge-brand-copy">
+          <strong id="knowledge-header-app-name">VaultMind</strong>
+          <small id="knowledge-header-vault-label">AI 知识工作台</small>
+        </span>
+      </a>
+      <div class="knowledge-header-actions">
+        <button id="knowledge-logout" class="knowledge-logout kb-action--secondary" type="button" hidden>退出登录</button>
+        <button id="knowledge-sidebar-toggle" class="knowledge-sidebar-toggle kb-action--secondary" type="button"
+          aria-expanded="false" aria-controls="knowledge-sidebar-details">
+          <span>设置与历史</span><span aria-hidden="true">⌄</span>
+        </button>
+      </div>
+    </header>
+
+    <main id="knowledge-main" class="knowledge-page">
+      <section class="knowledge-heading">
+        <div>
+          <p class="eyebrow"><span></span><span>检索 · 阅读 · 整理</span></p>
+          <h1 id="knowledge-app-name">VaultMind</h1>
+        </div>
+        <p>检索和阅读你的知识库；日记、计划与随心记仅在确认预览后安全写入。</p>
+      </section>
+
+      <section id="knowledge-gate" class="knowledge-gate" aria-live="polite">
+        <div class="knowledge-gate-mark" aria-hidden="true">VM</div>
+        <div class="knowledge-gate-copy">
+          <p class="mini-label">安全访问</p>
+          <h2 id="knowledge-gate-title">正在验证登录状态</h2>
+          <p id="knowledge-gate-message">请稍候，系统正在连接知识库。</p>
+          <form id="knowledge-login-form" class="knowledge-login" hidden>
+            <label>账号<input id="knowledge-username" autocomplete="username" required></label>
+            <label>密码<input id="knowledge-password" type="password" autocomplete="current-password" required></label>
+            <button class="kb-action--primary" type="submit">登录 <span>→</span></button>
+          </form>
+          <div class="knowledge-gate-actions">
+            <button id="knowledge-retry" class="kb-action--secondary" type="button" hidden>重新连接</button>
+            <a id="knowledge-gate-link" href="/" hidden>返回首页</a>
+          </div>
+          <p id="knowledge-login-error" class="form-error" role="alert"></p>
+        </div>
+      </section>
+
+      <section id="knowledge-app" class="knowledge-app" hidden>
+        <aside class="knowledge-sidebar">
+          <div class="knowledge-mode-panel" data-bento-card data-glass-surface>
+            <div class="knowledge-sidebar-top">
+              <div>
+                <p class="mini-label">知识库模式</p>
+                <h2>记录与检索</h2>
+              </div>
+            </div>
+
+            <div id="knowledge-modes" class="knowledge-modes" role="tablist" aria-label="知识库模式">
+              <button type="button" role="tab" data-kind="qa" aria-selected="true">
+                <span class="knowledge-mode-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M6.5 5h11A2.5 2.5 0 0 1 20 7.5v7a2.5 2.5 0 0 1-2.5 2.5H10l-5 3v-3.5A2.5 2.5 0 0 1 4 14.5v-7A2.5 2.5 0 0 1 6.5 5z"></path><path d="M8 9h8M8 13h5"></path></svg>
+                </span><strong>知识问答</strong><small>全库检索与核验</small>
+              </button>
+              <button type="button" role="tab" data-kind="diary" aria-selected="false">
+                <span class="knowledge-mode-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M5 4.5h11.5A2.5 2.5 0 0 1 19 7v12H7.5A2.5 2.5 0 0 1 5 16.5z"></path><path d="M5 16.5A2.5 2.5 0 0 1 7.5 14H19M9 8h6M9 11h4"></path></svg>
+                </span><strong>日记</strong><small>按模板智能合并</small>
+              </button>
+              <button type="button" role="tab" data-kind="plan" aria-selected="false">
+                <span class="knowledge-mode-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="m4 6 1.5 1.5L8 4.5M11 6h9M4 12l1.5 1.5L8 10.5M11 12h9M4 18l1.5 1.5L8 16.5M11 18h9"></path></svg>
+                </span><strong>计划</strong><small>任务清单与备注</small>
+              </button>
+              <button type="button" role="tab" data-kind="scratch" aria-selected="false">
+                <span class="knowledge-mode-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M5 19h4l9.5-9.5a2.12 2.12 0 0 0-3-3L6 16z"></path><path d="m13.75 8.25 3 3M5 19l1-3"></path></svg>
+                </span><strong>随心记</strong><small>学习内容与附件</small>
+              </button>
+            </div>
+          </div>
+
+          <div id="knowledge-sidebar-details" class="knowledge-sidebar-details">
+            <section class="knowledge-generation-settings" data-bento-card data-glass-surface aria-labelledby="knowledge-generation-settings-title">
+              <div class="knowledge-generation-settings-header">
+                <strong id="knowledge-generation-settings-title" class="knowledge-generation-settings-title">生成设置</strong>
+                <small>模型、思考强度与任务策略</small>
+              </div>
+              <div class="knowledge-settings">
+                <label>模型<select id="knowledge-model"></select></label>
+                <label id="knowledge-effort-field" class="knowledge-effort-field" data-effort="default">
+                  <span>思考强度</span>
+                  <span class="knowledge-effort-control"><select id="knowledge-effort"></select></span>
+                </label>
+                <p id="knowledge-model-description" class="knowledge-model-description" aria-live="polite"></p>
+                <div id="knowledge-task-mode-field" class="knowledge-task-mode-field">
+                  <span class="knowledge-setting-label">任务模式</span>
+                  <div id="knowledge-task-mode-segmented" class="knowledge-task-mode-segmented" role="radiogroup" aria-label="任务模式" data-task-mode="normal" style="--kb-task-mode-count: 1; --kb-task-mode-index: 0;">
+                    <span class="knowledge-task-mode-indicator" aria-hidden="true"></span>
+                    <div id="knowledge-task-mode-options" class="knowledge-task-mode-options"></div>
+                  </div>
+                  <select id="knowledge-task-mode" class="knowledge-task-mode-source" tabindex="-1" aria-hidden="true"></select>
+                </div>
+                <p id="knowledge-task-mode-description" class="knowledge-task-mode-description" aria-live="polite"></p>
+                <label id="knowledge-date-field" hidden>记录日期<input id="knowledge-date" type="date"></label>
+              </div>
+            </section>
+
+            <section id="knowledge-search-panel" class="knowledge-search-panel" data-bento-card data-glass-surface>
+              <div class="knowledge-section-heading">
+                <strong>快速检索</strong><small>直接返回候选</small>
+                <button id="knowledge-clear-search" class="knowledge-clear-search" type="button" disabled>清除结果</button>
+              </div>
+              <form id="knowledge-search-form">
+                <input id="knowledge-search-input" maxlength="200" placeholder="输入标题、概念或关键词">
+                <button class="kb-action--icon" type="submit" aria-label="搜索">⌕</button>
+              </form>
+              <div id="knowledge-search-results" class="knowledge-search-results"><p>输入关键词可直接检索当前知识库。</p></div>
+            </section>
+
+            <button id="knowledge-new-conversation" class="knowledge-new kb-action--primary" type="button">＋ 新建对话</button>
+
+            <section class="knowledge-history" data-bento-card data-glass-surface aria-labelledby="knowledge-history-title">
+              <div class="knowledge-section-heading">
+                <strong id="knowledge-history-title">知识库历史</strong><small>仅存服务端</small>
+                <button id="knowledge-clear-history" class="knowledge-clear-history" type="button" disabled>清空当前</button>
+              </div>
+              <div id="knowledge-conversation-list" class="knowledge-conversation-list"><p>还没有历史记录。</p></div>
+            </section>
+          </div>
+        </aside>
+
+        <section class="knowledge-console" data-bento-card data-glass-surface>
+          <header class="knowledge-console-header">
+            <div>
+              <span id="knowledge-state-dot" class="knowledge-state-dot"></span>
+              <div><strong id="knowledge-state-title">准备就绪</strong><p id="knowledge-state-message">输入问题后开始检索与核验。</p></div>
+            </div>
+            <button id="knowledge-stop" type="button" aria-label="停止当前任务" title="停止当前任务" hidden>停止任务</button>
+          </header>
+
+          <div id="knowledge-transcript" class="knowledge-transcript is-welcome" aria-live="polite">
+            <div class="knowledge-welcome">
+              <h2>知识问答</h2>
+              <p>输入问题后，系统会先筛选候选，再由 AI 助手搜索全库核验来源。</p>
+              <p class="knowledge-process-note">生成时可展开“执行过程”，查看检索和阅读工具的实时状态。</p>
+              <div class="knowledge-suggestions">
+                <button class="knowledge-suggestion-card" type="button" data-prompt="梳理知识库中关于 RAG 的关键概念"><span class="knowledge-suggestion-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M5 3.5h9l4 4V13M14 3.5V8h4M5 3.5v17h8"></path><circle cx="17" cy="17" r="3"></circle><path d="m19.2 19.2 2 2"></path></svg></span><span>梳理知识库中关于 RAG 的关键概念</span></button>
+                <button class="knowledge-suggestion-card" type="button" data-prompt="总结最近一个月的学习重点"><span class="knowledge-suggestion-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M5 5h14M5 10h9M5 15h11M5 20h7"></path><path d="m17 13 2 2 3-4"></path></svg></span><span>总结最近一个月的学习重点</span></button>
+                <button class="knowledge-suggestion-card" type="button" data-prompt="查找知识库里关于推理优化的笔记"><span class="knowledge-suggestion-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M5 3.5h9l4 4V13"></path><path d="M14 3.5V8h4M5 3.5v17h8"></path><circle cx="17" cy="17" r="3"></circle><path d="m19.2 19.2 2 2"></path></svg></span><span>查找知识库里关于推理优化的笔记</span></button>
+              </div>
+            </div>
+          </div>
+
+          <form id="knowledge-form" class="knowledge-composer">
+            <div class="knowledge-composer-context" aria-label="当前输入设置">
+              <button id="knowledge-kind-compact" class="knowledge-compact-setting" type="button" data-compact-setting="kind" aria-haspopup="listbox" aria-expanded="false"><span>模式</span><strong id="knowledge-kind-compact-value">知识问答</strong><i aria-hidden="true">⌄</i></button>
+              <button id="knowledge-task-mode-compact" class="knowledge-compact-setting" type="button" data-compact-setting="taskMode" data-task-mode="normal" aria-haspopup="listbox" aria-expanded="false"><span>任务</span><strong id="knowledge-task-mode-compact-value">普通</strong><i aria-hidden="true">⌄</i></button>
+              <button id="knowledge-model-compact" class="knowledge-compact-setting" type="button" data-compact-setting="model" aria-haspopup="listbox" aria-expanded="false"><span>模型</span><strong id="knowledge-model-compact-value">账号默认</strong><i aria-hidden="true">⌄</i></button>
+              <button id="knowledge-effort-compact" class="knowledge-compact-setting" type="button" data-compact-setting="effort" data-effort="default" aria-haspopup="listbox" aria-expanded="false"><span>强度</span><strong id="knowledge-effort-compact-value">默认</strong><i aria-hidden="true">⌄</i></button>
+            </div>
+            <div id="knowledge-compact-menu" class="knowledge-compact-menu" role="listbox" hidden></div>
+            <label class="sr-only" for="knowledge-prompt">输入知识库问题或记录</label>
+            <textarea id="knowledge-prompt" rows="2" maxlength="12000" placeholder="向知识库提问……" required></textarea>
+            <div id="knowledge-attachments" class="knowledge-attachments" hidden></div>
+            <input id="knowledge-attachment-input" type="file" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/*,.json,.js,.mjs,.ts,.tsx,.jsx,.py,.c,.cc,.cpp,.cu,.h,.hpp,.java,.rs,.sh,.sql,.yaml,.yml,.toml,.xml,.csv,.log,.md" multiple hidden>
+            <div class="knowledge-composer-footer">
+              <div class="knowledge-composer-tools">
+                <button id="knowledge-mic" class="kb-action--secondary" type="button" hidden><span aria-hidden="true">●</span> 开始口述</button>
+                <button id="knowledge-attach" class="kb-action--secondary" type="button"><span aria-hidden="true">＋</span> 添加文件</button>
+                <small id="knowledge-attachment-help"></small>
+                <small id="knowledge-voice-privacy" class="knowledge-voice-privacy" hidden>口述可能由浏览器、平台或已配置的语音服务处理；请先确认隐私策略。</small>
+              </div>
+              <div class="knowledge-submit-actions">
+                <button id="knowledge-cancel" class="kb-action--secondary" type="button" aria-label="取消当前思考" title="取消当前思考" hidden>取消思考</button>
+                <button id="knowledge-send" class="kb-action--primary" type="submit">开始 <span>→</span></button>
+              </div>
+            </div>
+            <p id="knowledge-error" class="form-error" role="alert"></p>
+          </form>
+        </section>
+      </section>
+    </main>
+
+    <dialog id="knowledge-draft-dialog" class="knowledge-dialog knowledge-draft-dialog">
+      <form method="dialog" class="knowledge-dialog-card" id="knowledge-draft-form">
+        <header><div><p class="mini-label">保存前预览</p><h2>确认保存草稿</h2></div><button id="knowledge-draft-close" type="button" aria-label="关闭">×</button></header>
+        <label id="knowledge-draft-title-field" hidden>笔记标题<input id="knowledge-draft-title" maxlength="80"></label>
+        <p class="knowledge-target">保存位置：<code id="knowledge-draft-target"></code></p>
+        <div class="knowledge-preview-tabs"><button type="button" data-preview="edit" aria-pressed="true">编辑 Markdown</button><button type="button" data-preview="render" aria-pressed="false">渲染预览</button></div>
+        <textarea id="knowledge-draft-content" rows="18" maxlength="524288"></textarea>
+        <div id="knowledge-draft-rendered" class="knowledge-rendered" hidden></div>
+        <p id="knowledge-draft-error" class="form-error" role="alert"></p>
+        <footer><button id="knowledge-discard-draft" type="button" class="quiet">放弃草稿</button><button id="knowledge-save-draft" type="submit">确认保存 <span>→</span></button></footer>
+      </form>
+    </dialog>
+
+    <dialog id="knowledge-source-dialog" class="knowledge-dialog knowledge-source-dialog">
+      <div class="knowledge-dialog-card">
+        <header><div><p class="mini-label">知识来源</p><h2 id="knowledge-source-title">来源预览</h2></div><button id="knowledge-source-close" type="button" aria-label="关闭">×</button></header>
+        <p id="knowledge-source-path" class="knowledge-source-path"></p>
+        <div id="knowledge-source-content" class="knowledge-source-content"></div>
+      </div>
+    </dialog>
+
+    <div id="knowledge-toast" class="knowledge-toast" role="status" aria-live="polite"></div>
+
+    <footer class="knowledge-footer">
+      <p><strong id="knowledge-footer-app-name">VaultMind</strong> · AI 知识工作台</p>
+      <p id="knowledge-footer-vault-label">知识库</p>
+      <p class="server-mark"><span aria-hidden="true"></span><span id="knowledge-sync-status">正在读取同步状态</span></p>
+    </footer>
+
+    <script src="./vendor/marked/marked.umd.js?v=18.0.11"></script>
+    <script src="./vendor/dompurify/purify.min.js?v=3.4.14"></script>
+    <script src="./vendor/katex/katex.min.js?v=0.18.4"></script>
+    <script src="./vendor/katex/auto-render.min.js?v=0.18.4"></script>
+    <script src="./agent-render.js?v=1.0.0"></script>
+    <script type="module" src="./knowledge.js?v=1.0.0"></script>
+  </body>
+</html>

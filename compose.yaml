@@ -1,0 +1,100 @@
+name: vaultmind
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vaultmind:local
+    restart: unless-stopped
+    init: true
+    user: "${VAULTMIND_UID:-1000}:${VAULTMIND_GID:-1000}"
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 8787
+      APP_NAME: "${APP_NAME:-VaultMind}"
+      VAULT_LABEL: "${VAULT_LABEL:-My Obsidian Vault}"
+      TIMEZONE: "${TIMEZONE:-UTC}"
+      TRUST_PROXY: "${TRUST_PROXY:-false}"
+      SECURE_COOKIE: "${SECURE_COOKIE:-false}"
+      VAULT_PATH: /vault
+      DATA_DIR: /app/data
+      PUBLIC_DIR: /app/public
+      INDEX_DIR: /app/data/index
+      DRAFT_DIR: /app/data/drafts
+      RECOVERY_DIR: /app/data/recovery
+      CONVERSATION_FILE: /app/data/conversations.json
+      AUDIT_FILE: /app/data/audit.jsonl
+      VAULT_AUTO_CREATE_PATHS: "${VAULT_AUTO_CREATE_PATHS:-true}"
+      DIARY_DIR: "${DIARY_DIR:-VaultMind/Diary}"
+      PLAN_DIR: "${PLAN_DIR:-VaultMind/Plans}"
+      SCRATCH_DIR: "${SCRATCH_DIR:-VaultMind/Inbox}"
+      DIARY_TEMPLATE: "${DIARY_TEMPLATE:-}"
+      PLAN_TEMPLATE: "${PLAN_TEMPLATE:-}"
+      VAULT_EXCLUDED_PATHS: "${VAULT_EXCLUDED_PATHS:-.obsidian,.trash,.git,.sync,.livesync,node_modules}"
+      ADMIN_USERNAME: "${ADMIN_USERNAME:-admin}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-}"
+      SESSION_SECRET: "${SESSION_SECRET:-}"
+      SESSION_TTL_SECONDS: "${SESSION_TTL_SECONDS:-43200}"
+      LLM_PROVIDER: "${LLM_PROVIDER:-openai-compatible}"
+      LLM_API_BASE: "${LLM_API_BASE:-http://host.docker.internal:11434/v1}"
+      LLM_API_KEY: "${LLM_API_KEY:-}"
+      LLM_MODEL: "${LLM_MODEL:-qwen3:8b}"
+      LLM_TIMEOUT_MS: "${LLM_TIMEOUT_MS:-120000}"
+      LLM_MAX_OUTPUT_TOKENS: "${LLM_MAX_OUTPUT_TOKENS:-3000}"
+      LLM_TEMPERATURE: "${LLM_TEMPERATURE:-0.2}"
+      EMBEDDING_PROVIDER: "${EMBEDDING_PROVIDER:-disabled}"
+      EMBEDDING_API_BASE: "${EMBEDDING_API_BASE:-http://host.docker.internal:11434/v1}"
+      EMBEDDING_ENDPOINT: "${EMBEDDING_ENDPOINT:-}"
+      EMBEDDING_API_KEY: "${EMBEDDING_API_KEY:-}"
+      EMBEDDING_MODEL: "${EMBEDDING_MODEL:-nomic-embed-text}"
+      EMBEDDING_DIMENSIONS: "${EMBEDDING_DIMENSIONS:-768}"
+      EMBEDDING_BATCH_SIZE: "${EMBEDDING_BATCH_SIZE:-16}"
+      EMBEDDING_TIMEOUT_MS: "${EMBEDDING_TIMEOUT_MS:-30000}"
+      ALLOW_INSECURE_PROVIDER_HTTP: "${ALLOW_INSECURE_PROVIDER_HTTP:-false}"
+      RAG_TOP_K: "${RAG_TOP_K:-8}"
+      RAG_MAX_CONTEXT_CHARS: "${RAG_MAX_CONTEXT_CHARS:-30000}"
+      INDEX_WATCH: "${INDEX_WATCH:-true}"
+      INDEX_RECONCILE_SECONDS: "${INDEX_RECONCILE_SECONDS:-300}"
+      MAX_JSON_BODY_BYTES: "${MAX_JSON_BODY_BYTES:-25165824}"
+      MAX_ATTACHMENT_COUNT: "${MAX_ATTACHMENT_COUNT:-8}"
+      MAX_ATTACHMENT_BYTES: "${MAX_ATTACHMENT_BYTES:-5242880}"
+      MAX_ATTACHMENT_TOTAL_BYTES: "${MAX_ATTACHMENT_TOTAL_BYTES:-15728640}"
+      RECOVERY_RETENTION_DAYS: "${RECOVERY_RETENTION_DAYS:-30}"
+      SYNC_PROVIDER: "${SYNC_PROVIDER:-filesystem}"
+      SYNC_DISPLAY_NAME: "${SYNC_DISPLAY_NAME:-Filesystem}"
+    ports:
+      - "${VAULTMIND_BIND_IP:-127.0.0.1}:${VAULTMIND_PORT:-8787}:8787"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - vaultmind-data:/app/data
+      - type: bind
+        source: "${VAULT_HOST_PATH:-./vault}"
+        target: /vault
+        bind:
+          create_host_path: false
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+    pids_limit: 256
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8787/health/ready').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));"
+      interval: 30s
+      timeout: 5s
+      start_period: 2m
+      retries: 10
+
+volumes:
+  vaultmind-data:
+    name: vaultmind-data

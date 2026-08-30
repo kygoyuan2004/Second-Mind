@@ -1,0 +1,59 @@
+# Replace every templated value before installing this file.
+[Unit]
+Description=VaultMind knowledge assistant
+Documentation=@PROJECT_DOCUMENTATION_URL@
+Wants=network-online.target
+After=network-online.target local-fs.target
+RequiresMountsFor=@VAULT_PATH@
+
+[Service]
+Type=simple
+User=@SERVICE_USER@
+Group=@SERVICE_GROUP@
+WorkingDirectory=@APP_DIR@
+Environment=NODE_ENV=production
+EnvironmentFile=@ENV_FILE@
+ExecStartPre=/usr/bin/test -d "@VAULT_PATH@"
+ExecStartPre=/usr/bin/test -d "@VAULT_PATH@/@DIARY_DIR@"
+ExecStartPre=/usr/bin/test -d "@VAULT_PATH@/@PLAN_DIR@"
+ExecStartPre=/usr/bin/test -d "@VAULT_PATH@/@SCRATCH_DIR@"
+ExecStart="@NODE_BIN@" "@APP_DIR@/src/server.mjs"
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+UMask=0077
+
+StateDirectory=@STATE_DIRECTORY_NAME@
+StateDirectoryMode=0700
+RuntimeDirectory=@RUNTIME_DIRECTORY_NAME@
+RuntimeDirectoryMode=0700
+
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=read-only
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=invisible
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+ReadOnlyPaths=@APP_DIR@
+ReadOnlyPaths=@VAULT_PATH@
+ReadWritePaths=/var/lib/@STATE_DIRECTORY_NAME@
+ReadWritePaths=@VAULT_PATH@/@DIARY_DIR@
+ReadWritePaths=@VAULT_PATH@/@PLAN_DIR@
+ReadWritePaths=@VAULT_PATH@/@SCRATCH_DIR@
+
+[Install]
+WantedBy=multi-user.target

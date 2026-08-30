@@ -1,0 +1,53 @@
+# Optional, local-install-only integration with the official Obsidian Headless
+# open beta. Replace every templated value. Do not redistribute the upstream
+# UNLICENSED package or a prebuilt image containing it.
+[Unit]
+Description=Obsidian Headless continuous Sync for VaultMind
+Documentation=https://obsidian.md/help/sync/headless
+Wants=network-online.target
+After=network-online.target local-fs.target
+Before=@VAULTMIND_SERVICE_NAME@
+RequiresMountsFor=@VAULT_PATH@ @SYNC_HOME@ @SYNC_CONFIG_DIR@
+
+[Service]
+Type=simple
+User=@SYNC_USER@
+Group=@SYNC_GROUP@
+WorkingDirectory=@VAULT_PATH@
+Environment="HOME=@SYNC_HOME@"
+Environment="XDG_CONFIG_HOME=@SYNC_CONFIG_DIR@"
+ExecStartPre=/usr/bin/test -d "@VAULT_PATH@"
+ExecStartPre=/usr/bin/test -d "@SYNC_HOME@"
+ExecStartPre=/usr/bin/test -d "@SYNC_CONFIG_DIR@"
+ExecStart="@OB_BIN@" sync --path "@VAULT_PATH@" --continuous
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=45s
+UMask=0077
+
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=read-only
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=invisible
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+ReadWritePaths=@VAULT_PATH@
+ReadWritePaths=@SYNC_HOME@
+ReadWritePaths=@SYNC_CONFIG_DIR@
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,17 @@
+[
+  {
+    "id": "hybrid-retrieval",
+    "query": "How are lexical and vector search combined?",
+    "relevantPaths": ["Learning/RAG.md"]
+  },
+  {
+    "id": "safe-write",
+    "query": "What happens before an AI-generated diary is saved?",
+    "relevantPaths": ["Projects/VaultMind.md"]
+  },
+  {
+    "id": "networking",
+    "query": "How should I expose the service through Tailscale?",
+    "relevantPaths": ["Operations/Deployment.md"]
+  }
+]

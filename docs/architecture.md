@@ -1,24 +1,14 @@
-# Architecture
+# Second-Mind architecture
 
-VaultMind is a single-user, self-hosted knowledge application built around one
+Second-Mind is a single-user, self-hosted knowledge application built around one
 constraint: an Obsidian Vault remains an ordinary local directory. Sync,
 retrieval, generation, and write approval are separate concerns.
 
-```mermaid
-flowchart LR
-    B[Browser] -->|signed session + SSE| A[VaultMind HTTP service]
-    A --> T[Task manager]
-    T --> R[Knowledge index]
-    R --> K[BM25 / CJK tokenizer]
-    R --> E[Optional embedding API]
-    T --> L[LLM API]
-    T --> D[Draft store outside Vault]
-    D -->|explicit confirmation| W[Write allowlist]
-    K --> V[(Local Vault)]
-    W --> V
-    S[External sync materializer] <--> V
-    S -. optional .-> O[Obsidian Sync]
-```
+<p align="center">
+  <a href="assets/second-mind-architecture.png">
+    <img src="assets/second-mind-architecture.png" alt="Second-Mind architecture with separate grounded-read and review-before-write paths" width="100%">
+  </a>
+</p>
 
 ## Components
 
@@ -80,7 +70,7 @@ context.
 
 ### Sync boundary
 
-VaultMind does not implement a synchronization protocol. An operator-selected
+Second-Mind does not implement a synchronization protocol. An operator-selected
 process materializes files into `VAULT_PATH`. This keeps the retrieval and
 write core independent from Obsidian Sync and leaves a clean interface for a
 future, separately tested LiveSync materializer. See [sync.md](sync.md).

@@ -1,4 +1,4 @@
-# VaultMind
+# Second-Mind
 
 Self-hosted, provider-neutral retrieval-augmented generation (RAG) for an
 Obsidian Vault that exists on the server as ordinary files.
@@ -8,14 +8,24 @@ Obsidian Vault that exists on the server as ordinary files.
 [Deployment](docs/deployment.md) · [Security](docs/security.md) ·
 [Sync](docs/sync.md) · [Resume and interview notes](docs/resume.md)
 
-VaultMind combines a responsive Chinese web workspace, a single-node Node.js
+Second-Mind combines a responsive Chinese web workspace, a single-node Node.js
 service, lexical and optional vector retrieval, streaming model output, and a
 review-before-write workflow for diaries, plans, and inbox notes. Bring your
 own model endpoint and, optionally, a separate embedding endpoint. API keys
 stay on the server.
 
+Second-Mind currently ships its web workspace under the internal **VaultMind**
+UI brand. The screenshots below show that unchanged runtime interface.
+
+<p align="center">
+  <a href="docs/assets/second-mind-grounded-qa.png">
+    <img src="docs/assets/second-mind-grounded-qa.png" alt="Second-Mind's bundled VaultMind UI answering a knowledge-base question with grounded Obsidian sources" width="100%">
+  </a>
+</p>
+<p align="center"><sub>All UI screenshots were captured from a real, isolated Second-Mind demo using synthetic notes and a deterministic OpenAI-compatible demo endpoint. No personal notes or production credentials are shown.</sub></p>
+
 > [!IMPORTANT]
-> VaultMind is a single-administrator private knowledge service, not a
+> Second-Mind is a single-administrator private knowledge service, not a
 > multi-tenant SaaS platform. It always reads a **local filesystem Vault**.
 > Synchronization is a separate operator-managed process.
 
@@ -34,6 +44,28 @@ stay on the server.
 
 Self-hosted LiveSync is **not implemented**. It appears only in the
 [roadmap](#roadmap), and must not be represented as a current feature.
+
+## Product tour
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/assets/second-mind-source-preview.png"><img src="docs/assets/second-mind-source-preview.png" alt="Second-Mind safe source preview for a retrieved Markdown note" width="100%"></a>
+      <br><sub><strong>Traceable retrieval.</strong> Open the exact Markdown source behind a search result or grounded answer.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/assets/second-mind-review-before-write.png"><img src="docs/assets/second-mind-review-before-write.png" alt="Second-Mind review-before-write dialog for a generated plan" width="100%"></a>
+      <br><sub><strong>Review before write.</strong> Inspect or edit generated Markdown before an explicit confirmation can change the Vault.</sub>
+    </td>
+  </tr>
+</table>
+
+<p align="center">
+  <a href="docs/assets/second-mind-mobile.png">
+    <img src="docs/assets/second-mind-mobile.png" alt="Second-Mind grounded knowledge question on a mobile viewport" width="320">
+  </a>
+</p>
+<p align="center"><sub><strong>Responsive workspace.</strong> Knowledge Q&amp;A and source citations remain usable on a phone-sized viewport.</sub></p>
 
 ## Five-minute Docker quick start
 
@@ -81,7 +113,7 @@ and embedding key files may be empty for an unauthenticated local endpoint.
 mkdir -p secrets
 chmod 700 secrets
 umask 077
-read -rsp "Choose a VaultMind admin password (12+ characters): " VAULTMIND_ADMIN_PASSWORD
+read -rsp "Choose a Second-Mind admin password (12+ characters): " VAULTMIND_ADMIN_PASSWORD
 printf '\n'
 printf '%s' "$VAULTMIND_ADMIN_PASSWORD" > secrets/admin_password
 unset VAULTMIND_ADMIN_PASSWORD
@@ -114,34 +146,12 @@ For a remote model, replace the provider values in `.env`, write its key to
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    Browser[Browser UI] --> Edge[HTTPS reverse proxy<br/>or Tailscale Serve]
-    Edge --> API[VaultMind Web + API<br/>auth, history, SSE]
-
-    subgraph Core[VaultMind process]
-        API --> Task[Grounded task pipeline]
-        Task --> Index[Markdown index]
-        Index --> BM25[BM25]
-        Index -. optional .-> Dense[Embedding client<br/>cosine search]
-        BM25 --> RRF[RRF fusion]
-        Dense --> RRF
-        RRF --> Task
-        Task --> LLM[LLM client]
-        API --> Draft[Private draft staging]
-    end
-
-    Vault[(Local filesystem Vault)] --> Policy[Path and exclusion policy]
-    Policy --> Index
-    Draft --> Review[Human review]
-    Review --> Guard[Allowlist + hash conflict check]
-    Guard -. existing-note preimage .-> Recovery[(Private recovery store)]
-    Guard --> Vault
-
-    Sync[External sync materializer<br/>optional Headless sidecar] <--> Vault
-    LLM --> Provider[Local or remote model]
-    Dense --> Embeddings[Local or remote embeddings]
-```
+<p align="center">
+  <a href="docs/architecture.md">
+    <img src="docs/assets/second-mind-architecture.png" alt="Second-Mind architecture showing separate read and review-before-write paths" width="100%">
+  </a>
+</p>
+<p align="center"><sub>Click the diagram for component boundaries, request flows, and deployment details.</sub></p>
 
 The read and write paths are deliberately different:
 
@@ -157,7 +167,7 @@ Vault content is treated as untrusted data in the grounding prompt.
 
 ## Retrieval design
 
-VaultMind indexes `.md`, `.txt`, `.json`, `.canvas`, `.base`, `.csv`, YAML, and
+Second-Mind indexes `.md`, `.txt`, `.json`, `.canvas`, `.base`, `.csv`, YAML, and
 log files up to 2 MiB each. The indexer:
 
 1. preserves headings, line ranges, lists, tables, and fenced code while
@@ -254,11 +264,11 @@ remain necessary.
 
 ## Synchronization model
 
-VaultMind does not embed a sync client. `SYNC_PROVIDER` and
+Second-Mind does not embed a sync client. `SYNC_PROVIDER` and
 `SYNC_DISPLAY_NAME` describe which external process materializes the local
 Vault.
 
-- **Filesystem:** no managed synchronization; point VaultMind at an existing
+- **Filesystem:** no managed synchronization; point Second-Mind at an existing
   local directory.
 - **Official Obsidian Headless:** an optional Compose overlay builds the
   upstream `obsidian-headless` package locally and shares the Vault directory.
@@ -427,6 +437,6 @@ commitments:
 
 ## License
 
-VaultMind's repository code is available under the [MIT License](LICENSE).
+Second-Mind's repository code is available under the [MIT License](LICENSE).
 Third-party components retain their own licenses. The optional locally built
-`obsidian-headless` package is not covered by VaultMind's MIT license.
+`obsidian-headless` package is not covered by Second-Mind's MIT license.

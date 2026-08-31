@@ -1,13 +1,23 @@
-# VaultMind 中文说明
+# Second-Mind 中文说明
 
 [English README](../README.md) · [部署指南](deployment.md) ·
 [安全模型](security.md) · [同步说明](sync.md) ·
 [网络接入](networking.md) · [简历与面试材料](resume.md)
 
-VaultMind 是一个面向本地 Obsidian Vault 的自托管 RAG 知识工作台。
+Second-Mind 是一个面向本地 Obsidian Vault 的自托管 RAG 知识工作台。
 它提供知识问答、日记、计划、随心记、关键词与语义检索、SSE 流式输出、
 来源预览和“预览后确认写入”的笔记工作流。模型与 embedding 由部署者
 自行选择，API Key 只保存在服务端。
+
+Second-Mind 当前内置 Web 界面仍使用 **VaultMind** 品牌；以下截图如实
+展示该运行界面，没有为文档修改产品源码。
+
+<p align="center">
+  <a href="assets/second-mind-grounded-qa.png">
+    <img src="assets/second-mind-grounded-qa.png" alt="Second-Mind 内置 VaultMind 界面基于 Obsidian 来源回答知识库问题" width="100%">
+  </a>
+</p>
+<p align="center"><sub>全部界面截图均来自真实、隔离的 Second-Mind 演示实例，使用合成笔记和确定性 OpenAI-compatible 演示端点拍摄；不含个人笔记或生产凭据。</sub></p>
 
 > [!IMPORTANT]
 > 当前版本定位为单管理员、单节点的私人知识服务，不是多租户 SaaS。
@@ -27,6 +37,28 @@ VaultMind 是一个面向本地 Obsidian Vault 的自托管 RAG 知识工作台�
 | 同步 | 本地文件系统；可选的 Obsidian Headless 本地构建 sidecar；其他外部文件同步进程 |
 
 Self-hosted LiveSync 目前**没有实现**，只属于路线图。
+
+## 产品实拍
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="assets/second-mind-source-preview.png"><img src="assets/second-mind-source-preview.png" alt="Second-Mind 检索结果的安全 Markdown 原文预览" width="100%"></a>
+      <br><sub><strong>检索结果可追溯。</strong>可以直接打开搜索结果或回答所依据的 Markdown 原文。</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="assets/second-mind-review-before-write.png"><img src="assets/second-mind-review-before-write.png" alt="Second-Mind 生成计划后的确认写入界面" width="100%"></a>
+      <br><sub><strong>写入前人工确认。</strong>只有在检查、编辑 Markdown 并明确确认后，系统才允许修改 Vault。</sub>
+    </td>
+  </tr>
+</table>
+
+<p align="center">
+  <a href="assets/second-mind-mobile.png">
+    <img src="assets/second-mind-mobile.png" alt="Second-Mind 在手机尺寸视口中的知识问答界面" width="320">
+  </a>
+</p>
+<p align="center"><sub><strong>响应式工作台。</strong>手机尺寸下仍可完成知识问答并查看来源引用。</sub></p>
 
 ## 五分钟 Docker 快速开始
 
@@ -62,7 +94,7 @@ EMBEDDING_PROVIDER=disabled
 mkdir -p secrets
 chmod 700 secrets
 umask 077
-read -rsp "设置 VaultMind 管理员密码（至少 12 个字符）：" VAULTMIND_ADMIN_PASSWORD
+read -rsp "设置 Second-Mind 管理员密码（至少 12 个字符）：" VAULTMIND_ADMIN_PASSWORD
 printf '\n'
 printf '%s' "$VAULTMIND_ADMIN_PASSWORD" > secrets/admin_password
 unset VAULTMIND_ADMIN_PASSWORD
@@ -93,34 +125,12 @@ curl --fail http://127.0.0.1:8787/health/ready
 
 ## 架构
 
-```mermaid
-flowchart LR
-    Browser[浏览器] --> Edge[HTTPS 反向代理<br/>或 Tailscale Serve]
-    Edge --> API[VaultMind Web/API<br/>登录、历史、SSE]
-
-    subgraph Core[VaultMind 单进程]
-        API --> Task[固定的 Grounded RAG 流程]
-        Task --> Index[Markdown 索引]
-        Index --> BM25[BM25]
-        Index -. 可选 .-> Dense[Embedding<br/>余弦召回]
-        BM25 --> RRF[RRF 排名融合]
-        Dense --> RRF
-        RRF --> Task
-        Task --> LLM[模型适配层]
-        API --> Draft[Vault 外草稿区]
-    end
-
-    Vault[(本地 Vault 文件)] --> Policy[路径与排除策略]
-    Policy --> Index
-    Draft --> Review[人工编辑与确认]
-    Review --> Guard[目录白名单 + 哈希冲突检查]
-    Guard -. 已有笔记 preimage .-> Recovery[(私有恢复副本)]
-    Guard --> Vault
-
-    Sync[外部同步进程<br/>可选 Headless sidecar] <--> Vault
-    LLM --> Provider[本地或远程模型]
-    Dense --> Embeddings[本地或远程 embedding]
-```
+<p align="center">
+  <a href="architecture.md">
+    <img src="assets/second-mind-architecture.png" alt="Second-Mind 读取链路与写入前确认链路架构图" width="100%">
+  </a>
+</p>
+<p align="center"><sub>点击架构图可查看组件边界、请求链路和部署细节。</sub></p>
 
 读取链路与写入链路被刻意拆开：
 
@@ -212,7 +222,7 @@ npm run index
 
 ## 同步方案的真实边界
 
-VaultMind 本身不上传、下载或合并 Vault。它只读取一个本地目录；
+Second-Mind 本身不上传、下载或合并 Vault。它只读取一个本地目录；
 `SYNC_PROVIDER` 与 `SYNC_DISPLAY_NAME` 只是部署状态描述。
 
 - `filesystem`：不管理同步，直接读取本地 Vault；
@@ -357,5 +367,5 @@ docs/                          部署、网络、安全、同步和简历材料
 
 ## License
 
-VaultMind 仓库代码使用 [MIT License](../LICENSE)。第三方组件保留其各自
-许可；本地构建的 `obsidian-headless` 不属于 VaultMind MIT 授权范围。
+Second-Mind 仓库代码使用 [MIT License](../LICENSE)。第三方组件保留其各自
+许可；本地构建的 `obsidian-headless` 不属于 Second-Mind MIT 授权范围。

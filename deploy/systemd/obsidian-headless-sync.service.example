@@ -2,7 +2,7 @@
 # open beta. Replace every templated value. Do not redistribute the upstream
 # UNLICENSED package or a prebuilt image containing it.
 [Unit]
-Description=Obsidian Headless continuous Sync for VaultMind
+Description=Obsidian Headless continuous Sync for Second-Mind
 Documentation=https://obsidian.md/help/sync/headless
 Wants=network-online.target
 After=network-online.target local-fs.target

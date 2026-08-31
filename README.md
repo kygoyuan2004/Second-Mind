@@ -14,15 +14,12 @@ review-before-write workflow for diaries, plans, and inbox notes. Bring your
 own model endpoint and, optionally, a separate embedding endpoint. API keys
 stay on the server.
 
-Second-Mind currently ships its web workspace under the internal **VaultMind**
-UI brand. The screenshots below show that unchanged runtime interface.
-
 <p align="center">
-  <a href="docs/assets/second-mind-grounded-qa.png">
-    <img src="docs/assets/second-mind-grounded-qa.png" alt="Second-Mind's bundled VaultMind UI answering a knowledge-base question with grounded Obsidian sources" width="100%">
+  <a href="docs/assets/second-mind-local-vault-answer.png">
+    <img src="docs/assets/second-mind-local-vault-answer.png" alt="Second Mind answering a grounded question from a local Obsidian knowledge base with Qwen" width="100%">
   </a>
 </p>
-<p align="center"><sub>All UI screenshots were captured from a real, isolated Second-Mind demo using synthetic notes and a deterministic OpenAI-compatible demo endpoint. No personal notes or production credentials are shown.</sub></p>
+<p align="center"><sub><strong>Deep Retrieval over a real Obsidian note.</strong> Captured from an isolated Second-Mind instance using a privacy-reviewed, read-only snapshot of one local technical note, Qwen 3.8 Max, Qwen 3.7 Text Embedding, and the shipped multi-query Deep Retrieval path. No personal notes or credentials are shown.</sub></p>
 
 > [!IMPORTANT]
 > Second-Mind is a single-administrator private knowledge service, not a
@@ -34,7 +31,7 @@ UI brand. The screenshots below show that unchanged runtime interface.
 | Area | Current implementation |
 |---|---|
 | Knowledge Q&A | Source-grounded answers with Obsidian-style citations and server-sent event (SSE) streaming |
-| Retrieval | Chinese-aware BM25; optional dense embeddings; cosine ranking plus Reciprocal Rank Fusion (RRF); lexical fallback when embeddings fail |
+| Retrieval | Chinese-aware BM25; optional dense embeddings; cosine ranking plus RRF; Normal single-pass and provider-neutral Deep Retrieval; lexical fallback when embeddings fail |
 | Note workflows | Diary, plan, and scratch/inbox generation with editable Markdown preview and explicit confirmation before write |
 | Files | Keyword and semantic search, safe source preview, text attachments for Q&A, and confirmed attachment persistence for note modes |
 | Providers | OpenAI-compatible chat APIs, Anthropic Messages API, OpenAI-compatible embeddings, and native DashScope embeddings |
@@ -47,25 +44,42 @@ Self-hosted LiveSync is **not implemented**. It appears only in the
 
 ## Product tour
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="docs/assets/second-mind-source-preview.png"><img src="docs/assets/second-mind-source-preview.png" alt="Second-Mind safe source preview for a retrieved Markdown note" width="100%"></a>
-      <br><sub><strong>Traceable retrieval.</strong> Open the exact Markdown source behind a search result or grounded answer.</sub>
-    </td>
-    <td width="50%" valign="top">
-      <a href="docs/assets/second-mind-review-before-write.png"><img src="docs/assets/second-mind-review-before-write.png" alt="Second-Mind review-before-write dialog for a generated plan" width="100%"></a>
-      <br><sub><strong>Review before write.</strong> Inspect or edit generated Markdown before an explicit confirmation can change the Vault.</sub>
-    </td>
-  </tr>
-</table>
+### Inspect the execution trace
 
 <p align="center">
-  <a href="docs/assets/second-mind-mobile.png">
-    <img src="docs/assets/second-mind-mobile.png" alt="Second-Mind grounded knowledge question on a mobile viewport" width="320">
+  <a href="docs/assets/second-mind-execution-trace.png">
+    <img src="docs/assets/second-mind-execution-trace.png" alt="Second-Mind execution trace showing retrieval, model session, source selection, generation, and completion" width="100%">
   </a>
 </p>
-<p align="center"><sub><strong>Responsive workspace.</strong> Knowledge Q&amp;A and source citations remain usable on a phone-sized viewport.</sub></p>
+<p align="center"><sub><strong>All 17 observable steps, without hidden chain-of-thought.</strong> The captured Deep Retrieval run shows the Qwen session, bounded query decomposition, four hybrid retrieval paths, per-path results, evidence fusion, cited generation, and completion.</sub></p>
+
+### Inspect the evidence behind an answer
+
+<p align="center">
+  <a href="docs/assets/second-mind-source-preview.png">
+    <img src="docs/assets/second-mind-source-preview.png" alt="Second-Mind opening the exact local Obsidian note behind a cited answer" width="100%">
+  </a>
+</p>
+<p align="center"><sub><strong>Traceable retrieval.</strong> Open the exact Markdown note and verify the evidence used by the answer.</sub></p>
+
+### Review every generated note before writing
+
+<p align="center">
+  <a href="docs/assets/second-mind-review-before-write.png">
+    <img src="docs/assets/second-mind-review-before-write.png" alt="Second-Mind reviewing Qwen-generated Markdown before an explicit Vault write" width="100%">
+  </a>
+</p>
+<p align="center"><sub><strong>Human-controlled writes.</strong> Generated Markdown remains editable and cannot enter the Vault without explicit confirmation. The screenshot stopped before confirmation.</sub></p>
+
+> [!NOTE]
+> **Normal and provider-neutral Deep Retrieval are real server-side strategies.**
+> Normal performs one bounded hybrid retrieval pass. Deep Retrieval decomposes
+> the question, runs up to four bounded hybrid searches, fuses file-level
+> evidence with reciprocal-rank scoring, and then generates the cited answer.
+> Deep Retrieval is available only for
+> knowledge Q&amp;A; every write workflow remains Normal and review-before-write.
+> This provider-neutral mode is deliberately not the private predecessor's
+> 50-turn, tool-using, multi-subagent Agent runtime.
 
 ## Five-minute Docker quick start
 
@@ -113,10 +127,10 @@ and embedding key files may be empty for an unauthenticated local endpoint.
 mkdir -p secrets
 chmod 700 secrets
 umask 077
-read -rsp "Choose a Second-Mind admin password (12+ characters): " VAULTMIND_ADMIN_PASSWORD
+read -rsp "Choose a Second-Mind admin password (12+ characters): " SECOND_MIND_ADMIN_PASSWORD
 printf '\n'
-printf '%s' "$VAULTMIND_ADMIN_PASSWORD" > secrets/admin_password
-unset VAULTMIND_ADMIN_PASSWORD
+printf '%s' "$SECOND_MIND_ADMIN_PASSWORD" > secrets/admin_password
+unset SECOND_MIND_ADMIN_PASSWORD
 openssl rand -hex 32 > secrets/session_secret
 : > secrets/llm_api_key
 : > secrets/embedding_api_key
@@ -155,8 +169,10 @@ For a remote model, replace the provider values in `.env`, write its key to
 
 The read and write paths are deliberately different:
 
-- **Read path:** safe Vault gateway → Markdown-aware chunks → BM25 and optional
-  vectors → RRF → bounded context → model → cited answer.
+- **Read path:** safe Vault gateway → Markdown-aware chunks → Normal single-pass
+  retrieval or provider-neutral Deep Retrieval → BM25 and
+  optional vectors → RRF/evidence fusion → bounded context → model → cited
+  answer.
 - **Write path:** user input → model-generated Markdown → private draft outside
   the Vault → editable preview → explicit confirmation → conflict/path checks →
   verified preimage recovery copy for an existing diary/plan → second hash check
@@ -180,6 +196,14 @@ log files up to 2 MiB each. The indexer:
    generation prompt;
 6. falls back to keyword results with diagnostics when embeddings are disabled
    or unavailable.
+
+Normal Q&amp;A performs one bounded hybrid search. Deep Retrieval first asks the model
+for a JSON-only set of complementary retrieval queries, always retains the
+original question, runs at most four hybrid searches, and fuses unique files
+with reciprocal-rank scoring. The final context still obeys
+`RAG_MAX_CONTEXT_CHARS`; Deep does not give the model shell, write, web, or
+client-configurable Agent tools. It is a provider-neutral Deep Retrieval
+strategy, not a turn-based or multi-subagent Agent runtime.
 
 Index generations are written atomically. The current and previous generation
 are retained so startup can fall back after an incomplete or corrupt write.
@@ -292,7 +316,8 @@ Implemented controls include:
 
 - one configured administrator identity; signed `HttpOnly`, `SameSite=Strict`
   session cookies; in-memory login throttling;
-- same-origin checks and `X-VaultMind-Request: 1` on mutating API calls;
+- same-origin checks and the legacy compatibility header
+  `X-VaultMind-Request: 1` on mutating API calls;
 - restrictive browser security headers and sanitized Markdown rendering;
 - file-backed secrets with permission checks;
 - excluded hidden/configuration paths, root containment, and symlink denial;
@@ -346,7 +371,7 @@ Run the included synthetic retrieval smoke evaluation:
 
 ```bash
 VAULT_PATH=examples/demo-vault \
-INDEX_DIR=/tmp/vaultmind-demo-index \
+INDEX_DIR=/tmp/second-mind-demo-index \
 EMBEDDING_PROVIDER=disabled \
 npm run eval -- --k 3 --min-recall 1
 ```
@@ -430,6 +455,8 @@ commitments:
   attachment recovery tests.
 - [ ] A pluggable sync/materializer interface beyond status labels.
 - [ ] A scalable lexical/vector storage adapter and background job queue.
+- [ ] An optional, permission-scoped read-only Agent loop for model runtimes
+  that support tools, with deterministic budgets and subagent isolation.
 - [ ] Optional OCR/multimodal ingestion with explicit privacy controls.
 - [ ] Multi-user identity/RBAC after a documented tenant-isolation design.
 - [ ] Larger human-reviewed retrieval datasets, regression dashboards, and

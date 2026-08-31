@@ -1,6 +1,6 @@
 # Vault synchronization
 
-VaultMind operates on ordinary files in a local directory. It does not copy,
+Second-Mind operates on ordinary files in a local directory. It does not copy,
 upload, or reconcile a Vault by itself. `SYNC_PROVIDER` and
 `SYNC_DISPLAY_NAME` describe the operator-selected mechanism; an external
 process must materialize the files.
@@ -9,7 +9,7 @@ Supported deployment states are:
 
 | Value | Meaning |
 |---|---|
-| `filesystem` | No sync process is managed. VaultMind reads a local directory. |
+| `filesystem` | No sync process is managed. Second-Mind reads a local directory. |
 | `obsidian-headless` | The optional sidecar or a host service runs the official Headless Sync client. |
 | `external` | Another operator-managed file sync process owns synchronization. |
 
@@ -54,12 +54,18 @@ testing a backup copy of the Vault.
 
 The sidecar uses:
 
-- the same host Vault bind mount as VaultMind;
+- the same host Vault bind mount as Second-Mind;
 - `vaultmind-obsidian-sync-config` for the login token;
 - `vaultmind-obsidian-sync-vault-state` mounted over the server-side
   `/vault/.obsidian` directory for link, device, and encryption state;
 - a non-root UID, read-only image filesystem, dropped capabilities, and a
   private `/tmp`.
+
+The `vaultmind-*` volume/image names, `VAULTMIND_UID`/`VAULTMIND_GID`, and the
+example `vaultmind-server` device name are legacy deployment identifiers kept
+for compatibility. They do not define the product brand. Do not rename an
+existing volume or linked Sync device unless its private state and remote link
+have been deliberately migrated.
 
 Both `HOME` and `XDG_CONFIG_HOME` point inside the private configuration
 volume. This contains CLI state even if an upstream beta release changes which
@@ -171,7 +177,7 @@ contain Vault names or filesystem paths.
 
 ### Conflict behavior
 
-VaultMind prepares diary, plan, and inbox changes as drafts. A save is rejected
+Second-Mind prepares diary, plan, and inbox changes as drafts. A save is rejected
 when the target note changed after preview generation. This reduces accidental
 overwrite risk but does not make simultaneous filesystem writers transactional.
 
@@ -216,7 +222,7 @@ Use a dedicated, mode-`0700` home/configuration directory owned by the Sync
 account. The template checks only that those directories exist; it deliberately
 does not assume an undocumented credential filename.
 
-The Sync service needs read/write access to the entire Vault. The VaultMind
+The Sync service needs read/write access to the entire Vault. The Second-Mind
 service should still receive write access only to its diary, plan, and inbox
 directories.
 
@@ -225,7 +231,7 @@ directories.
 Set `SYNC_PROVIDER=external` when another trusted process already presents a
 normal local Vault directory. The operator is responsible for atomic file
 replacement, conflict preservation, hidden configuration files, permissions,
-and backup. Do not point VaultMind at a network filesystem whose rename,
+and backup. Do not point Second-Mind at a network filesystem whose rename,
 locking, or watcher semantics are unknown without testing reconciliation and
 draft conflicts.
 
@@ -247,5 +253,5 @@ A future implementation should be a separate `SyncProvider`/materializer that:
   configuration, and recovery.
 
 The community [Self-hosted LiveSync project](https://github.com/vrtmrz/obsidian-livesync)
-is useful design input, but its existence must not be presented as VaultMind
+is useful design input, but its existence must not be presented as Second-Mind
 support.

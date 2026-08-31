@@ -10,7 +10,7 @@ FROM ${NODE_IMAGE}
 
 ARG OBSIDIAN_HEADLESS_VERSION=0.0.14
 
-LABEL org.opencontainers.image.title="VaultMind local Obsidian Sync sidecar" \
+LABEL org.opencontainers.image.title="Second-Mind local Obsidian Sync sidecar" \
       org.opencontainers.image.description="Locally built wrapper around the official Obsidian Headless open beta" \
       org.opencontainers.image.licenses="LicenseRef-Obsidian-Headless-Upstream-Terms"
 

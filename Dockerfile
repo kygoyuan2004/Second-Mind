@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/root/.npm \
 
 FROM ${NODE_IMAGE} AS runtime
 
-LABEL org.opencontainers.image.title="VaultMind" \
+LABEL org.opencontainers.image.title="Second-Mind" \
       org.opencontainers.image.description="Self-hosted, source-grounded Obsidian knowledge assistant"
 
 ENV NODE_ENV=production \

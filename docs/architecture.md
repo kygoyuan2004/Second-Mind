@@ -27,6 +27,17 @@ tokenizes English, identifiers, dates, and CJK text, and builds a BM25 index.
 When embeddings are configured, it also stores dense vectors and combines the
 lexical and semantic rankings with reciprocal rank fusion (RRF).
 
+Normal Q&amp;A performs one bounded hybrid search. Provider-neutral Deep Retrieval
+adds a model planning pass that emits only a bounded query list, searches the
+original question plus complementary variants, and fuses unique files with
+reciprocal-rank scoring before final generation. Both modes share the same path
+policy and final context ceiling. Deep Retrieval adds no shell, write, web, or
+browser-supplied Agent tools.
+
+This shipped, provider-neutral Deep Retrieval path is not the private
+predecessor's 50-turn, tool-using, multi-subagent Agent runtime. A permission-
+scoped read-only Agent backend remains roadmap work.
+
 The index has two important failure modes:
 
 - If embeddings are disabled or temporarily fail, hybrid queries degrade to

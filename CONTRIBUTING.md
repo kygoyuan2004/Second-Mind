@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions are welcome when they preserve VaultMind's core safety boundary:
+Contributions are welcome when they preserve Second-Mind's core safety boundary:
 sync materializes ordinary files, models have no arbitrary tools, and every
 Vault write is reviewed and restricted.
 

@@ -1,6 +1,6 @@
 # Deployment guide
 
-VaultMind can run as a hardened Docker Compose service or as a dedicated
+Second-Mind can run as a hardened Docker Compose service or as a dedicated
 systemd service. The application requires Node.js 22 or newer. A model endpoint
 is required; embeddings are optional and lexical retrieval remains available
 when `EMBEDDING_PROVIDER=disabled`.
@@ -9,6 +9,12 @@ This guide deliberately keeps the application on loopback by default. Read
 [networking.md](networking.md) before making it reachable from another device.
 
 ## Docker Compose
+
+The public product name is Second-Mind. Existing technical identifiers such as
+the `vaultmind:local` image tag, `vaultmind-data` volume, and `VAULTMIND_*`
+Compose variables are intentionally retained for upgrade compatibility. They
+do not change the browser-visible product name, and renaming an existing volume
+without migrating its data can make private state appear to be missing.
 
 ### 1. Prepare host directories
 
@@ -135,6 +141,20 @@ docker compose \
   up -d --build --remove-orphans
 ```
 
+The current defaults write new notes below `Second-Mind/Diary`,
+`Second-Mind/Plans`, and `Second-Mind/Inbox`. An older deployment that used the
+former defaults must choose one explicit upgrade path after taking a backup:
+
+- keep using the old locations by setting `DIARY_DIR=VaultMind/Diary`,
+  `PLAN_DIR=VaultMind/Plans`, and `SCRATCH_DIR=VaultMind/Inbox`; or
+- stop Second-Mind and every Sync writer, move or merge the old directories
+  into `Second-Mind/`, update configuration, verify ownership and conflicts,
+  and only then restart the services.
+
+Second-Mind never migrates Vault notes automatically. Do not leave this choice
+implicit, because doing so can split old and newly generated notes across both
+directory trees.
+
 Pin the Node base image by digest and review dependency changes for a
 reproducible production deployment. Keep the previous application image until
 the new image passes both health checks and a test query.
@@ -176,10 +196,10 @@ sha256sum ./recovered-note.md
 
 For a native deployment, read the same two files below `RECOVERY_DIR`. Verify
 that the checksum equals `sourceHash` in the metadata. Before restoring, stop
-VaultMind and the Sync materializer, make a separate copy of the current target
+Second-Mind and the Sync materializer, make a separate copy of the current target
 note, and inspect both versions. Then place the selected version at the exact
 `targetRelative` path recorded in metadata and restart Sync followed by
-VaultMind. Never restore blindly while a sync engine is writing the Vault.
+Second-Mind. Never restore blindly while a sync engine is writing the Vault.
 
 ## systemd deployment
 
@@ -197,6 +217,11 @@ Recommended layout:
 /etc/vaultmind/secrets/            individual service-readable secret files
 /srv/vaultmind/vault/              Vault shared with the selected sync process
 ```
+
+These filesystem and service names are legacy deployment identifiers retained
+so an upgrade can reuse established units, permissions, backups, and paths.
+They may be changed deliberately for a new installation, but all rendered
+systemd placeholders and operational commands must then use the same names.
 
 Keep the environment file root-owned at mode `0600`. Secret files must also be
 readable by the unprivileged service: use root ownership, the dedicated service
@@ -234,7 +259,7 @@ absolute.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `APP_NAME` | `VaultMind` | Display name |
+| `APP_NAME` | `Second Mind` | Display name |
 | `VAULT_LABEL` | `My Obsidian Vault` | Non-secret Vault label shown in the UI |
 | `HOST` / `PORT` | `127.0.0.1` / `8787` | Application listener |
 | `TIMEZONE` | `UTC` | IANA time zone used for dated notes |
@@ -258,9 +283,9 @@ absolute.
 |---|---|---|
 | `VAULT_PATH` | `./vault` | Local filesystem Vault root |
 | `VAULT_AUTO_CREATE_PATHS` | `true` | Create the three writable note directories inside an existing Vault root |
-| `DIARY_DIR` | `VaultMind/Diary` | Diary write allowlist |
-| `PLAN_DIR` | `VaultMind/Plans` | Plan write allowlist |
-| `SCRATCH_DIR` | `VaultMind/Inbox` | Inbox/scratch write allowlist |
+| `DIARY_DIR` | `Second-Mind/Diary` | Diary write allowlist |
+| `PLAN_DIR` | `Second-Mind/Plans` | Plan write allowlist |
+| `SCRATCH_DIR` | `Second-Mind/Inbox` | Inbox/scratch write allowlist |
 | `DIARY_TEMPLATE` / `PLAN_TEMPLATE` | empty | Optional relative template files inside the Vault |
 | `VAULT_EXCLUDED_PATHS` | hidden/config directories | Comma-separated directory denylist; retain `.obsidian` and `.livesync` |
 
@@ -292,6 +317,8 @@ Changing the embedding model or dimensions requires rebuilding the index.
 |---|---|---|
 | `RAG_TOP_K` | `8` | Retrieved passages supplied to the model |
 | `RAG_MAX_CONTEXT_CHARS` | `30000` | Maximum retrieved context size |
+| `DEEP_TASKS_ENABLED` | `true` | Publish provider-neutral Deep Retrieval for Q&A |
+| `RAG_DEEP_TOP_K` | `16` | Per-search and final source-file ceiling for Deep Retrieval |
 | `INDEX_WATCH` | `true` | Watch the Vault for changes |
 | `INDEX_RECONCILE_SECONDS` | `300` | Full reconciliation interval |
 | `MAX_JSON_BODY_BYTES` | `25165824` | Maximum JSON request body |

@@ -13,7 +13,7 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 8787
-      APP_NAME: "${APP_NAME:-VaultMind}"
+      APP_NAME: "${APP_NAME:-Second Mind}"
       VAULT_LABEL: "${VAULT_LABEL:-My Obsidian Vault}"
       TIMEZONE: "${TIMEZONE:-UTC}"
       TRUST_PROXY: "${TRUST_PROXY:-false}"
@@ -27,9 +27,9 @@ services:
       CONVERSATION_FILE: /app/data/conversations.json
       AUDIT_FILE: /app/data/audit.jsonl
       VAULT_AUTO_CREATE_PATHS: "${VAULT_AUTO_CREATE_PATHS:-true}"
-      DIARY_DIR: "${DIARY_DIR:-VaultMind/Diary}"
-      PLAN_DIR: "${PLAN_DIR:-VaultMind/Plans}"
-      SCRATCH_DIR: "${SCRATCH_DIR:-VaultMind/Inbox}"
+      DIARY_DIR: "${DIARY_DIR:-Second-Mind/Diary}"
+      PLAN_DIR: "${PLAN_DIR:-Second-Mind/Plans}"
+      SCRATCH_DIR: "${SCRATCH_DIR:-Second-Mind/Inbox}"
       DIARY_TEMPLATE: "${DIARY_TEMPLATE:-}"
       PLAN_TEMPLATE: "${PLAN_TEMPLATE:-}"
       VAULT_EXCLUDED_PATHS: "${VAULT_EXCLUDED_PATHS:-.obsidian,.trash,.git,.sync,.livesync,node_modules}"
@@ -55,6 +55,8 @@ services:
       ALLOW_INSECURE_PROVIDER_HTTP: "${ALLOW_INSECURE_PROVIDER_HTTP:-false}"
       RAG_TOP_K: "${RAG_TOP_K:-8}"
       RAG_MAX_CONTEXT_CHARS: "${RAG_MAX_CONTEXT_CHARS:-30000}"
+      DEEP_TASKS_ENABLED: "${DEEP_TASKS_ENABLED:-true}"
+      RAG_DEEP_TOP_K: "${RAG_DEEP_TOP_K:-16}"
       INDEX_WATCH: "${INDEX_WATCH:-true}"
       INDEX_RECONCILE_SECONDS: "${INDEX_RECONCILE_SECONDS:-300}"
       MAX_JSON_BODY_BYTES: "${MAX_JSON_BODY_BYTES:-25165824}"

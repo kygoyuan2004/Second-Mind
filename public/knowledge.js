@@ -230,13 +230,17 @@ function selectedModel() {
 function localizedTaskModeLabel(item) {
   const label = String(item?.label || '').trim();
   if (item?.id === 'normal' && (!label || /^normal$/i.test(label))) return '普通';
+  if (item?.id === 'deep' && (!label || /^deep$/i.test(label))) return '深度';
   return label || String(item?.id || '普通');
 }
 
 function localizedTaskModeDescription(item) {
   const description = String(item?.description || '').trim();
-  if (item?.id === 'normal' && (!description || /^grounded retrieval and generation\.?$/i.test(description))) {
+  if (item?.id === 'normal') {
     return '基于知识库进行检索与生成。';
+  }
+  if (item?.id === 'deep') {
+    return '分解问题，执行多路混合检索并融合证据后生成可引用回答。';
   }
   return description;
 }
@@ -536,7 +540,7 @@ function syncSummary(sync) {
 }
 
 function applyStatusConfiguration(status) {
-  const appName = String(status?.appName || 'VaultMind').trim() || 'VaultMind';
+  const appName = String(status?.appName || 'Second Mind').trim() || 'Second Mind';
   const vaultLabel = String(status?.vaultLabel || status?.rootLabel || '知识库').trim() || '知识库';
   const sync = syncSummary(status?.sync);
   document.title = appName;
@@ -798,6 +802,16 @@ function completeProcess(success, detail = '') {
   if (success) state.processCard.open = false;
 }
 
+function attachDraftButton(article, draftId) {
+  if (!article || !draftId || article.querySelector('.knowledge-open-draft')) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'knowledge-open-draft';
+  button.textContent = '打开待确认草稿';
+  button.addEventListener('click', () => loadDraft(draftId));
+  article.append(button);
+}
+
 function appendMessage(role, text, options = {}) {
   removeWelcome();
   const article = document.createElement('article');
@@ -810,14 +824,7 @@ function appendMessage(role, text, options = {}) {
   if (role === 'assistant') renderMarkdown(content, text);
   else content.textContent = text;
   article.append(label, content);
-  if (options.draftId) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'knowledge-open-draft';
-    button.textContent = '打开待确认草稿';
-    button.addEventListener('click', () => loadDraft(options.draftId));
-    article.append(button);
-  }
+  attachDraftButton(article, options.draftId);
   elements.transcript.append(article);
   scrollTranscript();
   return content;
@@ -830,6 +837,14 @@ function appendNotice(message, type = '') {
   notice.textContent = message;
   elements.transcript.append(notice);
   scrollTranscript();
+}
+
+function discardPartialAssistant() {
+  if (!state.assistantNode) return false;
+  state.assistantNode.closest('.knowledge-message')?.remove();
+  state.assistantNode = null;
+  state.assistantText = '';
+  return true;
 }
 
 function bindSuggestions() {
@@ -936,6 +951,23 @@ async function loadConversations() {
   }
 }
 
+function renderConversationTranscript(conversation, options = {}) {
+  resetTranscript();
+  let messages = [...(conversation.messages || [])];
+  // An active-task snapshot can race task completion before this conversation
+  // request returns. In that case the final assistant is already durable, but
+  // the in-memory SSE backlog will replay it too. Render all prior turns and
+  // let SSE own the active task's trailing assistant to avoid duplication.
+  if (options.excludeTrailingAssistant && messages.at(-1)?.role === 'assistant') {
+    messages = messages.slice(0, -1);
+  }
+  for (const message of messages) {
+    const names = message.role === 'user' && message.attachments?.length
+      ? `\n\n附件：${message.attachments.join('、')}` : '';
+    appendMessage(message.role, `${message.text ?? message.content ?? ''}${names}`, { draftId: message.draftId });
+  }
+}
+
 async function openConversation(id) {
   if (state.busy) return;
   try {
@@ -955,12 +987,7 @@ async function openConversation(id) {
     }
     updateEffortOptions(conversation.effort);
     syncCompactSettingLabels();
-    resetTranscript();
-    for (const message of conversation.messages || []) {
-      const names = message.role === 'user' && message.attachments?.length
-        ? `\n\n附件：${message.attachments.join('、')}` : '';
-      appendMessage(message.role, `${message.text ?? message.content ?? ''}${names}`, { draftId: message.draftId });
-    }
+    renderConversationTranscript(conversation);
     setStatus('', conversation.title, conversation.kind === 'qa' ? '已恢复对话，可以继续追问。' : '已打开历史记录。');
     renderConversationList();
   } catch (error) {
@@ -1027,7 +1054,12 @@ function connectTask(taskId) {
   source.addEventListener('session', (event) => {
     const data = parseEvent(event);
     const effort = data.effort ? localizedEffortLabel({ id: data.effort, label: data.effort }) : '';
-    const detail = [data.model, effort && `思考强度：${effort}`].filter(Boolean).join(' · ');
+    const taskMode = taskModeDefinitions().find((item) => item.id === data.taskMode);
+    const detail = [
+      taskMode && `任务：${localizedTaskModeLabel(taskMode)}`,
+      data.model,
+      effort && `思考强度：${effort}`,
+    ].filter(Boolean).join(' · ');
     appendProcessStep('模型会话已建立', detail, 'session');
   });
   source.addEventListener('thinking', (event) => {
@@ -1064,6 +1096,7 @@ function connectTask(taskId) {
   });
   source.addEventListener('draft_ready', (event) => {
     state.draft = parseEvent(event);
+    attachDraftButton(state.assistantNode?.closest('.knowledge-message'), state.draft.id);
     clearAttachments();
     openDraft(state.draft);
     if (state.draft.warnings?.length) {
@@ -1073,6 +1106,7 @@ function connectTask(taskId) {
   });
   source.addEventListener('task_error', (event) => {
     const message = parseEvent(event).message || '知识库任务失败。';
+    discardPartialAssistant();
     appendNotice(message, 'error');
     completeProcess(false, message);
     setStatus('error', '任务失败', message);
@@ -1083,8 +1117,12 @@ function connectTask(taskId) {
     state.source = null;
     state.taskId = null;
     setBusy(false);
+    const discarded = data.status !== 'completed' && discardPartialAssistant();
     completeProcess(data.status === 'completed', data.message || '');
-    if (data.status === 'cancelled') setIdleStatus();
+    if (data.status === 'cancelled') {
+      if (discarded) appendNotice('任务已取消，未完成的流式回答没有保存。');
+      setIdleStatus();
+    }
     else setStatus(data.status === 'completed' ? '' : 'error', data.status === 'completed' ? '任务完成' : '任务结束', data.message || '');
     loadConversations();
   });
@@ -1754,7 +1792,7 @@ async function initialize() {
     state.session = session;
     if (!session.authenticated) {
       elements.logout.hidden = true;
-      setGate('登录 VaultMind', '请输入你的知识库账号和密码。', { login: true });
+      setGate('登录 Second Mind', '请输入你的知识库账号和密码。', { login: true });
       return;
     }
     state.loggingOut = false;
@@ -1807,6 +1845,14 @@ async function initialize() {
       if (state.status.activeTask.model) elements.model.value = state.status.activeTask.model;
       updateEffortOptions(state.status.activeTask.effort);
       syncCompactSettingLabels();
+      try {
+        const conversation = await api(
+          `/api/knowledge/conversations/${encodeURIComponent(state.status.activeTask.conversationId)}`,
+        );
+        renderConversationTranscript(conversation, { excludeTrailingAssistant: true });
+      } catch {
+        resetTranscript();
+      }
       setBusy(true);
       appendNotice('正在恢复运行中的知识库任务。');
       connectTask(state.status.activeTask.id);
@@ -1843,7 +1889,7 @@ async function logout() {
     elements.sidebarToggle.setAttribute('aria-expanded', 'false');
     elements.logout.hidden = true;
     elements.loginError.textContent = '';
-    setGate('登录 VaultMind', '你已安全退出，请重新输入账号和密码。', { login: true });
+    setGate('登录 Second Mind', '你已安全退出，请重新输入账号和密码。', { login: true });
   } catch (error) {
     toast(`退出失败：${error.message}`);
   } finally {
@@ -2061,7 +2107,10 @@ elements.form.addEventListener('submit', async (event) => {
 async function cancelTask() {
   if (!state.taskId) return;
   try {
-    await api(`/api/knowledge/tasks/${encodeURIComponent(state.taskId)}/cancel`, { method: 'POST', body: '{}' });
+    const result = await api(`/api/knowledge/tasks/${encodeURIComponent(state.taskId)}/cancel`, {
+      method: 'POST', body: '{}',
+    });
+    if (result.status === 'completing') toast('回答已经生成，正在完成安全保存。');
   } catch (error) { toast(error.message); }
 }
 elements.stop.addEventListener('click', cancelTask);

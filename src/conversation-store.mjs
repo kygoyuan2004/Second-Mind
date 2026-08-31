@@ -69,6 +69,7 @@ export class ConversationStore {
       kind: conversation.kind,
       title: conversation.title,
       model: conversation.model,
+      taskMode: conversation.kind === 'qa' ? conversation.taskMode || 'normal' : 'normal',
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,
     };
@@ -91,6 +92,7 @@ export class ConversationStore {
       kind,
       title: metadata.title || 'New conversation',
       model: metadata.model || '',
+      taskMode: kind === 'qa' ? metadata.taskMode || 'normal' : 'normal',
       messages: [],
       createdAt: now,
       updatedAt: now,

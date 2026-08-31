@@ -1,4 +1,4 @@
-# VaultMind：简历与面试材料
+# Second-Mind：简历与面试材料
 
 这份文档用于把项目讲清楚，而不是把项目讲大。下面的描述均对应当前
 仓库已有实现；请根据自己的真实贡献删改，不要把“阅读过代码”写成
@@ -6,26 +6,29 @@
 
 ## 一句话项目介绍
 
-> VaultMind 是一个面向 Obsidian 本地 Vault 的自托管 RAG 知识工作台，
-> 支持 BYOK 模型/embedding、BM25 与向量混合检索、SSE 流式问答，以及
-> 日记/计划/随心记的“草稿预览—人工确认—冲突检查—安全写入”流程。
+> Second-Mind 是一个面向 Obsidian 本地 Vault 的自托管 RAG 知识工作台，
+> 支持 BYOK 模型/embedding、BM25 与向量混合检索、provider-neutral Deep
+> Retrieval、SSE 流式问答，以及日记/计划/随心记的“草稿预览—人工
+> 确认—冲突检查—安全写入”流程。
 
 更偏 AI 应用方向的版本：
 
 > 基于 Node.js 22 实现 provider-neutral RAG 应用：对 Markdown 做结构化
 > 分块，以 BM25、dense embedding 和 RRF 完成可降级召回，将有界来源
-> 注入模型上下文，并通过人工确认草稿隔离模型生成与真实知识库写入。
+> 注入模型上下文；Deep Retrieval 通过有界问题分解、多路召回和文件级
+> RRF 扩展证据，再通过人工确认草稿隔离模型生成与真实知识库写入。
 
 ## 简历项目条目（可直接改写）
 
 ```text
-VaultMind｜自托管 Obsidian RAG 知识工作台｜个人项目｜20XX.XX–20XX.XX
+Second-Mind｜自托管 Obsidian RAG 知识工作台｜个人项目｜20XX.XX–20XX.XX
 技术栈：Node.js 22 / JavaScript ESM / BM25 / Embedding / RRF / SSE /
         Docker Compose / Obsidian / Vanilla Web
 
 • 设计并实现面向 Markdown Vault 的 RAG 链路：保留标题、行号、列表、
   表格与代码块进行重叠分块，完成中文友好 BM25、向量余弦召回与 RRF
-  融合；embedding 关闭或异常时自动降级到关键词检索并返回诊断信息。
+  融合；Deep Retrieval 最多执行四路有界混合检索并融合文件级证据；
+  embedding 关闭或异常时自动降级到关键词检索并返回诊断信息。
 • 抽象 OpenAI-compatible 与 Anthropic 流式生成适配器，以及
   OpenAI-compatible/DashScope embedding 适配器，支持服务端 BYOK 与
   Ollama、vLLM、LM Studio 等本地兼容端点，避免 API Key 下发浏览器。
@@ -55,14 +58,17 @@ VaultMind｜自托管 Obsidian RAG 知识工作台｜个人项目｜20XX.XX–20
 
 - 自托管、BYOK、provider-neutral；
 - RAG、BM25、dense retrieval、cosine similarity、RRF；
+- provider-neutral Deep Retrieval、bounded query decomposition、multi-query
+  evidence fusion；
 - Markdown-aware chunking、增量 embedding、lexical fallback；
 - SSE streaming、draft confirmation、optimistic conflict detection；
 - Docker hardening、路径安全、Secret 扫描、离线检索评测。
 
 除非你另外实现过，否则不要写：
 
-- “多智能体协同”“ReAct Agent”“自主调用工具”——当前是固定的 grounded
-  RAG/草稿流水线；
+- “多智能体协同”“ReAct Agent”“自主调用工具”——当前 Deep 是有界的
+  provider-neutral Deep Retrieval，不是原私有仓库的 50-turn/多子 Agent
+  runtime；
 - “支持 Self-hosted LiveSync”——它只是 roadmap；
 - “内置 Obsidian Sync”——Headless 是外部上游、可选且只允许本地构建；
 - “企业级多租户”“RBAC”“高可用”“分布式”“海量向量库”；
@@ -97,6 +103,9 @@ Obsidian 文件格式的前提下完成：
   日期、代码标识符做 tokenization；用 BM25 做词法召回，用 embedding
   与余弦相似度做 dense 召回，再用 `1 / (60 + rank)` 的 RRF 合并两个
   排名，避免直接归一化不可比的分数。
+- 为知识问答实现 provider-neutral Deep Retrieval：先让当前配置模型输出
+  有界互补查询，始终保留原问题，最多执行四路混合检索，再按文件级倒数
+  排名融合证据；规划失败时安全回退原问题，不引入 Shell、Web 或写入工具。
 - 以 chunk hash 复用已有向量，只对变化内容调用 embedding；使用原子
   generation 与 current/previous manifest 持久化索引，并通过文件监听
   加周期 reconciliation 处理变化。
@@ -116,8 +125,8 @@ Obsidian 文件格式的前提下完成：
 
 ### R：Result
 
-- 得到一个可运行的单节点 MVP，覆盖知识问答、四模式前端、混合检索、
-  流式响应、历史记录、来源预览和三类确认写入；
+- 得到一个可运行的单节点 MVP，覆盖普通/Deep Retrieval 知识问答、四模式
+  前端、混合检索、流式响应、历史记录、来源预览和三类确认写入；
 - `npm run verify` 当前通过完整测试套件及 Secret/私人路径扫描；
 - synthetic demo baseline 在 `K=3` 时得到 Recall `1.0000`、MRR
   `0.8333`、nDCG `0.8770`，证明评测工具链可复现；
@@ -131,14 +140,15 @@ Obsidian 文件格式的前提下完成：
 
 ## 90 秒面试口述
 
-> 我做了一个自托管的 Obsidian RAG 项目 VaultMind。核心问题不是简单接
+> 我做了一个自托管的 Obsidian RAG 项目 Second-Mind。核心问题不是简单接
 > 一个聊天 API，而是怎样把私有知识检索、模型适配、文件写入和同步边界
 > 做成一个可靠系统。
 >
 > 读取侧我没有只做向量检索，而是实现了中文友好的 BM25 和可选 dense
 > embedding，用 RRF 融合排名。这样专有名词、日期和代码标识符由 BM25
 > 保底，同义表达由向量补充；embedding 故障时系统会显式降级。索引只对
-> 变化 chunk 重算向量，并保留前后两代原子 generation。
+> 变化 chunk 重算向量，并保留前后两代原子 generation。Deep Retrieval
+> 会执行有界问题分解和最多四路检索，但它不是多 Agent runtime。
 >
 > 写入侧我把模型输出放在 Vault 外的草稿区，用户预览和编辑后才允许
 > 保存。更新已有笔记时会先保存已验证的旧内容恢复副本，再检查一次
@@ -226,7 +236,7 @@ key 通过环境变量或权限受控的 `*_FILE` 读入，只用于服务端请
 
 ### 12. Obsidian Headless 是项目内置的吗？
 
-不是。VaultMind 始终读本地文件。可选 overlay 只是在本地构建官方
+不是。Second-Mind 始终读本地文件。可选 overlay 只是在本地构建官方
 `obsidian-headless` 并共享 Vault。它需要 Obsidian Sync 订阅，属于外部
 open-beta 上游，npm 元数据为 `UNLICENSED`，所以主镜像不打包，也不应
 分发本地构建结果。
@@ -278,6 +288,7 @@ Recall@K 衡量相关文档是否进入上下文候选；MRR 强调第一个相�
 | OpenAI-compatible / Anthropic | [`../src/llm-client.mjs`](../src/llm-client.mjs)、[`../test/llm-client.test.mjs`](../test/llm-client.test.mjs) |
 | OpenAI-compatible / DashScope embedding | [`../src/embedding-client.mjs`](../src/embedding-client.mjs)、[`../test/embedding-client.test.mjs`](../test/embedding-client.test.mjs) |
 | SSE Q&A 与草稿流程 | [`../src/task-manager.mjs`](../src/task-manager.mjs)、[`../test/server.test.mjs`](../test/server.test.mjs) |
+| provider-neutral Deep Retrieval | [`../src/task-modes.mjs`](../src/task-modes.mjs)、[`../src/task-manager.mjs`](../src/task-manager.mjs)、[`../test/deep-mode.test.mjs`](../test/deep-mode.test.mjs) |
 | 草稿确认、并发冲突、附件 | [`../src/vault-store.mjs`](../src/vault-store.mjs)、[`../test/vault-store.test.mjs`](../test/vault-store.test.mjs) |
 | 路径与隐藏目录安全 | [`../src/path-policy.mjs`](../src/path-policy.mjs) |
 | 会话、同源与写请求保护 | [`../src/auth.mjs`](../src/auth.mjs)、[`../test/auth.test.mjs`](../test/auth.test.mjs) |
@@ -292,7 +303,7 @@ Recall@K 衡量相关文档是否进入上下文候选；MRR 强调第一个相�
 
 1. 展示关键词命中精确术语，再展示语义查询；
 2. 展开来源预览，说明路径如何进入 grounded context；
-3. 发起 Q&A，展示 SSE 流式文本与引用；
+3. 分别发起普通和 Deep Retrieval Q&A，展示多路检索、SSE 与引用；
 4. 生成日记草稿，证明确认前目标文件不存在；
 5. 在另一个终端修改目标文件，演示确认保存返回冲突；
 6. 展示 `.obsidian` 文件无法搜索/读取；

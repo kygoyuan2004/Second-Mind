@@ -116,7 +116,7 @@ export function createConfig(overrides = {}) {
   );
   const config = {
     projectRoot: PROJECT_ROOT,
-    appName: text('APP_NAME', 'VaultMind'),
+    appName: text('APP_NAME', 'Second Mind'),
     vaultLabel: text('VAULT_LABEL', 'My Obsidian Vault'),
     host: text('HOST', '127.0.0.1'),
     port: integer('PORT', 8787, { min: 1, max: 65_535 }),
@@ -132,9 +132,9 @@ export function createConfig(overrides = {}) {
     auditFile: absolute('AUDIT_FILE', path.join(dataDir, 'audit.jsonl')),
     autoCreateVaultPaths: bool('VAULT_AUTO_CREATE_PATHS', true),
     paths: {
-      diary: relativeVaultPath('DIARY_DIR', 'VaultMind/Diary'),
-      plan: relativeVaultPath('PLAN_DIR', 'VaultMind/Plans'),
-      scratch: relativeVaultPath('SCRATCH_DIR', 'VaultMind/Inbox'),
+      diary: relativeVaultPath('DIARY_DIR', 'Second-Mind/Diary'),
+      plan: relativeVaultPath('PLAN_DIR', 'Second-Mind/Plans'),
+      scratch: relativeVaultPath('SCRATCH_DIR', 'Second-Mind/Inbox'),
     },
     templates: {
       diary: text('DIARY_TEMPLATE', '').replaceAll('\\', '/').replace(/^\/+|\/+$/g, ''),
@@ -180,6 +180,10 @@ export function createConfig(overrides = {}) {
       watch: bool('INDEX_WATCH', true),
       reconcileIntervalMs: integer('INDEX_RECONCILE_SECONDS', 300, { min: 10, max: 86_400 }) * 1_000,
     },
+    deep: {
+      enabled: bool('DEEP_TASKS_ENABLED', true),
+      topK: integer('RAG_DEEP_TOP_K', 16, { min: 1, max: 30 }),
+    },
     limits: {
       jsonBodyBytes: integer('MAX_JSON_BODY_BYTES', 24 * 1024 * 1024, { min: 65_536 }),
       attachmentCount: integer('MAX_ATTACHMENT_COUNT', 8, { min: 0, max: 32 }),
@@ -203,6 +207,7 @@ export function createConfig(overrides = {}) {
     llm: { ...config.llm, ...(overrides.llm || {}) },
     embedding: { ...config.embedding, ...(overrides.embedding || {}) },
     retrieval: { ...config.retrieval, ...(overrides.retrieval || {}) },
+    deep: { ...config.deep, ...(overrides.deep || {}) },
     limits: { ...config.limits, ...(overrides.limits || {}) },
     sync: { ...config.sync, ...(overrides.sync || {}) },
     paths: { ...config.paths, ...(overrides.paths || {}) },
@@ -230,6 +235,11 @@ export function validateRuntimeConfig(config) {
   if (!config.llm.model) issues.push('LLM_MODEL is required.');
   if (config.embedding.provider !== 'disabled' && !config.embedding.model) {
     issues.push('EMBEDDING_MODEL is required when embeddings are enabled.');
+  }
+  if (config.deep?.topK !== undefined && (
+    !Number.isSafeInteger(Number(config.deep.topK)) || Number(config.deep.topK) < 1 || Number(config.deep.topK) > 30
+  )) {
+    issues.push('RAG_DEEP_TOP_K must be an integer between 1 and 30.');
   }
   if (issues.length) {
     const error = new Error(`Invalid configuration:\n- ${issues.join('\n- ')}`);

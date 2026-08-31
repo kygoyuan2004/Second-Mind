@@ -1,6 +1,6 @@
 # Security model
 
-VaultMind is designed for a single trusted administrator operating a private
+Second-Mind is designed for a single trusted administrator operating a private
 knowledge service. It narrows filesystem writes and requires draft
 confirmation, but it is not a multi-tenant document platform, an internet edge
 gateway, a malware scanner, or a sandbox for arbitrary model-generated code.
@@ -25,7 +25,7 @@ account, or an unencrypted backup is equivalent to possession of these assets.
 ## Trust boundaries
 
 ```text
-Browser -> HTTPS/VPN edge -> VaultMind -> Vault and private state
+Browser -> HTTPS/VPN edge -> Second-Mind -> Vault and private state
                                       -> model provider
                                       -> embedding provider
 Sync sidecar <-> Obsidian Sync cloud -> shared Vault files
@@ -38,8 +38,14 @@ component equally trusted.
 
 ## Authentication and sessions
 
-VaultMind uses a configured administrator username/password and an HMAC-signed,
+Second-Mind uses a configured administrator username/password and an HMAC-signed,
 HttpOnly, SameSite=Strict session cookie.
+
+The cookie name `vaultmind_session` and mutating-request header
+`X-VaultMind-Request` are legacy wire identifiers retained so existing browser
+sessions, reverse-proxy rules, and clients are not silently broken. They do not
+represent the public product name and must not be renamed without a versioned
+compatibility plan.
 
 - Use a unique randomly generated administrator password of at least 12
   characters; a password manager-generated value should be longer.
@@ -100,7 +106,7 @@ configure.
 The application prepares writes in private draft storage and commits them only
 after explicit confirmation. Diary, plan, and inbox directories are the only
 application write targets. A content hash detects many concurrent edits
-between preview and save. Before replacing an existing note, VaultMind stores
+between preview and save. Before replacing an existing note, Second-Mind stores
 a verified preimage under `RECOVERY_DIR`, checks the live hash again, and then
 uses an atomic rename. The preimage is retained for
 `RECOVERY_RETENTION_DAYS` (30 by default). There is still no distributed
@@ -109,7 +115,7 @@ check-to-rename window. Preserve Sync conflicts, monitor recovery retention,
 and maintain independent backups.
 
 Audit append failures occur after some filesystem operations have already
-committed. VaultMind therefore returns an explicit `AUDIT_WRITE_FAILED`
+committed. Second-Mind therefore returns an explicit `AUDIT_WRITE_FAILED`
 post-commit warning instead of returning a misleading generic failure that
 could encourage a duplicate save. Treat that warning as an operational alert,
 repair `AUDIT_FILE` storage, and record the incident separately.
@@ -123,7 +129,7 @@ directory.
 ## Model-content safety
 
 Vault notes and uploaded text are untrusted data. They can contain instructions
-intended to manipulate a model. VaultMind sends text to a generation API but
+intended to manipulate a model. Second-Mind sends text to a generation API but
 does not grant that model a shell, arbitrary filesystem tools, or general web
 tools. Preserve that architecture.
 

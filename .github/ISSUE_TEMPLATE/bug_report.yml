@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible VaultMind defect without private Vault data.
+description: Report a reproducible Second-Mind defect without private Vault data.
 title: "[Bug]: "
 labels: [bug]
 body:

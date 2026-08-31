@@ -33,7 +33,7 @@ jobs:
         run: >-
           npm run eval --
           --vault examples/demo-vault
-          --index "${{ runner.temp }}/vaultmind-eval-index"
+          --index "${{ runner.temp }}/second-mind-eval-index"
           --k 3
           --min-recall 1
 
@@ -46,4 +46,4 @@ jobs:
         with:
           persist-credentials: false
       - run: docker compose config --quiet
-      - run: docker build --tag vaultmind:ci .
+      - run: docker build --tag second-mind:ci .

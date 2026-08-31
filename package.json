@@ -1,5 +1,5 @@
 {
-  "name": "vaultmind",
+  "name": "second-mind",
   "version": "0.1.0",
   "description": "Self-hosted, provider-neutral RAG workspace for Obsidian vaults",
   "type": "module",

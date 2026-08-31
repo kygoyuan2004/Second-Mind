@@ -1,6 +1,6 @@
 # Data flow and privacy boundaries
 
-VaultMind combines a browser, a local filesystem Vault, private application
+Second-Mind combines a browser, a local filesystem Vault, private application
 state, and operator-selected model services. Deployment does not make a remote
 provider private: understand each flow before using real notes.
 
@@ -13,7 +13,7 @@ Browser
 Trusted reverse proxy or Tailscale Serve
   | loopback HTTP
   v
-VaultMind application
+Second-Mind application
   |-- read allowed Markdown/text ------> retrieval index in DATA_DIR
   |-- confirmed writes ---------------> diary/plan/inbox in VAULT_PATH
   |-- conversations/drafts/audit -----> private DATA_DIR volume
@@ -33,7 +33,7 @@ external process.
 ## Browser to application
 
 After login, the browser sends questions, diary/plan/inbox input, selected
-dates, and optional attachments to VaultMind. Answers and draft events stream
+dates, and optional attachments to Second-Mind. Answers and draft events stream
 back over server-sent events. The browser receives source paths and retrieved
 content needed for the interface.
 
@@ -69,10 +69,14 @@ provider-side records, backups, or remote Sync copies.
 ## Embedding provider egress
 
 When `EMBEDDING_PROVIDER=disabled`, retrieval is lexical and no embedding API
-is called. When embeddings are enabled, VaultMind sends:
+is called. When embeddings are enabled, Second-Mind sends:
 
 - chunks of indexed documents during initial and incremental indexing; and
 - the user's search/question text when generating a query vector.
+
+Provider-neutral Deep Retrieval can additionally send up to three
+model-generated query variants to the embedding endpoint. Normal Q&amp;A sends
+one query.
 
 The provider returns vectors, which are stored in the local index. Provider
 requests can therefore expose much more of the Vault than the few passages
@@ -84,10 +88,16 @@ abuse-monitoring terms. Use a separate least-privilege API key and HTTPS.
 For a knowledge question, the LLM request contains the system instructions,
 the question, up to ten recent conversation messages, retrieved note excerpts
 within `RAG_MAX_CONTEXT_CHARS`, source paths, and text attachment excerpts.
+Provider-neutral Deep Retrieval first sends the question and bounded recent
+context in a separate query-planning request, then sends the fused source
+context for the final answer. It is a bounded retrieval strategy, not the
+private predecessor's 50-turn or multi-subagent runtime. Only observable search
+queries and progress are displayed; hidden chain-of-thought is neither
+requested nor exposed.
 
 For a diary, plan, or inbox draft, the request contains the user input and may
 contain the configured template, current note content, and text attachment
-excerpts. The generated Markdown returns to VaultMind and remains a private
+excerpts. The generated Markdown returns to Second-Mind and remains a private
 draft until the user explicitly saves it.
 
 Image and PDF bytes are not supplied to the current text-only LLM request.
@@ -121,7 +131,7 @@ limited to a trusted, firewalled private network.
 
 The optional Headless sidecar has read/write access to the whole Vault and
 connects to the Obsidian Sync service. Its login and remote-Vault link state
-live in private named volumes that the application does not mount. VaultMind
+live in private named volumes that the application does not mount. Second-Mind
 can still observe ordinary note files after the sidecar materializes them.
 
 Obsidian Headless is an open beta and its npm package is marked UNLICENSED.

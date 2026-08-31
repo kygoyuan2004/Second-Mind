@@ -578,7 +578,7 @@ export class VaultStore {
       await this.audit(event);
       return [];
     } catch {
-      console.warn('[vaultmind] AUDIT_WRITE_FAILED');
+      console.warn('[second-mind] AUDIT_WRITE_FAILED');
       return ['AUDIT_WRITE_FAILED'];
     }
   }

@@ -21,9 +21,9 @@ export async function temporaryProject(prefix = 'vaultmind-test-') {
       auditFile: path.join(dataDir, 'audit.jsonl'),
       autoCreateVaultPaths: true,
       paths: {
-        diary: 'VaultMind/Diary',
-        plan: 'VaultMind/Plans',
-        scratch: 'VaultMind/Inbox',
+        diary: 'Second-Mind/Diary',
+        plan: 'Second-Mind/Plans',
+        scratch: 'Second-Mind/Inbox',
       },
       templates: { diary: '', plan: '' },
       excludedPaths: ['.obsidian', '.trash', '.git', '.livesync'],

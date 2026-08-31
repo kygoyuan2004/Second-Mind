@@ -23,7 +23,7 @@ window before public disclosure.
 
 ## Operator security
 
-VaultMind handles private notes and can write into configured Vault folders.
+Second-Mind handles private notes and can write into configured Vault folders.
 Before deployment, read [docs/security.md](docs/security.md),
 [docs/networking.md](docs/networking.md), and
 [docs/data-flow.md](docs/data-flow.md). In particular, keep the application on

@@ -1,4 +1,4 @@
-# Replace @DOMAIN@ and @PORT@. Keep VaultMind bound to 127.0.0.1 and set
+# Replace @DOMAIN@ and @PORT@. Keep Second-Mind bound to 127.0.0.1 and set
 # TRUST_PROXY=true plus SECURE_COOKIE=true in its environment.
 @DOMAIN@ {
     encode zstd gzip

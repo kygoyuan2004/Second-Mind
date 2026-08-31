@@ -1,6 +1,6 @@
 # Replace every templated value before installing this file.
 [Unit]
-Description=VaultMind knowledge assistant
+Description=Second-Mind knowledge assistant
 Documentation=@PROJECT_DOCUMENTATION_URL@
 Wants=network-online.target
 After=network-online.target local-fs.target

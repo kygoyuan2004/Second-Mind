@@ -6,7 +6,7 @@ should use the file-backed secrets overlay described in
 [deployment.md](deployment.md).
 
 The Vault root must already exist. With `VAULT_AUTO_CREATE_PATHS=true`,
-VaultMind creates only its three configured write directories inside that
+Second-Mind creates only its three configured write directories inside that
 root; it does not silently create a missing Vault.
 
 ## Required runtime settings
@@ -28,7 +28,7 @@ value takes precedence. Secret files writable by group or others are rejected.
 
 | Variable | Default | Notes |
 |---|---:|---|
-| `APP_NAME` | `VaultMind` | Browser-visible application name |
+| `APP_NAME` | `Second Mind` | Browser-visible application name |
 | `VAULT_LABEL` | `My Obsidian Vault` | Browser-visible Vault label |
 | `HOST` | `127.0.0.1` | Keep loopback unless a container/reverse proxy requires otherwise |
 | `PORT` | `8787` | HTTP listen port |
@@ -39,11 +39,21 @@ value takes precedence. Secret files writable by group or others are rejected.
 | `RECOVERY_DIR` | `DATA_DIR/recovery` | Verified preimages retained before replacing existing notes |
 | `CONVERSATION_FILE` | `DATA_DIR/conversations.json` | Chat history |
 | `AUDIT_FILE` | `DATA_DIR/audit.jsonl` | Metadata-only write audit |
-| `DIARY_DIR` | `VaultMind/Diary` | Allowed diary write root |
-| `PLAN_DIR` | `VaultMind/Plans` | Allowed plan write root |
-| `SCRATCH_DIR` | `VaultMind/Inbox` | Allowed evergreen-note write root |
+| `DIARY_DIR` | `Second-Mind/Diary` | Allowed diary write root |
+| `PLAN_DIR` | `Second-Mind/Plans` | Allowed plan write root |
+| `SCRATCH_DIR` | `Second-Mind/Inbox` | Allowed evergreen-note write root |
 | `DIARY_TEMPLATE` / `PLAN_TEMPLATE` | blank | Optional relative Markdown path inside the Vault |
 | `VAULT_EXCLUDED_PATHS` | see `.env.example` | Replacement comma-separated denylist; every hidden path is denied separately regardless |
+
+### Upgrading the write-directory defaults
+
+The current defaults are `Second-Mind/Diary`, `Second-Mind/Plans`, and
+`Second-Mind/Inbox`. Earlier releases used `VaultMind/Diary`,
+`VaultMind/Plans`, and `VaultMind/Inbox`. Second-Mind does not move notes during
+an upgrade. After backing up the Vault, either set all three old paths
+explicitly to preserve the existing layout, or stop every application/Sync
+writer and deliberately migrate the directories before adopting the new
+defaults. Mixing the two choices can split old and new notes across both trees.
 
 `TRUST_PROXY=true` trusts the first `X-Forwarded-For` value for login
 throttling. Enable it only when clients cannot bypass a proxy that replaces
@@ -100,6 +110,8 @@ hard-coding a claim that a particular hosted model remains available.
 | `EMBEDDING_BATCH_SIZE` | `16` | Documents per outbound request |
 | `RAG_TOP_K` | `8` | Source files supplied to generation |
 | `RAG_MAX_CONTEXT_CHARS` | `30000` | Maximum retrieved source text in one prompt |
+| `DEEP_TASKS_ENABLED` | `true` | Publish provider-neutral Deep Retrieval for Q&amp;A: bounded query decomposition, up to four hybrid searches, and evidence fusion |
+| `RAG_DEEP_TOP_K` | `16` | Explicit per-search and final source-file ceiling for Deep Retrieval |
 | `INDEX_WATCH` | `true` | Watch known Vault directories for changes |
 | `INDEX_RECONCILE_SECONDS` | `300` | Full metadata/hash reconciliation interval |
 
@@ -117,9 +129,12 @@ Changing provider, model, or dimension invalidates the active vector
 generation and triggers a rebuild. Run `npm run index` to build explicitly.
 
 Remote embedding providers receive every indexed text chunk and each semantic
-query. Remote chat providers receive the user prompt, recent conversation
-history, selected note excerpts, and supported text-attachment excerpts. Use
-local endpoints when that data must remain on the host.
+query. Deep Retrieval can send several model-generated query variants.
+Remote chat providers receive the user prompt, recent conversation history,
+selected note excerpts, and supported text-attachment excerpts; Deep Retrieval
+also uses one bounded planning request before final generation. It is not the
+private predecessor's 50-turn or multi-subagent runtime. Use local endpoints
+when that data must remain on the host.
 
 ## Transport policy and limits
 
@@ -138,4 +153,13 @@ retention and defaults to 30 days; backups remain necessary.
 
 `SYNC_PROVIDER` accepts `filesystem`, `obsidian-headless`, or `external`.
 `SYNC_DISPLAY_NAME` is display metadata only. Neither variable starts a sync
-client or grants VaultMind any sync credential. See [sync.md](sync.md).
+client or grants Second-Mind any sync credential. See [sync.md](sync.md).
+
+## Compatibility identifiers
+
+The browser-visible product name is Second-Mind. The environment loader name
+`VAULTMIND_ENV_FILE` and Compose variables `VAULTMIND_BIND_IP`,
+`VAULTMIND_PORT`, `VAULTMIND_UID`, and `VAULTMIND_GID` remain supported as
+legacy configuration identifiers. Existing deployments should keep them until
+a separately documented migration is available; their spelling does not alter
+the UI brand.

@@ -172,7 +172,7 @@ export async function createApp(configInput, dependencies = {}) {
   })();
   ready.catch((error) => {
     initialization.error = error;
-    console.error('[vaultmind] INITIALIZATION_FAILED', error.code || error.name);
+    console.error('[second-mind] INITIALIZATION_FAILED', error.code || error.name);
   });
   await assertStateOutsideVault(config);
 
@@ -306,7 +306,7 @@ export async function createApp(configInput, dependencies = {}) {
         return;
       }
       const status = Number(error.status) || 500;
-      if (status >= 500) console.error('[vaultmind]', error.code || error.name, error.message);
+      if (status >= 500) console.error('[second-mind]', error.code || error.name, error.message);
       return json(res, status, {
         error: error.code || 'SERVER_ERROR',
         message: status >= 500 && !error.status ? 'The server could not complete this request.' : error.message,

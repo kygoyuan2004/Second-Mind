@@ -23,11 +23,29 @@ class FakeLlm {
   }
 }
 
+class FakeDeepLlm extends FakeLlm {
+  constructor() {
+    super();
+    this.calls = [];
+  }
+
+  async generate(messages, options = {}) {
+    this.calls.push(messages);
+    const system = messages.find((message) => message.role === 'system')?.content || '';
+    if (system.includes('bounded search queries')) {
+      return JSON.stringify({
+        queries: ['RRF lexical ranking', 'semantic retrieval ranking'],
+      });
+    }
+    return super.generate(messages, options);
+  }
+}
+
 function appConfig(project) {
   return {
     ...project.config,
     projectRoot,
-    appName: 'VaultMind Test',
+    appName: 'Second Mind Test',
     vaultLabel: 'Fixture Vault',
     publicDir: path.join(projectRoot, 'public'),
     host: '127.0.0.1',
@@ -167,6 +185,107 @@ test('authenticated API supports grounded Q&A and review-before-write diary flow
     headers: { cookie: clearedCookie },
   });
   assert.equal(loggedOutSession.body.authenticated, false);
+});
+
+test('authenticated HTTP API exposes and executes bounded Deep retrieval', async (t) => {
+  const project = await temporaryProject('second-mind-server-deep-');
+  const llm = new FakeDeepLlm();
+  let app;
+  t.after(async () => {
+    if (app) {
+      await app.manager.close();
+      await new Promise((resolve) => app.server.close(resolve));
+    }
+    await project.cleanup();
+  });
+  await fsp.mkdir(path.join(project.vaultPath, 'Learning'), { recursive: true });
+  await fsp.writeFile(
+    path.join(project.vaultPath, 'Learning', 'RAG.md'),
+    '# RAG\n\nRRF combines lexical and semantic ranked lists.\n',
+  );
+
+  app = await createApp(appConfig(project), { llm });
+  await app.ready;
+  const searches = [];
+  const search = app.index.search.bind(app.index);
+  app.index.search = async (query, options) => {
+    searches.push({ query, options });
+    return search(query, options);
+  };
+  await new Promise((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+  const address = app.server.address();
+  const base = `http://127.0.0.1:${address.port}`;
+
+  const login = await requestJson(base, '/api/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-vaultmind-request': '1' },
+    body: JSON.stringify({ username: 'admin', password: 'correct horse battery staple' }),
+  });
+  assert.equal(login.response.status, 200);
+  const cookie = login.response.headers.get('set-cookie');
+  const authHeaders = { cookie, 'x-vaultmind-request': '1', 'content-type': 'application/json' };
+
+  const status = await requestJson(base, '/api/knowledge/status', { headers: { cookie } });
+  assert.equal(status.response.status, 200);
+  assert.deepEqual(status.body.taskModes.map((mode) => mode.id), ['normal', 'deep']);
+
+  const deep = await requestJson(base, '/api/knowledge/tasks', {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({
+      kind: 'qa',
+      prompt: 'How does RRF combine lexical and semantic retrieval results?',
+      taskMode: 'deep',
+    }),
+  });
+  assert.equal(deep.response.status, 201);
+  assert.equal(deep.body.taskMode, 'deep');
+
+  const stream = await fetch(`${base}/api/knowledge/tasks/${deep.body.taskId}/events`, {
+    headers: { cookie },
+  });
+  assert.equal(stream.status, 200);
+  const deepEvents = events(await stream.text());
+  assert.ok(deepEvents.some((event) => (
+    event.type === 'session' && event.data.taskMode === 'deep'
+  )));
+  assert.ok(deepEvents.some((event) => (
+    event.type === 'activity'
+    && event.data.toolName === 'deep_query_planner'
+    && event.data.stage === 'complete'
+  )));
+  assert.equal(deepEvents.filter((event) => (
+    event.type === 'activity'
+    && event.data.toolName === 'vault_search'
+    && event.data.stage === 'start'
+  )).length, 3);
+  const fusion = deepEvents.find((event) => (
+    event.type === 'activity'
+    && event.data.toolName === 'evidence_fusion'
+    && event.data.stage === 'complete'
+  ));
+  assert.equal(fusion?.data.diagnostics.queryCount, 3);
+  assert.equal(fusion?.data.diagnostics.strategy, 'multi-query-keyword-rrf');
+  assert.equal(searches.length, 3);
+  assert.deepEqual(searches.map((item) => item.options.route), ['hybrid', 'hybrid', 'hybrid']);
+  assert.equal(llm.calls.length, 2);
+  assert.equal(deepEvents.at(-1).type, 'done');
+  assert.equal(deepEvents.at(-1).data.status, 'completed');
+
+  const deepWrite = await requestJson(base, '/api/knowledge/tasks', {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ kind: 'diary', prompt: 'Write a diary.', taskMode: 'deep' }),
+  });
+  assert.equal(deepWrite.response.status, 400);
+  assert.equal(deepWrite.body.error, 'DEEP_MODE_NOT_ALLOWED');
+
+  const clientTools = await requestJson(base, '/api/knowledge/tasks', {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({
+      kind: 'qa', prompt: 'Use a shell tool.', taskMode: 'deep', tools: ['shell'],
+    }),
+  });
+  assert.equal(clientTools.response.status, 400);
+  assert.equal(clientTools.body.error, 'CLIENT_AGENT_OPTIONS_DENIED');
 });
 
 test('application state cannot resolve back inside the Vault through a symbolic link', async (t) => {

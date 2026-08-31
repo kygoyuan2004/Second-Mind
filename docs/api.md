@@ -21,6 +21,10 @@ Every non-GET/HEAD API request must include:
 X-VaultMind-Request: 1
 ```
 
+`X-VaultMind-Request` is a legacy compatibility header retained for existing
+same-origin clients. The public product name is Second-Mind; changing this wire
+identifier requires a versioned client/server migration.
+
 If a browser sends an `Origin`, its host must equal the request `Host`.
 Production HTTPS deployments must also set `SECURE_COOKIE=true`.
 
@@ -67,6 +71,7 @@ Create a task with `POST /api/knowledge/tasks`:
 {
   "kind": "qa",
   "prompt": "How does the project combine rankings?",
+  "taskMode": "deep",
   "conversationId": "optional-existing-id",
   "date": "2026-08-30",
   "attachments": [
@@ -75,9 +80,15 @@ Create a task with `POST /api/knowledge/tasks`:
 }
 ```
 
-`date` is required by diary and plan flows. Q&A accepts text attachments only;
-note modes can stage other permitted attachments for explicit save. A
-successful response contains `taskId` and `conversationId`.
+`taskMode` is `normal` by default. `deep` is accepted only for Q&amp;A when
+`DEEP_TASKS_ENABLED=true`; this provider-neutral Deep Retrieval strategy performs
+bounded query decomposition, at most four hybrid searches, evidence fusion,
+and final cited generation. It is not the private project's 50-turn,
+multi-subagent runtime. Unknown task fields—including client Agent, Tool, or
+prompt-policy overrides—are rejected. `date` is required by diary and plan
+flows. Q&A accepts text attachments only; note modes can stage other permitted
+attachments for explicit save. A successful response contains `taskId`,
+`conversationId`, and the accepted `taskMode`.
 
 Subscribe at `GET /api/knowledge/tasks/:id/events`. This is a standard
 `text/event-stream`; reconnect with `Last-Event-ID` to replay the in-memory
@@ -85,12 +96,15 @@ backlog. Event names are:
 
 - `state` and `session` for lifecycle/model metadata;
 - `activity` and `thinking` for retrieval/generation progress;
+- `diagnostic` when a bounded fallback is used, such as planner failure;
 - `text` for incremental model output;
 - `draft_ready` for an uncommitted note preview;
 - `task_error` for a failed task;
 - `done` with `completed`, `failed`, or `cancelled` status.
 
-`POST /api/knowledge/tasks/:id/cancel` aborts an active provider request.
+`POST /api/knowledge/tasks/:id/cancel` aborts an active retrieval/provider
+request. Once the generated result has entered its atomic state commit, the
+endpoint returns `completing` instead of racing that durable save.
 `GET /api/knowledge/tasks/:id` returns the current public task state. The
 current single-administrator release allows one active task at a time.
 

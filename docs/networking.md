@@ -1,6 +1,6 @@
 # Networking and remote access
 
-VaultMind contains private notes, prompts, generated drafts, and account
+Second-Mind contains private notes, prompts, generated drafts, and account
 sessions. Its application port is not a public security boundary. The default
 Compose mapping is intentionally:
 
@@ -19,7 +19,7 @@ router port.
 
 1. Install Tailscale on the server and client devices.
 2. Enable MagicDNS and HTTPS for the tailnet.
-3. Keep VaultMind bound to `127.0.0.1`.
+3. Keep Second-Mind bound to `127.0.0.1`.
 4. Restrict access to the server and service in the tailnet policy.
 5. Set these non-secret application values before restarting:
 
@@ -47,7 +47,7 @@ are different products: seeing a valid `*.ts.net` certificate does not by
 itself prove that access is tailnet-only. Verify `tailscale serve status` and
 the tailnet policy after every networking change.
 
-Keep VaultMind's own password even when Tailscale controls network membership.
+Keep Second-Mind's own password even when Tailscale controls network membership.
 Tailnet membership and application authentication protect different failure
 modes.
 
@@ -57,7 +57,7 @@ For a public cloud host, use a dedicated DNS name, Caddy-managed HTTPS, a host
 firewall, and the application login. Do not serve the origin on its raw IP and
 port.
 
-1. Keep VaultMind on `127.0.0.1:@PORT@`.
+1. Keep Second-Mind on `127.0.0.1:@PORT@`.
 2. Point the chosen DNS record at the server.
 3. Allow inbound TCP 80/443 only; keep 8787 blocked externally.
 4. Render `deploy/Caddyfile.example` with the domain and local port.
@@ -93,7 +93,7 @@ server-sent events and can run for several minutes.
 `TRUST_PROXY=true` makes login rate limiting use the first
 `X-Forwarded-For` value. Enable it only when:
 
-- VaultMind listens on loopback or a private container network; and
+- Second-Mind listens on loopback or a private container network; and
 - every request must pass through a proxy that deletes and recreates forwarding
   headers.
 
@@ -130,7 +130,7 @@ providers:
 Keep `ALLOW_INSECURE_PROVIDER_HTTP=false`. The application permits HTTP for
 `localhost`, loopback addresses, and `host.docker.internal`; any other HTTP
 endpoint requires an explicit opt-in. If a model runs on another Tailscale
-node, use a tailnet ACL that allows only the VaultMind server to reach that
+node, use a tailnet ACL that allows only the Second-Mind server to reach that
 model port and prefer HTTPS or an authenticated service identity.
 
 Provider API keys belong in file-backed secrets, never URL query parameters.

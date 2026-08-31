@@ -9,15 +9,12 @@ Second-Mind 是一个面向本地 Obsidian Vault 的自托管 RAG 知识工作�
 来源预览和“预览后确认写入”的笔记工作流。模型与 embedding 由部署者
 自行选择，API Key 只保存在服务端。
 
-Second-Mind 当前内置 Web 界面仍使用 **VaultMind** 品牌；以下截图如实
-展示该运行界面，没有为文档修改产品源码。
-
 <p align="center">
-  <a href="assets/second-mind-grounded-qa.png">
-    <img src="assets/second-mind-grounded-qa.png" alt="Second-Mind 内置 VaultMind 界面基于 Obsidian 来源回答知识库问题" width="100%">
+  <a href="assets/second-mind-local-vault-answer.png">
+    <img src="assets/second-mind-local-vault-answer.png" alt="Second Mind 使用千问回答本地 Obsidian 知识库问题" width="100%">
   </a>
 </p>
-<p align="center"><sub>全部界面截图均来自真实、隔离的 Second-Mind 演示实例，使用合成笔记和确定性 OpenAI-compatible 演示端点拍摄；不含个人笔记或生产凭据。</sub></p>
+<p align="center"><sub><strong>基于真实 Obsidian 笔记的深度可溯源问答。</strong>截图来自隔离的 Second-Mind 实例，只使用一篇通过隐私检查的本地技术笔记只读快照，并接入 Qwen 3.8 Max、Qwen 3.7 Text Embedding 与已实现的多查询 Deep Retrieval 链路；不含个人笔记或凭据。</sub></p>
 
 > [!IMPORTANT]
 > 当前版本定位为单管理员、单节点的私人知识服务，不是多租户 SaaS。
@@ -28,7 +25,7 @@ Second-Mind 当前内置 Web 界面仍使用 **VaultMind** 品牌；以下截图
 | 范围 | 当前实现 |
 |---|---|
 | 知识问答 | 基于检索片段生成答案，要求输出 Obsidian 路径引用，通过 SSE 持续返回 |
-| 检索 | 中文友好 BM25；可选 dense embedding；余弦相似度与 RRF 融合；embedding 故障时回退关键词检索 |
+| 检索 | 中文友好 BM25；可选 dense embedding；余弦相似度与 RRF 融合；普通单路与 provider-neutral Deep Retrieval；embedding 故障时回退关键词检索 |
 | 笔记工作流 | 日记、计划、随心记生成；Markdown 可编辑预览；用户确认后才写入 |
 | 文件体验 | 快速关键词检索、语义检索、来源预览、剪贴板附件和附件落盘 |
 | 模型 | OpenAI-compatible、Anthropic；本地 Ollama/vLLM/LM Studio 可走兼容接口 |
@@ -40,25 +37,41 @@ Self-hosted LiveSync 目前**没有实现**，只属于路线图。
 
 ## 产品实拍
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="assets/second-mind-source-preview.png"><img src="assets/second-mind-source-preview.png" alt="Second-Mind 检索结果的安全 Markdown 原文预览" width="100%"></a>
-      <br><sub><strong>检索结果可追溯。</strong>可以直接打开搜索结果或回答所依据的 Markdown 原文。</sub>
-    </td>
-    <td width="50%" valign="top">
-      <a href="assets/second-mind-review-before-write.png"><img src="assets/second-mind-review-before-write.png" alt="Second-Mind 生成计划后的确认写入界面" width="100%"></a>
-      <br><sub><strong>写入前人工确认。</strong>只有在检查、编辑 Markdown 并明确确认后，系统才允许修改 Vault。</sub>
-    </td>
-  </tr>
-</table>
+### 展开并检查执行过程
 
 <p align="center">
-  <a href="assets/second-mind-mobile.png">
-    <img src="assets/second-mind-mobile.png" alt="Second-Mind 在手机尺寸视口中的知识问答界面" width="320">
+  <a href="assets/second-mind-execution-trace.png">
+    <img src="assets/second-mind-execution-trace.png" alt="Second-Mind 展示检索、模型会话、来源选择、生成和完成状态的执行过程" width="100%">
   </a>
 </p>
-<p align="center"><sub><strong>响应式工作台。</strong>手机尺寸下仍可完成知识问答并查看来源引用。</sub></p>
+<p align="center"><sub><strong>完整展开 17 个可观察步骤，但不暴露隐藏思维链。</strong>实拍的 Deep Retrieval 任务展示千问会话、有界问题分解、四路混合检索、逐路结果、证据融合、带引用生成和完成状态。</sub></p>
+
+### 打开回答背后的原始证据
+
+<p align="center">
+  <a href="assets/second-mind-source-preview.png">
+    <img src="assets/second-mind-source-preview.png" alt="Second-Mind 打开回答所引用的本地 Obsidian 原始笔记" width="100%">
+  </a>
+</p>
+<p align="center"><sub><strong>检索结果可追溯。</strong>可以直接打开回答引用的 Markdown 原文，核验模型使用的证据。</sub></p>
+
+### 所有生成内容都要在写入前确认
+
+<p align="center">
+  <a href="assets/second-mind-review-before-write.png">
+    <img src="assets/second-mind-review-before-write.png" alt="Second-Mind 在明确写入 Vault 前预览千问生成的 Markdown" width="100%">
+  </a>
+</p>
+<p align="center"><sub><strong>写入由用户最终控制。</strong>生成内容可以先检查和编辑，只有明确确认后才允许写入 Vault；截图过程没有点击确认保存。</sub></p>
+
+> [!NOTE]
+> **“普通”和 provider-neutral Deep Retrieval 对应真实的服务端策略。**
+> 普通模式执行一次有界混合检索；Deep Retrieval 先分解问题，最多执行
+> 四路有界混合检索，按倒数排名融合文件级证据，再生成带引用的回答。
+> Deep Retrieval 只用于知识问答；日记、计划和随心记仍固定为普通模式，
+> 并继续执行“预览后确认写入”。
+> 这是与模型供应商无关的 Deep Retrieval，并不冒充原私有项目中最多
+> 50 轮、带工具和多个子 Agent 的 Agentic Deep 运行时。
 
 ## 五分钟 Docker 快速开始
 
@@ -94,10 +107,10 @@ EMBEDDING_PROVIDER=disabled
 mkdir -p secrets
 chmod 700 secrets
 umask 077
-read -rsp "设置 Second-Mind 管理员密码（至少 12 个字符）：" VAULTMIND_ADMIN_PASSWORD
+read -rsp "设置 Second-Mind 管理员密码（至少 12 个字符）：" SECOND_MIND_ADMIN_PASSWORD
 printf '\n'
-printf '%s' "$VAULTMIND_ADMIN_PASSWORD" > secrets/admin_password
-unset VAULTMIND_ADMIN_PASSWORD
+printf '%s' "$SECOND_MIND_ADMIN_PASSWORD" > secrets/admin_password
+unset SECOND_MIND_ADMIN_PASSWORD
 openssl rand -hex 32 > secrets/session_secret
 : > secrets/llm_api_key
 : > secrets/embedding_api_key
@@ -134,8 +147,9 @@ curl --fail http://127.0.0.1:8787/health/ready
 
 读取链路与写入链路被刻意拆开：
 
-- **读取：**安全文件网关 → Markdown 分块 → BM25/可选向量召回 → RRF →
-  有界上下文 → 模型 → 带来源答案。
+- **读取：**安全文件网关 → Markdown 分块 → 普通单路检索或
+  provider-neutral Deep Retrieval → BM25/可选向量召回 → RRF/证据融合 → 有界上下文 → 模型 →
+  带来源答案。
 - **写入：**用户输入 → 模型生成 Markdown → Vault 外私有草稿 → 人工预览
   与编辑 → 明确确认 → 路径/并发检查 → 已有日记/计划的已验证 preimage
   恢复副本 → 二次哈希检查 → 白名单目录原子替换。
@@ -155,6 +169,12 @@ YAML 和日志文件，单文件索引上限为 2 MiB。
    BM25 与向量名次；
 5. 按文件去重，把路径和有限长度片段交给模型；
 6. embedding 未启用或调用失败时，返回带诊断信息的关键词结果。
+
+普通问答只执行一次有界混合检索。Deep Retrieval 先让模型输出严格 JSON 格式的
+互补检索问题，并始终保留用户原问题；系统最多执行四次混合检索，再按倒数
+排名融合不同文件。最终上下文仍受 `RAG_MAX_CONTEXT_CHARS` 限制；深度模式
+不会获得 Shell、写入、联网或客户端可配置的 Agent 工具。它是多查询
+Deep Retrieval，不是多轮或多子 Agent 的自主运行时。
 
 索引使用原子 generation 文件，并保留 current/previous 两代。启动时若
 当前 generation 损坏，可回退上一代。文件监听负责快速更新，定时全量
@@ -246,7 +266,7 @@ Vault materializer，因此不能把 Self-hosted LiveSync 写成已支持能力�
 已实现：
 
 - 单管理员账号；HMAC 签名、`HttpOnly`、`SameSite=Strict` 会话 Cookie；
-- 登录尝试内存限流；同源校验；写请求必须包含
+- 登录尝试内存限流；同源校验；写请求必须包含保留用于兼容旧客户端的
   `X-VaultMind-Request: 1`；
 - 浏览器安全响应头和 DOMPurify Markdown 消毒；
 - 文件型 Secret 与权限检查；
@@ -295,7 +315,7 @@ npm run test:coverage
 
 ```bash
 VAULT_PATH=examples/demo-vault \
-INDEX_DIR=/tmp/vaultmind-demo-index \
+INDEX_DIR=/tmp/second-mind-demo-index \
 EMBEDDING_PROVIDER=disabled \
 npm run eval -- --k 3 --min-recall 1
 ```
@@ -356,6 +376,8 @@ docs/                          部署、网络、安全、同步和简历材料
   凭据与加密口令，并覆盖删除、重命名、冲突、附件和恢复测试；
 - [ ] 真正的可插拔同步/materializer 接口，而不只是状态标签；
 - [ ] 可扩展的倒排/向量存储适配器和后台任务队列；
+- [ ] 面向支持 Tool 的模型运行时提供可选、权限受限的只读 Agent loop，
+  并加入确定性预算与子 Agent 隔离；
 - [ ] 带明确隐私边界的 OCR/多模态摄取；
 - [ ] 在完成租户隔离设计后增加多用户身份与 RBAC；
 - [ ] 更大的人工标注评测集、回归看板与部署可观测性。

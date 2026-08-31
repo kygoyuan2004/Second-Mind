@@ -26,8 +26,7 @@
   <a href="docs/api.md">API</a> ·
   <a href="docs/deployment.md">Deployment</a> ·
   <a href="docs/security.md">Security</a> ·
-  <a href="docs/sync.md">Sync</a> ·
-  <a href="docs/resume.md">Resume / Interview</a>
+  <a href="docs/sync.md">Sync</a>
 </p>
 
 Second-Mind combines a responsive Chinese web workspace, a single-node Node.js

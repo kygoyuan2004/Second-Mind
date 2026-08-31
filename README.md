@@ -1,12 +1,34 @@
-# Second-Mind
+<p align="center">
+  <a href="docs/assets/second-mind-hero.png">
+    <img src="docs/assets/second-mind-hero.png" alt="Second-Mind — self-hosted AI knowledge workspace for an Obsidian Vault" width="100%">
+  </a>
+</p>
 
-Self-hosted, provider-neutral retrieval-augmented generation (RAG) for an
-Obsidian Vault that exists on the server as ordinary files.
+<h1 align="center">Second-Mind</h1>
 
-[简体中文](docs/README.zh-CN.md) · [Architecture](docs/architecture.md) ·
-[Configuration](docs/configuration.md) · [API](docs/api.md) ·
-[Deployment](docs/deployment.md) · [Security](docs/security.md) ·
-[Sync](docs/sync.md) · [Resume and interview notes](docs/resume.md)
+<p align="center">
+  <strong>Self-hosted, provider-neutral RAG for a local Obsidian Vault.</strong><br>
+  <sub>Bring your own model · Hybrid retrieval · Traceable citations · Review before write</sub>
+</p>
+
+<p align="center">
+  <a href="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-7C3AED"></a>
+  <a href="package.json"><img alt="Node.js 22 or newer" src="https://img.shields.io/badge/Node.js-%E2%89%A522-339933?logo=nodedotjs&amp;logoColor=white"></a>
+  <a href="#five-minute-docker-quick-start"><img alt="Docker Compose deployment" src="https://img.shields.io/badge/deploy-Docker%20Compose-2496ED?logo=docker&amp;logoColor=white"></a>
+  <a href="docs/sync.md"><img alt="Obsidian Vault" src="https://img.shields.io/badge/knowledge-Obsidian-7C3AED?logo=obsidian&amp;logoColor=white"></a>
+</p>
+
+<p align="center">
+  <a href="docs/README.zh-CN.md">简体中文</a> ·
+  <a href="docs/architecture.md">Architecture</a> ·
+  <a href="docs/configuration.md">Configuration</a> ·
+  <a href="docs/api.md">API</a> ·
+  <a href="docs/deployment.md">Deployment</a> ·
+  <a href="docs/security.md">Security</a> ·
+  <a href="docs/sync.md">Sync</a> ·
+  <a href="docs/resume.md">Resume / Interview</a>
+</p>
 
 Second-Mind combines a responsive Chinese web workspace, a single-node Node.js
 service, lexical and optional vector retrieval, streaming model output, and a

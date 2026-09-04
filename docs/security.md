@@ -1,228 +1,182 @@
 # Security model
 
-Second-Mind is designed for a single trusted administrator operating a private
-knowledge service. It narrows filesystem writes and requires draft
-confirmation, but it is not a multi-tenant document platform, an internet edge
-gateway, a malware scanner, or a sandbox for arbitrary model-generated code.
-
-Read this document together with [networking.md](networking.md) and
-[data-flow.md](data-flow.md).
+Second Mind is a single-administrator, self-hosted service for private filesystem knowledge bases. Its controls reduce common deployment, path, secret, and model-content risks, but they do not turn an untrusted host, Docker daemon, administrator, backup operator, remote Provider, or sync engine into a trusted component.
 
 ## Assets to protect
 
-- the complete Vault, including deleted/conflicted copies and attachments;
-- administrator credentials and signed session cookies;
-- model, embedding, and Sync credentials;
-- conversation history, generated drafts, temporary attachments, and audit
-  records;
-- the local retrieval index, which is derived from private note content;
-- Obsidian account, remote Vault, device-link, and encryption state;
-- backups and operational logs.
+- Every mounted Vault, including attachments and hidden configuration.
+- The mapping between public knowledge-base IDs and host paths.
+- Administrator credentials and signed sessions.
+- LLM, WebSearch, embedding, and optional sync credentials.
+- Conversations, drafts, temporary attachments, recovery preimages, and audit logs.
+- BM25/vector indexes derived from note content.
+- Installer state, named volumes, operational logs, and backups.
 
-Possession of Docker daemon access, the service Unix account, the host root
-account, or an unencrypted backup is equivalent to possession of these assets.
+Possession of Docker daemon access, the service account, host-administrator access, or an unencrypted backup is effectively possession of these assets.
 
 ## Trust boundaries
 
 ```text
-Browser -> HTTPS/VPN edge -> Second-Mind -> Vault and private state
-                                      -> model provider
-                                      -> embedding provider
-Sync sidecar <-> Obsidian Sync cloud -> shared Vault files
+browser -> private network or HTTPS edge -> Second Mind
+                                           -> allowed Vault mounts
+                                           -> private runtime state
+                                           -> selected LLM
+                                           -> selected embedding service
+                                           -> selected WebSearch/public pages
+external sync process <-> Vault files <-> sync provider
 ```
 
-The browser, reverse proxy, application, model provider, embedding provider,
-Sync provider, host administrator, and backup operator are distinct trust
-boundaries. A private network reduces exposure but does not make every
-component equally trusted.
+The browser, proxy, application, host, Docker engine, each remote Provider, sync process, and backup destination are separate boundaries. A private network reduces exposure but does not merge their trust.
 
 ## Authentication and sessions
 
-Second-Mind uses a configured administrator username/password and an HMAC-signed,
-HttpOnly, SameSite=Strict session cookie.
+The service has one configured administrator username/password. Successful login creates an HMAC-signed, `HttpOnly`, `SameSite=Strict` cookie. Set `SECURE_COOKIE=true` whenever the browser uses HTTPS.
 
-The cookie name `vaultmind_session` and mutating-request header
-`X-VaultMind-Request` are legacy wire identifiers retained so existing browser
-sessions, reverse-proxy rules, and clients are not silently broken. They do not
-represent the public product name and must not be renamed without a versioned
-compatibility plan.
-
-- Use a unique randomly generated administrator password of at least 12
-  characters; a password manager-generated value should be longer.
+- Use a unique password of at least 12 characters, preferably a longer password-manager value.
 - Use an independent random session secret of at least 32 characters.
-- Set `SECURE_COOKIE=true` whenever the browser uses HTTPS.
-- Keep the default short session lifetime unless the threat model justifies a
-  longer one.
-- Login throttling is in process memory. A restart clears it, and it is not a
-  substitute for edge rate limiting or monitoring.
-- Rotate the session secret whenever immediate invalidation of all existing
-  sessions is required. Changing only the password does not necessarily revoke
-  an already signed session.
+- Rotate the session secret to invalidate all signed sessions immediately.
+- Keep the default session lifetime unless the threat model needs a shorter value.
+- Login throttling is process-local and resets on restart. Add edge throttling and monitoring for exposed deployments.
+- Enable `TRUST_PROXY` only when clients cannot bypass the trusted proxy.
 
-The current application has one administrative identity. Do not represent it
-as enterprise RBAC, SSO, or multi-user isolation.
+Every mutating API request needs `X-VaultMind-Request: 1`, and a supplied `Origin` must match `Host`. The header and `vaultmind_session` cookie are legacy compatibility identifiers. They are not a substitute for HTTPS and must not be renamed without a versioned client/proxy migration.
 
-## Secrets
+Do not describe the current single identity as RBAC, SSO, team sharing, or tenant isolation.
 
-Every supported credential can be loaded from a file by appending `_FILE` to
-the variable name. Prefer:
+## Secret handling
 
-- Docker Compose secrets or a runtime secret manager;
-- root-owned/service-readable files outside the Git checkout for systemd;
-- separate least-privilege keys for LLM and embedding APIs;
-- interactive Obsidian login and encryption prompts.
+Use the installers or `_FILE` environment variants. Keep secret files outside the repository, Vaults, and sync roots. Supported credential categories have separate fields and rotation boundaries:
 
-Never store secrets in:
+- administrator password;
+- session signing secret;
+- each model connection key;
+- each WebSearch provider key;
+- embedding key;
+- optional page-extraction/sync credentials.
 
-- Git, `.env.example`, Compose YAML, Docker build arguments, or image layers;
-- browser local storage or a client-visible configuration endpoint;
-- URLs, issue reports, CI logs, screenshots, shell history, or model prompts;
-- the Obsidian Vault or its synced configuration folders.
+Never store credentials in Git, `.env.example`, image build arguments/layers, URLs, issue text, screenshots, shell history, Vault notes, browser Web Storage, or a client-visible response. Read APIs return configured booleans only.
 
-The application rejects secret files writable by group or others. Use mode
-`0600` where possible. Docker Compose's mounted secret may be readable inside
-the container according to runtime semantics; it remains isolated from the
-image and repository, but a Docker administrator can still read it.
+Managed runtime and registry files use restrictive permissions, regular-file/symbolic-link checks, atomic replacement, revision comparison, and previous or last-known-good copies. Managed runtime reads also enforce one-link safe-open checks where supported. Do not hand-edit these files during operation.
 
-Rotate a leaked key at its provider first, update the secret store, restart the
-service, and inspect logs/audit records for abuse. Deleting a value from the
-latest Git commit is insufficient if it ever entered history.
+Changing a Provider destination/protocol requires replacing or clearing its key. This prevents an old credential from being silently sent to a new endpoint. Provider validation errors are bounded and redacted.
 
-## Vault filesystem boundary
+If a credential leaks, revoke it at the Provider first, replace local state, restart as needed, inspect Provider audit data and local logs, and scan complete Git history. Removing it from only the current commit is insufficient.
 
-Vault paths are normalized, resolved inside the configured root, checked for
-symbolic links, and filtered by an excluded-path policy. Keep these exclusions
-at minimum:
+## Knowledge-base boundaries
+
+The registry accepts only actual Obsidian Vault roots under startup-authorized mounts. It resolves canonical paths and rejects absolute submitted paths, traversal, symbolic-link traversal, missing or linked `.obsidian` markers, duplicate/nested bases, overlapping mounts, and overlap with private state. The API exposes relative paths and mount labels, never host mount paths.
+
+Each base receives separate index, embedding slots, conversations, tasks, drafts, recovery copies, and audit records. Opaque task/conversation/draft IDs are resolved inside the selected base. Responses and SSE events carry base ID/revision so the browser can discard stale cross-switch results.
+
+Registry updates require password reauthentication and compare-and-swap. They fail when an affected base has an active task. A private digest ledger permanently binds each `knowledgeBaseId` to its first canonical Vault path, including across deletion, restart, and external registry refresh. Removing an entry does not erase its files or state.
+
+Host administrators and mount configuration remain trusted. If different Vault contents replace a directory or mount at exactly the same canonical path, register them under a new ID before use; otherwise the application cannot distinguish that host-level substitution from the original Vault and may reopen its retained private state.
+
+At minimum, preserve these excluded paths:
 
 ```text
 .obsidian,.trash,.git,.sync,.livesync,node_modules
 ```
 
-`.obsidian` and `.livesync` can contain plugin configuration and credentials.
-They must be denied consistently from indexing, search results, direct file
-reads, and model context. Do not weaken the denylist to make a plugin easier to
-configure.
+`.obsidian` and sync/plugin directories may contain tokens or configuration. They are excluded consistently from indexing, search, direct reads, and model context. Do not weaken the policy to simplify a plugin setup.
 
-The application prepares writes in private draft storage and commits them only
-after explicit confirmation. Diary, plan, and inbox directories are the only
-application write targets. A content hash detects many concurrent edits
-between preview and save. Before replacing an existing note, Second-Mind stores
-a verified preimage under `RECOVERY_DIR`, checks the live hash again, and then
-uses an atomic rename. The preimage is retained for
-`RECOVERY_RETENTION_DAYS` (30 by default). There is still no distributed
-transaction with a Sync engine, so an external write can land in the final
-check-to-rename window. Preserve Sync conflicts, monitor recovery retention,
-and maintain independent backups.
+## Confirmed write path
 
-Audit append failures occur after some filesystem operations have already
-committed. Second-Mind therefore returns an explicit `AUDIT_WRITE_FAILED`
-post-commit warning instead of returning a misleading generic failure that
-could encourage a duplicate save. Treat that warning as an operational alert,
-repair `AUDIT_FILE` storage, and record the incident separately.
+Generated note content first enters private draft storage outside every Vault. A confirmed save rechecks user ownership, selected base, destination allowlist, filename, draft expiry, symbolic links, expected target hash, and attachments. It writes a temporary file in the destination and uses atomic rename.
 
-For systemd, expose the Vault read-only and reopen only the three configured
-write directories. For Docker, the shared bind mount is read/write at the
-kernel level; application path policy is therefore the final write boundary.
-Use a dedicated host UID and filesystem ACLs, and never mount an entire home
-directory.
+Before replacing an existing diary or plan, Second Mind stores and verifies a recovery preimage. Recovery copies expire according to `RECOVERY_RETENTION_DAYS`, 30 by default. There is no distributed transaction with an external sync engine, so a conflicting external write can still land near the final rename. Preserve sync conflicts and keep independent tested backups.
+
+An audit append occurs after the filesystem commit. If it fails, the API returns an `AUDIT_WRITE_FAILED` warning rather than pretending the note failed. Treat this as an operational incident and do not blindly repeat the write.
 
 ## Model-content safety
 
-Vault notes and uploaded text are untrusted data. They can contain instructions
-intended to manipulate a model. Second-Mind sends text to a generation API but
-does not grant that model a shell, arbitrary filesystem tools, or general web
-tools. Preserve that architecture.
+Vault notes, uploaded text, WebSearch results, and fetched pages are untrusted data and can contain prompt-injection attempts. The model receives bounded, delimited text. It does not receive a shell, arbitrary filesystem API, general browser, raw MCP client, or unrestricted fetch tool.
 
-Model output can still be wrong, disclose supplied context, or produce unsafe
-links/content. Review every generated draft before saving. Never execute code
-or commands from a generated answer without independent inspection.
+Server code owns retrieval, allowed tools, source identities, URL validation, and writes. Only Vault paths actually supplied as sources may become Vault citations. This limits authority but does not make model output correct or confidential. Review answers and every draft. Never execute generated commands without independent inspection.
 
-Remote model and embedding providers receive private data. Select providers
-whose retention, training, regional, contractual, and incident-response terms
-match the data. Use local providers for data that must not leave the server.
+Remote LLM and embedding services can receive selected private text. Remote search services receive generated queries. Choose Providers whose retention, training, region, contractual, logging, and incident-response terms fit the data. Use independent least-privilege keys, quotas, and spending alerts.
+
+## Web egress and SSRF controls
+
+WebSearch is off by default and enabled per Q&A conversation. Optional page reading accepts selected public HTTPS URLs only. It rechecks DNS/IP, the connected address, redirects, media type, byte/character bounds, timeouts, concurrency, and total pages.
+
+Private, loopback, link-local, reserved, and otherwise non-public destinations are rejected. TLS hostname verification remains tied to the public hostname. Fetched text remains untrusted model input.
+
+The standard image omits the sandbox tools needed for PDF extraction. PDF reading reports unavailable and does not fall back to an unsandboxed parser.
 
 ## Attachments
 
-Text attachment excerpts can be sent to the LLM. Image and PDF attachments in
-note modes are persisted with a confirmed draft but are not an antivirus or
-content-disarm pipeline. Size and filename validation do not prove that a file
-is harmless. Scan untrusted files before opening them in desktop software and
-keep endpoint applications patched.
+Q&A accepts text attachments only and may send bounded excerpts to the selected LLM. Note modes can save validated image/PDF attachments after draft confirmation. Size, filename, MIME, and extension checks are not antivirus or content disarm. Scan untrusted content before opening it in desktop software.
 
-## Container hardening
+## Container boundary
 
-The supplied Compose service uses a non-root UID, a read-only root filesystem,
-all-capability drop, `no-new-privileges`, PID limit, private temporary storage,
-loopback-only host publication, and a separate persistent data volume.
+The supplied Compose service uses:
 
-These controls do not defend against a compromised Docker daemon, malicious
-host administrator, vulnerable kernel, or overly permissive Vault bind mount.
-Do not mount `/var/run/docker.sock`, SSH agent sockets, cloud instance
-credentials, or unrelated host directories into the container.
+- a non-root UID/GID;
+- a read-only image filesystem;
+- dropped capabilities and `no-new-privileges`;
+- PID and temporary-filesystem limits;
+- loopback-only host publication;
+- one explicit knowledge-base bind mount;
+- a separate named private-data volume;
+- file-backed secrets through the required Compose secrets overlay.
 
-The optional Obsidian Headless image is locally built and must not be published.
-It has network access and full Vault write access because synchronization
-requires both. It receives no model API secrets.
+These controls do not protect against a compromised Docker daemon, host administrator, kernel, or writable Vault mount. Never mount the Docker socket, SSH agent, cloud credentials, a user home, installer state, or unrelated directories into the application.
 
-## systemd hardening
+The non-root user inside the application container does not make the Docker daemon rootless. The Linux quick installer assumes conventional rootful Docker; rootless Docker and SELinux-enforcing hosts require an explicit UID/volume-ownership and bind-mount relabel design that the installer does not apply automatically.
 
-The example unit uses a dedicated user, empty capability sets,
-`NoNewPrivileges`, a private `/tmp`, kernel/control-group protections, a strict
-system view, a restricted address-family set, read-only application code, and
-write allowlists.
+## Installer and backup safety
 
-Render and verify the unit on the target distribution. systemd features differ
-between releases. Never fall back to running the application as root merely
-because a hardening directive or permission is misconfigured.
+Each installer instance has an independent project, volume, state directory, and secret set. The installer rejects filesystem/user-home roots, repository overlap, Vault/state overlap, and unresolved port conflicts. It does not stop unrelated processes.
+
+`backup` includes the Vault, runtime data, deployment configuration, and credentials. SHA-256 inventories detect copied-content changes, but the backup is a live copy and does not preserve every platform ACL/xattr. Stop the exact instance and its sync engine for strict point-in-time consistency. Encrypt backups and test restore in isolation.
+
+An independent sync engine's private volumes, account/link state, and remote state are outside this backup unless the operator captures them separately. `update` preserves the instance data volume and configuration but has no automatic image rollback; retain the previous reviewed image and test a manual recovery path.
+
+There is no destructive uninstall command. Ordinary `docker compose down` should target the exact generated project without `--volumes`. Permanent cleanup requires a verified backup and explicit review of each named volume and directory. Never use a broad recursive deletion.
 
 ## Network security
 
-- Keep the application listener on loopback.
-- Prefer Tailscale Serve for private remote access; never enable Funnel for this
-  service.
-- For cloud access, terminate maintained TLS in Caddy or Nginx and expose only
-  443 (plus 80 for ACME/redirect when needed).
-- Replace, rather than append to, client-supplied forwarding headers.
-- Enable `TRUST_PROXY` only when direct access is impossible.
-- Do not log request bodies, cookies, authorization headers, or URL secrets.
-- Apply provider egress restrictions when the platform supports them.
+- Keep the application on loopback by default.
+- For remote use, prefer a reviewed private network or maintained HTTPS reverse proxy.
+- Do not expose the application port directly to the public internet.
+- Preserve the public `Host`, replace forwarding headers, and disable proxy buffering for SSE.
+- Apply edge login throttling, request-size limits, access logs without sensitive bodies, and egress restrictions where possible.
+- Never publish through a public-tunnel feature by accident.
 
-## Supply-chain and release security
+See [networking.md](networking.md) for concrete proxy guidance.
 
-Before each release:
+## Sync boundary
 
-1. review lockfile and base-image changes;
-2. run tests, static checks, secret scanning, and dependency vulnerability
-   scanning;
-3. generate an SBOM and retain build provenance;
-4. patch high/critical vulnerabilities or document a time-bounded exception;
-5. verify third-party licenses and preserve required notices;
-6. scan the complete Git history, not only the working tree;
-7. build from a clean checkout and test backup/restore;
-8. pin published images by immutable tag or digest.
+Second Mind does not implement synchronization. Any Headless or external sync process needs full Vault write access and its own network credentials, making it a separate high-trust component. Never run two sync engines for one local Vault, and never treat sync as backup.
 
-The optional `obsidian-headless` package is open beta and marked UNLICENSED.
-The main image intentionally excludes it. Do not publish an image containing it
-without explicit upstream redistribution rights.
+The optional Headless image is locally built, excluded from the main application image, and should not be published. It receives no model Provider credentials. Review current upstream requirements and redistribution terms before using it.
 
-## Operational monitoring
+## Release and supply chain
 
-Alert on repeated login failures, unexpected restarts, provider authentication
-errors, Sync conflicts, index failures, disk exhaustion, and backup failures.
-Audit records are sensitive metadata and require retention limits. Avoid
-putting raw note text or secrets in alerts.
+Before release:
 
-## Incident response checklist
+1. Review lockfile, action, base-image, and Provider-adapter changes.
+2. Run static checks, the complete test suite, current-tree/history secret scans, and dependency audit.
+3. Build only from the strict Docker context and inspect image history and environment.
+4. Exercise an isolated synthetic container and real-browser tests.
+5. Produce and retain provenance and an SBOM for published images.
+6. Resolve high/critical findings or record a time-bounded exception.
+7. Verify screenshot pixels, OCR, metadata, and all public documentation.
+8. Test backup and manual restore from a clean release candidate.
+9. Pin production images by immutable tag or digest.
 
-1. Restrict network access or stop the service while preserving evidence.
-2. Revoke affected model, embedding, Sync, and administrator credentials.
-3. Rotate the session secret to invalidate sessions.
-4. Inspect Git history, container layers, logs, backups, and provider audit
-   trails for the leaked material.
-5. Restore from a known-good snapshot if Vault integrity is uncertain.
-6. Rebuild images and indexes from reviewed source rather than trusting a
-   potentially modified host.
-7. Document scope, timeline, remediation, and notification obligations.
+## Monitoring and incident response
 
-Report suspected vulnerabilities privately through the repository's published
-security contact rather than a public issue.
+Monitor repeated login failures, unexpected restarts, registry/index failures, Provider authentication errors, WebSearch failures, sync conflicts, disk exhaustion, failed backups, and `AUDIT_WRITE_FAILED`. Logs and audits are sensitive metadata and should have access and retention limits.
+
+If compromise or disclosure is suspected:
+
+1. Restrict network access or stop the exact service while preserving evidence.
+2. Revoke affected administrator, session, Provider, and sync credentials.
+3. Inspect Git history, image layers, logs, backups, Provider audit trails, and Vault changes.
+4. Restore from a verified snapshot if integrity is uncertain.
+5. Rebuild indexes and images from reviewed source.
+6. Document scope, timing, remediation, and any notification duties.
+
+Use the private reporting process in [SECURITY.md](../SECURITY.md). Do not put vulnerability details, secrets, or private note content in a public issue.

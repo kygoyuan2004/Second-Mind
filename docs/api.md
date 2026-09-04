@@ -1,143 +1,203 @@
 # HTTP API
 
-The API is intended for the bundled same-origin browser, not as a stable public
-SDK. All responses containing private state use `Cache-Control: no-store`.
+The browser UI and API are versioned together. This document describes the current supported web contract for operators and contributors. It is not a promise of a stable third-party SDK.
 
-## Authentication and request guard
+## Authentication and request verification
 
-`POST /api/login` accepts:
+All knowledge and administrator routes require the signed administrator session cookie. Login, logout, and session discovery are handled without requiring an existing session. Login returns an `HttpOnly`, `SameSite=Strict` cookie. With HTTPS, configure `SECURE_COOKIE=true` so it also has the `Secure` attribute.
 
-```json
-{ "username": "admin", "password": "..." }
-```
-
-Successful authentication sets an HMAC-signed, `HttpOnly`, `SameSite=Strict`
-cookie. `GET /api/session` returns the current public session and
-`POST /api/logout` clears it.
-
-Every non-GET/HEAD API request must include:
+Every non-GET API request must include:
 
 ```http
 X-VaultMind-Request: 1
+Content-Type: application/json
 ```
 
-`X-VaultMind-Request` is a legacy compatibility header retained for existing
-same-origin clients. The public product name is Second-Mind; changing this wire
-identifier requires a versioned client/server migration.
+`X-VaultMind-Request` and the `vaultmind_session` cookie name are compatibility wire identifiers. They do not change the visible product name. When the browser sends an `Origin`, its host must equal the request `Host`. A reverse proxy must therefore preserve the public host and replace untrusted forwarding headers.
 
-If a browser sends an `Origin`, its host must equal the request `Host`.
-Production HTTPS deployments must also set `SECURE_COOKIE=true`.
-
-Errors use this shape:
-
-```json
-{ "error": "STABLE_ERROR_CODE", "message": "Human-readable explanation" }
-```
-
-## Status and retrieval
-
-| Method and path | Result |
+| Method and route | Purpose |
 |---|---|
-| `GET /health/live` | Process liveness; no authentication |
-| `GET /health/ready` | Retrieval initialization status; no authentication |
-| `GET /api/knowledge/status` | Public runtime capabilities, model labels, sync label, limits, active task, and index diagnostics |
-| `GET /api/knowledge/search?q=...&mode=keyword&limit=30` | File-deduplicated search results; mode is `keyword`, `semantic`, or `hybrid` |
-| `GET /api/knowledge/file?path=...` | A path-policy-approved Vault file for source preview |
+| `POST /api/login` | Authenticate `{ "username": "admin", "password": "..." }` |
+| `POST /api/logout` | Clear the session cookie |
+| `GET /api/session` | Return authentication state, administrator identity, and feature permissions |
 
-Search results expose the relative path, best heading/line range, snippet,
-score, and matched terms. Raw indexed chunk content and vectors are removed at
-the HTTP boundary. An explicitly requested semantic search returns `503
-SEMANTIC_SEARCH_UNAVAILABLE` rather than silently pretending it was semantic.
-Hybrid task retrieval can degrade to lexical candidates and reports the reason
-in diagnostics.
+Authentication errors use `401`; missing request verification or a rejected origin uses `403`. Login throttling is process-local.
 
-## Conversations
+## Knowledge-base selection
 
-| Method and path | Result |
-|---|---|
-| `GET /api/knowledge/conversations` | Conversation summaries for the administrator |
-| `GET /api/knowledge/conversations/:id` | Summary and messages |
-| `DELETE /api/knowledge/conversations/:id` | Delete one idle conversation |
-| `DELETE /api/knowledge/conversations?kind=qa` | Delete all idle conversations of one mode |
-
-Valid kinds are `qa`, `diary`, `plan`, and `scratch`. Conversation deletion
-never deletes Vault files.
-
-## Tasks and SSE
-
-Create a task with `POST /api/knowledge/tasks`:
+`GET /api/knowledge/bases` returns the public registry status:
 
 ```json
 {
-  "kind": "qa",
-  "prompt": "How does the project combine rankings?",
-  "taskMode": "deep",
-  "conversationId": "optional-existing-id",
-  "date": "2026-08-30",
-  "attachments": [
-    { "name": "notes.txt", "type": "text/plain", "data": "base64..." }
+  "revision": "registry-revision",
+  "stale": false,
+  "defaultKnowledgeBaseId": "research",
+  "readyCount": 2,
+  "enabledCount": 2,
+  "knowledgeBases": [
+    {
+      "knowledgeBaseId": "research",
+      "name": "Research",
+      "enabled": true,
+      "default": true,
+      "revision": "entry-revision",
+      "status": "ready",
+      "retrieval": { "ready": true, "mode": "keyword", "documentCount": 12 }
+    }
   ]
 }
 ```
 
-`taskMode` is `normal` by default. `deep` is accepted only for Q&amp;A when
-`DEEP_TASKS_ENABLED=true`; this provider-neutral Deep Retrieval strategy performs
-bounded query decomposition, at most four hybrid searches, evidence fusion,
-and final cited generation. It is not the private project's 50-turn,
-multi-subagent runtime. Unknown task fields—including client Agent, Tool, or
-prompt-policy overrides—are rejected. `date` is required by diary and plan
-flows. Q&A accepts text attachments only; note modes can stage other permitted
-attachments for explicit save. A successful response contains `taskId`,
-`conversationId`, and the accepted `taskMode`.
+Every route under `/api/knowledge/` uses one knowledge-base context. Supply `knowledgeBaseId` as a query parameter. JSON creation/save routes may instead include it in the body. If query and body both provide different values, the server returns `KNOWLEDGE_BASE_SELECTION_CONFLICT`. Omitting it selects the current default for compatibility, but clients should always send it explicitly.
 
-Subscribe at `GET /api/knowledge/tasks/:id/events`. This is a standard
-`text/event-stream`; reconnect with `Last-Event-ID` to replay the in-memory
-backlog. Event names are:
+Selected-context JSON responses add:
 
-- `state` and `session` for lifecycle/model metadata;
-- `activity` and `thinking` for retrieval/generation progress;
-- `diagnostic` when a bounded fallback is used, such as planner failure;
-- `text` for incremental model output;
-- `draft_ready` for an uncommitted note preview;
-- `task_error` for a failed task;
+```json
+{
+  "knowledgeBaseId": "research",
+  "knowledgeBaseRevision": "entry-revision",
+  "knowledgeBaseName": "Research"
+}
+```
+
+Task events also contain the ID and revision. Task, conversation, and draft identifiers are scoped to the selected base. Supplying an identifier from another base returns not found.
+
+## Health and retrieval
+
+Health routes do not require authentication:
+
+| Method and route | Purpose |
+|---|---|
+| `GET /health/live` | Process liveness; returns `200` while the HTTP process responds |
+| `GET /health/ready` | Returns `200` when at least one enabled base is ready, otherwise `503` |
+
+Authenticated retrieval routes:
+
+| Method and route | Purpose |
+|---|---|
+| `GET /api/knowledge/status?knowledgeBaseId=ID` | Selected base, model catalog, retrieval, WebSearch, modes, and active task |
+| `GET /api/knowledge/search?knowledgeBaseId=ID&q=TEXT&mode=keyword&limit=30` | Search with `keyword`, `semantic`, or `hybrid` route |
+| `GET /api/knowledge/file?knowledgeBaseId=ID&path=RELATIVE_PATH` | Read an allowed Vault file |
+| `HEAD /api/knowledge/file?...` | Read file metadata without the body |
+
+Search results intentionally omit indexed chunk content, token lists, and vectors. A semantic-only request returns `503 SEMANTIC_SEARCH_UNAVAILABLE` when no active semantic index exists. Hybrid search may explicitly report a lexical fallback.
+
+File paths are Vault-relative and pass the same excluded-path and symbolic-link policy used by indexing. Binary content may be returned as an attachment. Responses use `Cache-Control: no-store`.
+
+## Conversations
+
+| Method and route | Purpose |
+|---|---|
+| `GET /api/knowledge/conversations?knowledgeBaseId=ID` | List conversations for the selected base |
+| `GET /api/knowledge/conversations/CONVERSATION_ID?knowledgeBaseId=ID` | Read one conversation with messages |
+| `DELETE /api/knowledge/conversations/CONVERSATION_ID?knowledgeBaseId=ID` | Delete one idle conversation |
+| `DELETE /api/knowledge/conversations?knowledgeBaseId=ID&kind=qa` | Clear idle conversations, optionally filtered by kind |
+
+A conversation with an active task cannot be deleted. Q&A conversation settings are fixed to model binding, requested effort, and WebSearch binding. To change them, create the next task with `forkFromConversationId`; do not send both `conversationId` and `forkFromConversationId`.
+
+## Tasks and SSE
+
+Create a task with `POST /api/knowledge/tasks`. Example:
+
+```json
+{
+  "knowledgeBaseId": "research",
+  "kind": "qa",
+  "prompt": "Summarize the supported evidence.",
+  "taskMode": "normal",
+  "model": "main",
+  "effort": "medium",
+  "modelCatalogRevision": "catalog-revision",
+  "webSearch": false,
+  "attachments": []
+}
+```
+
+Supported `kind` values are `qa`, `diary`, `plan`, and `scratch`. `taskMode` is `normal` or, for Q&A when enabled, `deep`. Diary and plan requests may add a date. Attachments use `{name,type,data}` where `data` is the base64 payload without a data-URL prefix. Q&A accepts text attachments only; note modes may persist accepted image/PDF attachments with the confirmed draft. Server-configured count and byte limits always apply.
+
+Creation returns `201` with a task ID, conversation ID, status, fixed model/WebSearch binding metadata, requested/effective effort, and knowledge-base identity. If no model is configured it returns `503 LLM_NOT_CONFIGURED`; local search remains available.
+
+| Method and route | Purpose |
+|---|---|
+| `GET /api/knowledge/tasks/TASK_ID?knowledgeBaseId=ID` | Read current task state |
+| `GET /api/knowledge/tasks/TASK_ID/events?knowledgeBaseId=ID` | Subscribe to SSE events |
+| `POST /api/knowledge/tasks/TASK_ID/cancel?knowledgeBaseId=ID` | Request cancellation |
+
+SSE frames contain monotonically increasing numeric IDs. `Last-Event-ID` resumes buffered events. The server sends heartbeat comments every 20 seconds and ends the stream after terminal `done`. Current event names include:
+
+- `state`, `session`, and `activity` for observable execution state;
+- `thinking` and `diagnostic` for bounded, user-visible status, not hidden chain of thought;
+- `text` and `text_replace` for answer content;
+- `usage` for bounded token/cost metadata when available;
+- `draft_ready` for a generated note draft;
+- `task_error` followed by terminal `done` on failure;
 - `done` with `completed`, `failed`, or `cancelled` status.
-
-`POST /api/knowledge/tasks/:id/cancel` aborts an active retrieval/provider
-request. Once the generated result has entered its atomic state commit, the
-endpoint returns `completing` instead of racing that durable save.
-`GET /api/knowledge/tasks/:id` returns the current public task state. The
-current single-administrator release allows one active task at a time.
 
 ## Draft confirmation
 
-Drafts remain in private application state and do not modify the Vault until a
-save request succeeds.
-
-| Method and path | Result |
+| Method and route | Purpose |
 |---|---|
-| `GET /api/knowledge/drafts/:id` | Reload a non-expired draft |
-| `DELETE /api/knowledge/drafts/:id` | Discard it |
-| `POST /api/knowledge/drafts/:id/save` | Confirm edited `content` and optional scratch `title` |
+| `GET /api/knowledge/drafts/DRAFT_ID?knowledgeBaseId=ID` | Read the editable private draft |
+| `POST /api/knowledge/drafts/DRAFT_ID/save` | Confirm and save changes to the selected Vault |
+| `DELETE /api/knowledge/drafts/DRAFT_ID?knowledgeBaseId=ID` | Discard a draft |
 
-The save endpoint revalidates ownership, expiry, content size, path policy,
-symbolic links, write allowlist, and the target hash captured at preview time.
-Drafts expire after 24 hours. A concurrent Obsidian edit detected by these hash
-checks produces `409 DRAFT_CONFLICT`; a final check-to-rename race with an
-external Sync writer still exists.
+The save JSON body carries `knowledgeBaseId`, edited Markdown content, and any client fields returned by the draft contract. The server does not trust the client path blindly. It rechecks ownership, expiry, destination policy, symbolic links, target hash, attachment names, and concurrent changes.
 
-When an existing note is replaced, the success payload includes a
-`recoveryId`. Its verified preimage is stored under private recovery state for
-the configured retention period. This recovery copy narrows the impact of the
-unavoidable final filesystem race with an external Sync writer; it is not a
-distributed transaction or a substitute for backups.
+A successful save returns the relative path plus any warnings. `AUDIT_WRITE_FAILED` can be returned as a post-commit warning when the note write succeeded but the audit append failed. Clients must not blindly repeat that save.
 
-Successful draft create/delete/save responses can include a `warnings` array.
-`AUDIT_WRITE_FAILED` means the requested draft or Vault operation completed,
-but its metadata audit event could not be appended; the UI reports this as a
-post-commit warning so the operator is not misled into repeating the write.
-`DRAFT_CLEANUP_FAILED` means a confirmed note was written but expired draft
-state still needs operator cleanup.
+## Administrator knowledge-base registry
 
-`POST /api/knowledge/transcribe` intentionally returns `503
-TRANSCRIPTION_UNAVAILABLE`; voice input in the bundled UI uses the browser's
-optional speech-recognition capability.
+`GET /api/admin/knowledge-bases` requires the administrator session and returns public state plus allowed mount IDs/labels, relative paths, path availability, and bounded runtime status. It never returns host mount paths.
+
+`PUT /api/admin/knowledge-bases` requires request verification and password reauthentication:
+
+```json
+{
+  "adminPassword": "current-password",
+  "expectedRevision": "registry-revision",
+  "knowledgeBases": [
+    {
+      "knowledgeBaseId": "research",
+      "name": "Research",
+      "mountId": "vaults-1",
+      "relativePath": "Research",
+      "enabled": true,
+      "default": true
+    }
+  ]
+}
+```
+
+IDs are lowercase stable identifiers, and every managed path must be an actual Obsidian Vault root with a non-symlink `.obsidian` directory. The private binding ledger permanently binds each ID to the first canonical Vault path, including after deletion and restart. Re-adding the same Vault with its original ID is allowed; assigning that ID to another Vault returns `409 KNOWLEDGE_BASE_ID_REBIND_FORBIDDEN`, so use a new ID instead. Exactly one enabled base must be the default and at least one must remain enabled. A stale revision returns `409 KNOWLEDGE_BASE_REVISION_CONFLICT`. Updates affecting an active or still-admitting task return `409 KNOWLEDGE_BASE_BUSY`. Path, layout, and overlap failures return specific bounded codes and never echo a private absolute path.
+
+## Administrator Provider configuration
+
+The browser administrator page treats the server response as the schema source. Clients should GET before editing and preserve fields they do not change.
+
+| Method and route | Purpose |
+|---|---|
+| `GET /api/admin/provider-config?knowledgeBaseId=ID` | Simplified registered model/WebSearch configuration plus selected-base embedding status |
+| `POST /api/admin/provider-config/validate?knowledgeBaseId=ID` | Reauthenticate and validate a candidate without committing it |
+| `PUT /api/admin/provider-config?knowledgeBaseId=ID` | Commit a validated one-time receipt, or a branding-only change |
+| `GET /api/admin/runtime-config?knowledgeBaseId=ID` | Full managed configuration and selected-base embedding status |
+| `PUT /api/admin/runtime-config?knowledgeBaseId=ID` | Revision-checked managed configuration update |
+| `POST /api/admin/embedding-rebuild?knowledgeBaseId=ID` | `validate-and-build` or `cancel` for the selected base |
+
+All mutations require `adminPassword` and `expectedRevision` where the returned schema provides a revision. A Provider candidate is checked before commit. The simplified validation flow issues a short-lived, one-use server-side receipt so secrets do not need to remain in browser storage. Receipts do not survive a process restart and cannot be replayed against a new revision.
+
+Secret fields use explicit `replace`, `keep`, or `clear` actions. Responses expose only fields such as `apiKeyConfigured` or `configured`. A destination/protocol change requires replacing or clearing the credential instead of silently carrying it to another endpoint.
+
+Embedding `validate-and-build` may probe the configured service, detect dimensions, and send all indexable text in the selected base. It returns `202` after the rebuild starts. The prior active index keeps serving until a candidate finishes and is atomically activated. Cancellation leaves the active index unchanged.
+
+## Error contract
+
+JSON failures use:
+
+```json
+{
+  "error": "BOUNDED_MACHINE_CODE",
+  "message": "Human-readable explanation"
+}
+```
+
+Expected status families are `400` invalid input, `401` missing/failed authentication, `403` request/origin rejection, `404` unknown scoped resource, `409` revision or active-state conflict, `413` size limit, `422` Provider validation failure, and `503` unavailable dependency or knowledge base. Unexpected internal exceptions are replaced with a generic message. Provider response bodies, credentials, absolute Vault paths, and raw note text must not be copied into API errors or logs.

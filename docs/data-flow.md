@@ -1,163 +1,155 @@
 # Data flow and privacy boundaries
 
-Second-Mind combines a browser, a local filesystem Vault, private application
-state, and operator-selected model services. Deployment does not make a remote
-provider private: understand each flow before using real notes.
+Second Mind keeps Vault files and application state local unless the administrator configures a remote Provider and a user or administrator starts an operation that needs it. No remote model, search, or embedding call is required for startup, sign-in, knowledge-base management, file preview, or BM25 keyword retrieval.
 
 ## Component flow
 
-```text
-Browser
-  | HTTPS (question, note input, attachments; streamed answer/draft)
-  v
-Trusted reverse proxy or Tailscale Serve
-  | loopback HTTP
-  v
-Second-Mind application
-  |-- read allowed Markdown/text ------> retrieval index in DATA_DIR
-  |-- confirmed writes ---------------> diary/plan/inbox in VAULT_PATH
-  |-- conversations/drafts/audit -----> private DATA_DIR volume
-  |-- document chunks + queries ------> embedding endpoint (optional)
-  `-- prompts + selected context ------> LLM endpoint
-
-Optional Obsidian Headless sidecar
-  |-- read/write local VAULT_PATH
-  `-- encrypted Sync traffic <--------> Obsidian Sync service
+```mermaid
+flowchart LR
+  U[Authenticated browser] -->|same-origin JSON and SSE| A[Second Mind]
+  A --> R[Knowledge-base registry]
+  R --> V1[Vault A]
+  R --> V2[Vault B]
+  A --> S1[Private state A]
+  A --> S2[Private state B]
+  A --> G[Global private Provider config]
+  A -->|explicit generation| L[Selected LLM]
+  A -->|explicit build or semantic query| E[Embedding service]
+  A -->|Q&A web option enabled| W[Selected WebSearch]
+  A -->|selected safe HTTPS page| P[Public web origin]
+  X[External sync process] <--> V1
+  X <--> V2
 ```
 
-The reverse proxy transports application traffic; it does not perform
-retrieval or model inference. `SYNC_PROVIDER` is a status/configuration value,
-not an embedded Sync client. Files appear in the Vault through an optional
-external process.
+The browser never talks directly to a model, embedding endpoint, WebSearch service, or Vault filesystem. It sends an authenticated request to Second Mind. The server selects one knowledge-base context, applies limits and policy, and makes any allowed outbound call.
 
 ## Browser to application
 
-After login, the browser sends questions, diary/plan/inbox input, selected
-dates, and optional attachments to Second-Mind. Answers and draft events stream
-back over server-sent events. The browser receives source paths and retrieved
-content needed for the interface.
+The browser sends:
 
-Use HTTPS for every non-loopback browser connection. The proxy may observe
-plaintext after TLS termination, so it and its access-log policy are trusted.
-Do not enable request-body, cookie, or authorization-header logging.
+- login credentials over the deployment's HTTP or HTTPS transport;
+- an explicit `knowledgeBaseId` for knowledge operations;
+- prompts, selected model/effort/task mode, and the Q&A WebSearch toggle;
+- optional attachments within configured limits;
+- edited draft Markdown and explicit save confirmation;
+- Provider keys only during an administrator replace action.
 
-## Vault and local application state
+The server returns an HttpOnly signed session cookie. The browser may retain opaque per-user/per-base selection and conversation IDs, but does not retain Provider keys in localStorage, sessionStorage, URLs, or cookies.
 
-The application scans allowed text files under `VAULT_PATH`. The default
-excluded-path policy denies `.obsidian`, `.trash`, `.git`, `.sync`,
-`.livesync`, and `node_modules`; retain at least those exclusions. The index
-stores note paths, chunk text, metadata, and—when enabled—embedding vectors in
-`INDEX_DIR`. A vector is derived data, not anonymized data.
+Use HTTPS or a reviewed private tunnel for remote access. The default Compose binding is loopback only.
 
-`DATA_DIR` also contains:
+## Local Vault and private state
 
-- conversation history, including user questions and model responses;
-- pending drafts and temporary attachment copies;
-- an audit log containing write/security event metadata;
-- index generations and retrieval metadata.
+Vaults remain ordinary host directories. The application indexes allowed files, reads source previews, and writes only configured diary, plan, and scratch-note destinations after confirmation. Excluded paths such as `.obsidian`, `.trash`, `.git`, `.sync`, `.livesync`, and `node_modules` do not enter search, direct file reads, or model context.
 
-All of these are confidential. The index can be rebuilt, but conversations,
-drafts, and audit records cannot. Back up and retain them according to the
-sensitivity of the underlying Vault, not as harmless cache files.
+The knowledge-base registry maps stable public IDs to roots under startup-authorized mounts. Absolute host paths are not returned through public or administrator APIs. Each base has isolated indexes, conversations, drafts, recovery copies, audit logs, and embedding slots. Global Provider configuration and registry metadata live in separate private runtime state.
 
-Vault writes follow a preview-and-confirm flow. Diary, plan, and inbox paths
-are the only supported write destinations. A confirmed note-mode draft copies
-its attachments from private draft storage into that note's asset directory.
-Deleting a conversation does not delete notes already committed to the Vault,
-provider-side records, backups, or remote Sync copies.
+Private state includes derived copies of note content and must be protected like the Vault itself:
 
-## Embedding provider egress
+- BM25 and vector index files;
+- conversation messages and source metadata;
+- drafts, temporary attachments, and recovery preimages;
+- audit records;
+- managed Provider destinations, model names, and credentials;
+- registry mount mappings.
 
-When `EMBEDDING_PROVIDER=disabled`, retrieval is lexical and no embedding API
-is called. When embeddings are enabled, Second-Mind sends:
+Deleting a registry entry does not delete that state or the Vault. Installer backups include Vault, runtime data, and configuration, including secrets.
 
-- chunks of indexed documents during initial and incremental indexing; and
-- the user's search/question text when generating a query vector.
+## LLM egress
 
-Provider-neutral Deep Retrieval can additionally send up to three
-model-generated query variants to the embedding endpoint. Normal Q&amp;A sends
-one query.
+An LLM is contacted only when a user creates a generation task and an enabled model is configured. Depending on mode, its request can contain:
 
-The provider returns vectors, which are stored in the local index. Provider
-requests can therefore expose much more of the Vault than the few passages
-shown in one answer. Review the provider's retention, training, regional, and
-abuse-monitoring terms. Use a separate least-privilege API key and HTTPS.
+- the current prompt;
+- up to the bounded recent complete conversation turns used for continuity;
+- selected Vault text excerpts, titles, and relative paths;
+- text attachment excerpts;
+- bounded WebSearch snippets or safely extracted public-page text when enabled;
+- system instructions and output contracts;
+- selected model and reasoning parameters.
 
-## LLM provider egress
+Images and PDFs can be stored with confirmed note drafts but are not sent as multimodal Q&A input by the current task API. Q&A accepts text attachments only.
 
-For a knowledge question, the LLM request contains the system instructions,
-the question, up to ten recent conversation messages, retrieved note excerpts
-within `RAG_MAX_CONTEXT_CHARS`, source paths, and text attachment excerpts.
-Provider-neutral Deep Retrieval first sends the question and bounded recent
-context in a separate query-planning request, then sends the fused source
-context for the final answer. It is a bounded retrieval strategy, not the
-private predecessor's 50-turn or multi-subagent runtime. Only observable search
-queries and progress are displayed; hidden chain-of-thought is neither
-requested nor exposed.
+The model does not receive credentials, host absolute paths, index vectors, the registry document, arbitrary Vault access, a shell, an MCP client, or a general fetch tool. Source normalization permits only Vault citations that were actually supplied to model context.
 
-For a diary, plan, or inbox draft, the request contains the user input and may
-contain the configured template, current note content, and text attachment
-excerpts. The generated Markdown returns to Second-Mind and remains a private
-draft until the user explicitly saves it.
+A task leases its exact model connection and revision at creation. Later configuration edits do not redirect the in-flight task. Provider failures are redacted before they reach browser errors or logs.
 
-Image and PDF bytes are not supplied to the current text-only LLM request.
-They can be retained in private draft storage and, after confirmation, written
-to the Vault as attachments. They still require malware scanning and safe
-viewer handling; the application does not sanitize their binary content.
+## Embedding egress
 
-Model output is untrusted. It may reproduce context or contain unsafe advice,
-links, or Markdown. The model has no shell or arbitrary filesystem tool in this
-architecture, and operators should not add one without a new threat model.
+Embedding is optional. BM25 remains local and requires no embedding call.
 
-## Local model path
+Remote text leaves the host in two cases:
 
-With an operator-controlled OpenAI-compatible LLM and embedding service, set
-the endpoints to loopback (`host.docker.internal` from Compose) or to a tightly
-restricted private service. In that topology, model request content stays on
-the operator-controlled host/network rather than being sent to a commercial
-model API.
+1. An administrator confirms `validate-and-build` for the selected knowledge base. A probe may be sent to determine vector dimensions, followed by all eligible text chunks for that base.
+2. A user requests semantic or hybrid retrieval against an active remote embedding profile. The search query is sent to create its query vector.
 
-This does not make the entire deployment offline. Obsidian Headless still
-communicates with Obsidian Sync when enabled, package/image builds may contact
-registries, and backups or monitoring can create their own egress. Verify with
-firewall and DNS logs instead of relying only on configuration labels.
+The desired embedding configuration is global, while active and previous vector slots are isolated per base. A candidate build does not become active until it completes. Failure or cancellation keeps the previous active index. Startup never triggers the first paid build.
 
-Keep `ALLOW_INSECURE_PROVIDER_HTTP=false`. Loopback and
-`host.docker.internal` HTTP are accepted for local inference. For a separate
-host, prefer authenticated HTTPS; an explicit plain-HTTP opt-in should be
-limited to a trusted, firewalled private network.
+Embedding responses and vectors are stored in local private index state. The configured Provider may retain request data according to its own terms.
 
-## Obsidian Sync flow
+## WebSearch egress
 
-The optional Headless sidecar has read/write access to the whole Vault and
-connects to the Obsidian Sync service. Its login and remote-Vault link state
-live in private named volumes that the application does not mount. Second-Mind
-can still observe ordinary note files after the sidecar materializes them.
+WebSearch is off by default and is only available for Q&A. Enabling it in one conversation does not enable it for another. A task sends a bounded set of search queries to either the selected Alibaba Model Studio WebSearch MCP connection or Tavily REST connection.
 
-Obsidian Headless is an open beta and its npm package is marked UNLICENSED.
-The main application image does not contain it. Operators build the optional
-sidecar locally and must not publish that resulting image. Do not run Desktop
-Sync and Headless Sync against the same local Vault on the same device. Sync
-is not a backup; take versioned, independently stored snapshots.
+Search responses are treated as untrusted evidence. The application normalizes URLs, bounds results and context, tracks provider/source identity, and can continue with Vault-only evidence when the remote path is unavailable. The model does not choose an arbitrary search tool or its credentials.
 
-## LiveSync boundary
+The selected WebSearch provider has its own credential. It does not receive an LLM or embedding key. An explicitly enabled extraction fallback may reuse only the selected WebSearch credential.
 
-Self-hosted LiveSync is an architectural placeholder only and is **not
-implemented**. No supplied service connects to CouchDB, consumes a Setup URI,
-or loads LiveSync credentials. A future materializer must keep database and
-encryption credentials outside the application-visible Vault and must not run
-alongside another Sync engine for the same Vault.
+## Safe selected-page reading
 
-## Deployment decision table
+Optional page reading begins only after WebSearch returns a candidate and the research pipeline selects it. For each request, the reader:
 
-| Configuration | Note text leaves the application host? | Other important egress |
-|---|---|---|
-| Local LLM, embeddings disabled, no Sync | No during normal use | Package updates, backups, or monitoring only if configured |
-| Local LLM and local embeddings, no Sync | No during normal use | Same operational exceptions |
-| Remote LLM, embeddings disabled | Selected context, history, prompts, and text attachment excerpts go to the LLM | Provider metadata |
-| Remote embeddings | Document chunks and queries go to the embedding provider | Remote LLM flow also applies if configured |
-| Obsidian Headless enabled | Vault contents synchronize through Obsidian Sync | Model flows remain independent |
+- allows public `https:` URLs only;
+- rejects URL credentials, fragments as authority, and unsupported ports/schemes;
+- resolves DNS and rejects loopback, private, link-local, multicast, reserved, and otherwise non-public IPs;
+- connects to the validated address while preserving TLS hostname verification;
+- revalidates each redirect;
+- bounds redirects, response bytes, decoded characters, pages, concurrency, and time;
+- accepts only configured HTML/text content, plus sandboxed PDF when explicitly available.
 
-Before production use, document which row applies, who administers each trust
-boundary, provider retention settings, backup destinations, and the procedure
-for deleting or rotating each class of data and credential.
+Fetched text is untrusted and enters the LLM request as delimited evidence. It never becomes an instruction that can widen filesystem, network, or tool permissions.
+
+The standard image does not contain the required sandboxed PDF toolchain, so PDF reading reports unavailable instead of using an unsandboxed fallback.
+
+## Administrator validation egress
+
+Saving a Provider change is separate from validating it. Explicit validation can make small model and WebSearch requests. Embedding validation can start the full-base operation described above. These actions may incur cost even if the candidate later fails.
+
+Validation receipts are short-lived, one-use, bound to the administrator and source revision, and kept in process memory. They avoid persisting candidate keys in browser storage. Read APIs return configured booleans rather than secret values.
+
+## Draft and write flow
+
+```text
+prompt -> optional remote generation -> private draft outside Vault
+       -> browser review/edit
+       -> explicit save
+       -> owner, base, path, symlink, expiry, and hash checks
+       -> optional verified recovery preimage
+       -> temporary file and atomic rename inside the selected Vault
+       -> per-base audit append
+```
+
+There is no distributed transaction with an external sync process. A content hash and final checks reduce races but cannot make two independent filesystem writers atomic. Preserve sync conflicts and maintain tested backups.
+
+## External sync flow
+
+Second Mind never uploads or reconciles a Vault on its own. If `SYNC_PROVIDER` labels a Headless or external sync process, that process has a separate network, account, encryption, and filesystem trust boundary. Its data flows and retention are governed by its operator and provider.
+
+Do not run two sync engines against the same local Vault. Sync is not backup. See [sync.md](sync.md).
+
+## Data-egress decision table
+
+| Operation | Vault read | Vault write | Remote LLM | Remote embedding | Web/Search network |
+|---|---:|---:|---:|---:|---:|
+| Startup and lexical indexing | Yes | No | No | No | No |
+| Sign-in or configuration GET | No | No | No | No | No |
+| BM25 search and source preview | Yes | No | No | No | No |
+| Semantic/hybrid query | Yes | No | No | Yes, if remote profile active | No |
+| Provider validation | No | No | Selected model only | Probe for embedding action | Selected search/extractor only |
+| Embedding build | Yes | No | No | Yes, eligible chunks | No |
+| Q&A without web | Yes | No | Yes | Maybe for retrieval | No |
+| Q&A with web | Yes | No | Yes | Maybe for retrieval | Yes |
+| Generate note draft | Maybe | No | Yes | Maybe for retrieval | No |
+| Confirm draft | No new model context | Yes | No | No | No |
+| Installer backup | Yes | No | No | No | No, except any separately running sync |
+
+For sensitive Vaults, choose local-compatible services where appropriate, or accept that selected content leaves the host. Apply the remote Provider's retention, training, regional, contractual, logging, and access-control terms to that data.

@@ -1,490 +1,207 @@
-<p align="center">
-  <a href="docs/assets/second-mind-hero.png">
-    <img src="docs/assets/second-mind-hero.png" alt="Second-Mind — self-hosted AI knowledge workspace for an Obsidian Vault" width="100%">
-  </a>
-</p>
+# Second Mind
 
-<h1 align="center">Second-Mind</h1>
+[English](README.en.md) · [在线网站](https://kygoyuan2004.github.io/Second-Mind/) · [Windows](docs/quickstart-windows.md) · [macOS](docs/quickstart-macos.md) · [Linux](docs/quickstart-linux.md) · [安全边界](docs/security.md)
 
-<p align="center">
-  <strong>Self-hosted, provider-neutral RAG for a local Obsidian Vault.</strong><br>
-  <sub>Bring your own model · Hybrid retrieval · Traceable citations · Review before write</sub>
-</p>
+[![CI](https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml/badge.svg)](https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml)
+[![Pages](https://github.com/kygoyuan2004/Second-Mind/actions/workflows/pages.yml/badge.svg)](https://github.com/kygoyuan2004/Second-Mind/actions/workflows/pages.yml)
 
-<p align="center">
-  <a href="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-7C3AED"></a>
-  <a href="package.json"><img alt="Node.js 22 or newer" src="https://img.shields.io/badge/Node.js-%E2%89%A522-339933?logo=nodedotjs&amp;logoColor=white"></a>
-  <a href="#five-minute-docker-quick-start"><img alt="Docker Compose deployment" src="https://img.shields.io/badge/deploy-Docker%20Compose-2496ED?logo=docker&amp;logoColor=white"></a>
-  <a href="docs/sync.md"><img alt="Obsidian Vault" src="https://img.shields.io/badge/knowledge-Obsidian-7C3AED?logo=obsidian&amp;logoColor=white"></a>
-</p>
+Second Mind 是一个面向本地 Obsidian Vault 的单管理员、自托管知识工作台。它把关键词与可选向量检索、带引用的问答、反馈式研究、会话连续性，以及日记、计划、随心记的确认后写入放在同一个网页中。模型、搜索和 Embedding 由管理员自带；未配置 LLM 时仍可登录、管理知识库并使用 BM25 关键词检索。
 
-<p align="center">
-  <a href="docs/README.zh-CN.md">简体中文</a> ·
-  <a href="docs/architecture.md">Architecture</a> ·
-  <a href="docs/configuration.md">Configuration</a> ·
-  <a href="docs/api.md">API</a> ·
-  <a href="docs/deployment.md">Deployment</a> ·
-  <a href="docs/security.md">Security</a> ·
-  <a href="docs/sync.md">Sync</a>
-</p>
+![Second Mind 在隔离合成知识库中显示带引用的回答](docs/assets/second-mind-qa.png)
 
-Second-Mind combines a responsive Chinese web workspace, a single-node Node.js
-service, lexical and optional vector retrieval, streaming model output, and a
-review-before-write workflow for diaries, plans, and inbox notes. Bring your
-own model endpoint and, optionally, a separate embedding endpoint. API keys
-stay on the server.
+> 以上及下方产品图均由仓库的截图脚本从当前真实网页生成，使用隔离端口、公开合成 Vault 和 mock LLM。没有连接私人实例，也没有调用付费服务。
 
-<p align="center">
-  <a href="docs/assets/second-mind-local-vault-answer.png">
-    <img src="docs/assets/second-mind-local-vault-answer.png" alt="Second Mind answering a grounded question from a local Obsidian knowledge base with Qwen" width="100%">
-  </a>
-</p>
-<p align="center"><sub><strong>Deep Retrieval over a real Obsidian note.</strong> Captured from an isolated Second-Mind instance using a privacy-reviewed, read-only snapshot of one local technical note, Qwen 3.8 Max, Qwen 3.7 Text Embedding, and the shipped multi-query Deep Retrieval path. No personal notes or credentials are shown.</sub></p>
+## 三步打开登录页
 
-> [!IMPORTANT]
-> Second-Mind is a single-administrator private knowledge service, not a
-> multi-tenant SaaS platform. It always reads a **local filesystem Vault**.
-> Synchronization is a separate operator-managed process.
+先安装 Git，并安装和启动 Docker。安装器只询问知识库目录、管理员密码和端口，不要求宿主机安装 Node.js、OpenSSL，也不要求手工编辑 JSON。
 
-## What works today
-
-| Area | Current implementation |
-|---|---|
-| Knowledge Q&A | Source-grounded answers with Obsidian-style citations and server-sent event (SSE) streaming |
-| Retrieval | Chinese-aware BM25; optional dense embeddings; cosine ranking plus RRF; Normal single-pass and provider-neutral Deep Retrieval; lexical fallback when embeddings fail |
-| Note workflows | Diary, plan, and scratch/inbox generation with editable Markdown preview and explicit confirmation before write |
-| Files | Keyword and semantic search, safe source preview, text attachments for Q&A, and confirmed attachment persistence for note modes |
-| Providers | OpenAI-compatible chat APIs, Anthropic Messages API, OpenAI-compatible embeddings, and native DashScope embeddings |
-| Local models | Ollama, vLLM, LM Studio, or another compatible endpoint through the OpenAI-compatible adapter |
-| Operations | Docker Compose, optional file-backed secrets, health checks, index reconciliation, audit events, Caddy/Nginx examples, and Tailscale guidance |
-| Synchronization | Plain filesystem mode; optional locally built Obsidian Headless sidecar; other external filesystem materializers |
-
-Self-hosted LiveSync is **not implemented**. It appears only in the
-[roadmap](#roadmap), and must not be represented as a current feature.
-
-## Product tour
-
-### Inspect the execution trace
-
-<p align="center">
-  <a href="docs/assets/second-mind-execution-trace.png">
-    <img src="docs/assets/second-mind-execution-trace.png" alt="Second-Mind execution trace showing retrieval, model session, source selection, generation, and completion" width="100%">
-  </a>
-</p>
-<p align="center"><sub><strong>All 17 observable steps, without hidden chain-of-thought.</strong> The captured Deep Retrieval run shows the Qwen session, bounded query decomposition, four hybrid retrieval paths, per-path results, evidence fusion, cited generation, and completion.</sub></p>
-
-### Inspect the evidence behind an answer
-
-<p align="center">
-  <a href="docs/assets/second-mind-source-preview.png">
-    <img src="docs/assets/second-mind-source-preview.png" alt="Second-Mind opening the exact local Obsidian note behind a cited answer" width="100%">
-  </a>
-</p>
-<p align="center"><sub><strong>Traceable retrieval.</strong> Open the exact Markdown note and verify the evidence used by the answer.</sub></p>
-
-### Review every generated note before writing
-
-<p align="center">
-  <a href="docs/assets/second-mind-review-before-write.png">
-    <img src="docs/assets/second-mind-review-before-write.png" alt="Second-Mind reviewing Qwen-generated Markdown before an explicit Vault write" width="100%">
-  </a>
-</p>
-<p align="center"><sub><strong>Human-controlled writes.</strong> Generated Markdown remains editable and cannot enter the Vault without explicit confirmation. The screenshot stopped before confirmation.</sub></p>
-
-> [!NOTE]
-> **Normal and provider-neutral Deep Retrieval are real server-side strategies.**
-> Normal performs one bounded hybrid retrieval pass. Deep Retrieval decomposes
-> the question, runs up to four bounded hybrid searches, fuses file-level
-> evidence with reciprocal-rank scoring, and then generates the cited answer.
-> Deep Retrieval is available only for
-> knowledge Q&amp;A; every write workflow remains Normal and review-before-write.
-> This provider-neutral mode is deliberately not the private predecessor's
-> 50-turn, tool-using, multi-subagent Agent runtime.
-
-## Five-minute Docker quick start
-
-This path assumes Docker Compose and an OpenAI-compatible model endpoint are
-already available. The default example targets Ollama on the Docker host. The
-repository's `vault/` directory is suitable for a disposable demo; point
-`VAULT_HOST_PATH` at a backed-up real Vault for actual use.
-
-Requirements:
-
-- Docker Engine with Docker Compose v2;
-- an LLM endpoint, or local Ollama with a pulled model;
-- a writable local Vault directory;
-- `openssl` for generating a session secret.
+Linux / macOS：
 
 ```bash
 git clone https://github.com/kygoyuan2004/Second-Mind.git
 cd Second-Mind
-cp .env.example .env
+./install.sh
 ```
 
-For local Ollama, pull the configured model and set these values in `.env`:
+Windows PowerShell，使用 Docker Desktop 的 WSL2 backend 与 Linux containers：
 
-```bash
-ollama pull qwen3:8b
+```powershell
+git clone https://github.com/kygoyuan2004/Second-Mind.git
+cd Second-Mind
+powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-```dotenv
-VAULT_HOST_PATH=./vault
+安装器优先拉取 `ghcr.io/kygoyuan2004/second-mind:latest` 的 `linux/amd64` 或 `linux/arm64` 镜像，拉取失败时从当前源码构建。它不会停止占用端口的进程，而是要求选择新端口。完成后访问终端显示的回环地址，并以 `admin` 登录。
 
-LLM_PROVIDER=openai-compatible
-LLM_API_BASE=http://host.docker.internal:11434/v1
-LLM_MODEL=qwen3:8b
+平台细节与故障排查：
 
-EMBEDDING_PROVIDER=disabled
-```
+- [Windows 10/11](docs/quickstart-windows.md)
+- [macOS Intel / Apple Silicon](docs/quickstart-macos.md)
+- [Linux amd64 / arm64](docs/quickstart-linux.md)
 
-Keep the Compose UID/GID defaults for this quick start because the named data
-volume is initialized for UID/GID `1000`. Advanced host identity mapping needs
-the data volume and Vault permissions to be provisioned together; see the
-[deployment guide](docs/deployment.md). Then create local secret files. The LLM
-and embedding key files may be empty for an unauthenticated local endpoint.
+## 当前功能
 
-```bash
-mkdir -p secrets
-chmod 700 secrets
-umask 077
-read -rsp "Choose a Second-Mind admin password (12+ characters): " SECOND_MIND_ADMIN_PASSWORD
-printf '\n'
-printf '%s' "$SECOND_MIND_ADMIN_PASSWORD" > secrets/admin_password
-unset SECOND_MIND_ADMIN_PASSWORD
-openssl rand -hex 32 > secrets/session_secret
-: > secrets/llm_api_key
-: > secrets/embedding_api_key
-chmod 600 secrets/*
-```
-
-Build and start:
-
-```bash
-docker compose \
-  -f compose.yaml \
-  -f compose.secrets.yaml \
-  up -d --build
-
-docker compose ps
-curl --fail http://127.0.0.1:8787/health/live
-curl --fail http://127.0.0.1:8787/health/ready
-```
-
-Open <http://127.0.0.1:8787> and sign in as `admin` with the password entered
-above. The readiness check can remain in `starting` while a large Vault builds
-its first index.
-
-For a remote model, replace the provider values in `.env`, write its key to
-`secrets/llm_api_key`, and keep provider transport on HTTPS. See
-[Bring your own model and embeddings](#bring-your-own-model-and-embeddings).
-
-## Architecture
-
-<p align="center">
-  <a href="docs/architecture.md">
-    <img src="docs/assets/second-mind-architecture.png" alt="Second-Mind architecture showing separate read and review-before-write paths" width="100%">
-  </a>
-</p>
-<p align="center"><sub>Click the diagram for component boundaries, request flows, and deployment details.</sub></p>
-
-The read and write paths are deliberately different:
-
-- **Read path:** safe Vault gateway → Markdown-aware chunks → Normal single-pass
-  retrieval or provider-neutral Deep Retrieval → BM25 and
-  optional vectors → RRF/evidence fusion → bounded context → model → cited
-  answer.
-- **Write path:** user input → model-generated Markdown → private draft outside
-  the Vault → editable preview → explicit confirmation → conflict/path checks →
-  verified preimage recovery copy for an existing diary/plan → second hash check
-  → atomic file replacement in an allow-listed directory.
-
-The model has no shell, arbitrary filesystem tool, or general web-search tool.
-Vault content is treated as untrusted data in the grounding prompt.
-
-## Retrieval design
-
-Second-Mind indexes `.md`, `.txt`, `.json`, `.canvas`, `.base`, `.csv`, YAML, and
-log files up to 2 MiB each. The indexer:
-
-1. preserves headings, line ranges, lists, tables, and fenced code while
-   creating overlapping chunks;
-2. tokenizes Chinese text, dates, and programming identifiers for BM25;
-3. optionally embeds only chunks whose content hash has changed;
-4. ranks dense results by cosine similarity and fuses dense and lexical ranks
-   with RRF;
-5. deduplicates results by file and includes source paths and excerpts in the
-   generation prompt;
-6. falls back to keyword results with diagnostics when embeddings are disabled
-   or unavailable.
-
-Normal Q&amp;A performs one bounded hybrid search. Deep Retrieval first asks the model
-for a JSON-only set of complementary retrieval queries, always retains the
-original question, runs at most four hybrid searches, and fuses unique files
-with reciprocal-rank scoring. The final context still obeys
-`RAG_MAX_CONTEXT_CHARS`; Deep does not give the model shell, write, web, or
-client-configurable Agent tools. It is a provider-neutral Deep Retrieval
-strategy, not a turn-based or multi-subagent Agent runtime.
-
-Index generations are written atomically. The current and previous generation
-are retained so startup can fall back after an incomplete or corrupt write.
-Filesystem watchers trigger debounced updates, while periodic reconciliation
-detects missed changes.
-
-## Bring your own model and embeddings
-
-Credentials are read by the server from environment variables or `*_FILE`
-paths. They are never requested by, stored in, or returned to the browser.
-
-### Chat models
-
-| Endpoint | Configuration |
+| 能力 | 当前实现 |
 |---|---|
-| OpenAI or another OpenAI-compatible service | `LLM_PROVIDER=openai-compatible`, HTTPS `LLM_API_BASE` ending at the provider's API root, provider model ID, server-side API key |
-| Anthropic | `LLM_PROVIDER=anthropic`, `LLM_API_BASE=https://api.anthropic.com`, Anthropic model ID, server-side API key |
-| Ollama on the Docker host | `LLM_PROVIDER=openai-compatible`, `LLM_API_BASE=http://host.docker.internal:11434/v1`, local model ID, empty key allowed |
-| vLLM or LM Studio | OpenAI-compatible mode; use loopback, a private container network, or HTTPS |
+| 多知识库 | 稳定 ID、显示名、启用/默认状态、受限挂载点；工作台选择器与管理员注册表 |
+| 隔离 | 每库独立索引、会话、草稿、恢复副本和审计；跨库任务、会话、草稿 ID 会失败 |
+| 检索 | 中文感知 BM25；可选 OpenAI-compatible 或 DashScope Embedding；混合 RRF；语义失效时明确降级 |
+| 问答 | Normal 单轮检索与 Deep 反馈式多路径检索；服务器控制工具；答案引用具体 Vault 相对路径 |
+| 联网补充 | 每个会话显式选择；Alibaba Model Studio WebSearch MCP 或 Tavily REST；安全网页读取与 Vault-only 降级 |
+| 会话 | 刷新恢复；模型、思考强度或联网设置变化时派生子会话；Normal 与 Deep 可在原会话切换 |
+| 写入 | 日记、计划、随心记生成；可编辑 Markdown 预览；明确确认后只写入允许目录；冲突检查和恢复副本 |
+| 渲染 | 安全 Markdown、代码块、表格与 KaTeX 行内/块级公式 |
+| Provider | Alibaba Model Studio、DeepSeek、GLM、Kimi 与 Custom；最多启用三个模型；Key 永不回显 |
+| 运维 | Docker Compose、健康检查、`doctor`、`status`、`logs`、`update`、`backup`、GHCR 多架构工作流 |
 
-OpenAI-compatible means the endpoint must implement the request and streaming
-shapes used by `/chat/completions`; brand compatibility alone is not a test
-guarantee. Validate the exact model and gateway before production use.
+这不是多租户 SaaS，也不是让模型获得 shell 或任意文件系统权限的自主 Agent。模型只接收服务端选定和定界的文本；WebSearch、网页读取、索引与写入都由应用代码控制。
 
-### Embeddings
+## 真实界面
 
-`EMBEDDING_PROVIDER=disabled` gives BM25-only retrieval. To enable hybrid RAG:
+| 执行过程 | Provider 配置 |
+|---|---|
+| ![检索、核验与生成的可观察执行过程](docs/assets/second-mind-execution.png) | ![只显示虚构 Provider、模型和已配置状态的管理员页](docs/assets/second-mind-provider-config.png) |
+| **公开合成问答的检索与生成阶段** | **虚构 Provider；没有显示或保存截图用 Key** |
 
-```dotenv
-EMBEDDING_PROVIDER=openai-compatible
-EMBEDDING_API_BASE=https://your-provider.example/v1
-EMBEDDING_MODEL=your-embedding-model
-EMBEDDING_DIMENSIONS=768
+| 日记预览 | 计划预览 |
+|---|---|
+| ![隔离 demo 中生成并渲染的日记草稿](docs/assets/second-mind-diary.png) | ![隔离 demo 中生成并渲染的计划草稿](docs/assets/second-mind-plan.png) |
+| **仍在 Vault 外，尚未确认写入** | **仍在 Vault 外，尚未确认写入** |
+
+![Second Mind 知识库工作台的 360 像素窄屏布局](docs/assets/second-mind-mobile.png)
+
+## 多知识库如何工作
+
+首次安装可以选择一个 Vault，也可以选择包含多个 Vault 的父目录。父目录模式只发现下一层中带 `.obsidian` 的目录。无论自动发现还是后来注册，每个知识库根都必须包含实际目录（不是符号链接）的 `.obsidian`。管理员随后可在启动时授权的挂载点内，用相对路径添加、重命名、禁用或切换默认知识库。
+
+每次知识 API 请求都绑定 `knowledgeBaseId` 与当前 revision：
+
+- 搜索、预览、引用、会话、任务、SSE、草稿和确认写入使用同一知识库上下文；
+- 在 A 中创建的运行任务始终留在 A，浏览器可以同时切到 B；
+- A 的旧响应或 SSE 事件不能更新已经切到 B 的界面；
+- 一个库损坏或索引失败不会阻止其他健康库启动；
+- 绝对路径、符号链接、目录逃逸、重复或嵌套 Vault，以及与私人状态重叠的路径都会被拒绝；
+- 删除注册项不会删除笔记、索引、会话或草稿。
+
+管理员保存注册表时必须再次输入密码，并携带读取到的 revision。若有别的页面先保存，或相关库仍有活动任务，更新会失败而不是覆盖。私有绑定清单会把稳定 ID 永久绑定到首次规范化的 Vault 路径；即使删除注册项或重启也不会释放该 ID，把它改指向另一条路径会被拒绝。
+
+## 网页配置与 BYOK
+
+登录管理员页后，可分别配置：
+
+1. LLM Provider、API Base、模型与五档应用级思考强度；
+2. 可选的 WebSearch Provider 和独立 Key；
+3. 可选的 Embedding Provider、模型和独立 Key。
+
+LLM、WebSearch 与 Embedding 凭据不互相回退。API 只返回 `configured` 布尔状态，不返回 Key。浏览器不把 Key 写入 localStorage、sessionStorage、URL 或 Cookie。变更 Provider 地址时必须重新提供该目标的凭据。
+
+连接检查与 Embedding 构建可能产生费用，因此只在管理员明确确认后执行；启动、登录、刷新配置和 BM25 检索不会主动调用付费 Provider。运行中的任务固定使用创建时的模型、搜索和索引快照，新任务才使用保存后的版本。
+
+## RAG、研究与会话
+
+Normal 使用一个受控检索路径。Deep 会生成有限数量的互补查询、合并证据、检查冲突和缺口，并在启用研究循环时进行有限反馈轮次。两种模式都只把实际进入模型上下文的 Vault 相对路径作为可引用来源；无法支持的结论应明确说明证据不足。
+
+联网搜索默认关闭，且只能用于问答。启用后，搜索结果先经过 URL 与域名检查；可选页面读取还会执行 DNS/IP、重定向、类型、大小、超时和并发限制。模型本身不拥有 MCP、浏览器或抓取工具。
+
+浏览器只持久化当前用户和知识库对应的不透明会话 ID。更换固定模型、思考强度或联网选项时，下一条消息会派生子会话，并最多复制五轮完整问答；不会把原始网页、搜索片段或隐藏推理保存为会话内容。
+
+## 确认后写入
+
+日记、计划和随心记先生成到 Vault 外的私有草稿目录。用户可以检查 Markdown、目标相对路径和附件，再明确确认。服务器随后重新校验目录、符号链接、目标哈希和并发变化，通过后才原子替换文件。覆盖既有日记或计划前会保留校验过的恢复副本。
+
+模型输出、文件名检查和扩展名检查不能证明附件安全。不要在桌面软件中打开不可信附件，外部同步也不能替代备份。
+
+## 架构
+
+```mermaid
+flowchart LR
+  B[浏览器与登录会话] --> R[知识库注册表]
+  R --> A[知识库 A 上下文]
+  R --> C[知识库 B 上下文]
+  A --> IA[独立索引与历史]
+  C --> IC[独立索引与历史]
+  IA --> Q[受控 RAG 与可选 WebSearch]
+  IC --> Q
+  Q --> L[任务固定的 LLM 租约]
+  L --> O[流式回答或私有草稿]
+  O --> W{用户确认写入?}
+  W -->|否| P[继续预览]
+  W -->|是| V[路径、冲突与原子写入检查]
 ```
 
-The other implemented embedding adapter is `dashscope`, using its native
-embedding payload. `EMBEDDING_DIMENSIONS` must exactly match the provider
-output. Changing provider, model, or dimensions invalidates the previous
-vectors and requires an index rebuild:
+**这是架构图，不是产品截图。** 更完整的组件、数据流和信任边界见 [docs/architecture.md](docs/architecture.md) 与 [docs/data-flow.md](docs/data-flow.md)。
+
+## 隐私与远程数据边界
+
+| 目的地 | 只有在何时访问 | 可能发送的数据 |
+|---|---|---|
+| LLM | 用户发起生成，且已配置模型 | 问题、近期完整会话、选定笔记片段、文本附件片段 |
+| Embedding | 管理员确认构建或用户进行语义查询 | 可索引文本块或搜索查询 |
+| WebSearch | 当前问答会话显式启用 | 服务端生成的有限搜索词 |
+| 安全网页读取 | WebSearch 已启用且研究流程选择来源 | 经过验证的公开 HTTPS URL；读取结果随后作为定界文本交给模型 |
+
+Vault、会话、索引、草稿、恢复副本、审计和凭据默认留在本机卷。若选择远程 Provider，与其共享的数据受该 Provider 的条款、保留策略、区域和账号权限约束。请使用最小权限、独立额度与可轮换的 Key。
+
+“自托管”不等于“所有操作始终仅在本地”：启用远程 LLM、Embedding、WebSearch 或网页读取后，表中对应的选定内容会离开主机。若要求内容绝不出站，请只从本机浏览器访问，只使用在同一主机运行的兼容 Provider，禁用联网与远端同步，并把备份留在受控本地存储。
+
+Compose 默认只发布 `127.0.0.1`。需要远程访问时，应使用经过审查的私有网络或 HTTPS 反向代理，不要直接把应用端口暴露到公网。详见 [docs/security.md](docs/security.md) 和 [docs/networking.md](docs/networking.md)。
+
+## 备份、更新与卸载
 
 ```bash
-npm run index
+./install.sh doctor
+./install.sh status
+./install.sh logs --no-follow --tail 200
+./install.sh backup
+./install.sh update
 ```
 
-Prefer a separate least-privilege embedding key. A remote embedding provider
-receives document chunks during indexing and user queries at search time; a
-remote LLM receives the prompt, recent conversation messages, selected note
-excerpts, and text attachment excerpts.
+PowerShell 使用相同子命令；在限制脚本执行的系统上继续使用进程级绕过，例如 `powershell -ExecutionPolicy Bypass -File .\install.ps1 doctor`。
 
-Plain HTTP is accepted automatically only for loopback and
-`host.docker.internal`. Non-local HTTP requires the explicit
-`ALLOW_INSECURE_PROVIDER_HTTP=true` opt-in and should be limited to a trusted
-private network.
+每个安装实例有独立 Compose project、私有配置目录和数据卷。`backup` 保存 Vault、运行数据和配置，并为内容生成 SHA-256 清单；它是实时复制，不保证外部同步与运行写入之间的原子时间点一致性，也不会自动收集独立同步器的私有卷、账号状态或远端状态。严格恢复前应停止本实例和同步程序，在隔离目录验证备份。
 
-## Review-before-write
+当前没有自动恢复或永久卸载命令。普通卸载应对精确实例执行 `docker compose down` 且不带 `--volumes`，从而保留 Vault、凭据、会话、索引和备份。永久删除前必须先备份并分别核对具体命名卷和配置目录；不要对用户目录或 Vault 做宽范围递归删除。
 
-Knowledge Q&A is read-only. Diary, plan, and scratch modes use a staged write
-protocol:
+## 已知限制
 
-- drafts and temporary attachments live under the private data directory, not
-  inside the Vault;
-- nothing is written to the Vault until the user reviews and confirms the
-  Markdown preview;
-- diary and plan saves compare the current note hash with the hash captured
-  before generation and reject concurrent changes;
-- before replacing an existing diary or plan, the server copies and verifies its
-  preimage under `RECOVERY_DIR`, rechecks the live hash, and only then performs
-  the atomic replacement; recovery copies default to 30-day retention through
-  `RECOVERY_RETENTION_DAYS`;
-- scratch notes receive a sanitized, collision-avoiding filename;
-- writes are restricted to `DIARY_DIR`, `PLAN_DIR`, and `SCRATCH_DIR`;
-- traversal, excluded paths, non-regular files, and symbolic links are denied;
-- confirmed writes and draft deletion/creation attempt to append JSONL audit
-  events; a post-commit audit failure is returned as an explicit warning rather
-  than misreporting a successful Vault write as failed.
+- 只有一个管理员账号，没有多用户授权、租户隔离或外部身份登录。
+- 应用读取本地文件系统 Vault；Self-hosted LiveSync 没有实现，Obsidian Headless 只是需单独审查的可选同步边界。
+- 标准镜像没有安装 `bwrap` 与 `pdftotext`，所以网页 PDF 读取默认不可用；不会静默回退到无 sandbox 解析。确认后的 PDF 附件持久化不等于 PDF 内容理解。
+- Windows Service、macOS LaunchDaemon、Credential Manager 与 Keychain 集成都没有实现。
+- 安装器的备份不保留所有平台 ACL/xattr，也不是应用与同步器的原子快照。
+- Docker `--mount` 不能可靠处理名称含逗号的宿主机路径；空格、中文和 Windows 盘符有测试覆盖。
+- Linux 快速安装针对常规 rootful Docker Engine；rootless Docker 与启用 SELinux 的宿主机需要管理员另行设计 UID 映射、卷权限和 bind-mount relabel，本安装器不会静默修改这些边界。
+- `update` 会保留数据和配置，但没有自动镜像回滚；关键部署应固定不可变 tag/digest、保留上一镜像，并先在备份副本上验证升级。
+- `knowledgeBaseId` 绑定规范化路径。若宿主机在完全相同的路径替换成另一套 Vault 内容，必须使用新 ID，避免重新打开旧库保留的私有状态。
+- 模型兼容取决于目标 API 是否真正实现所选协议；显示为 compatible 不代表所有模型能力相同。
 
-Recovery copies contain previous private note content, so protect and back up
-the data directory according to its sensitivity. This protocol reduces
-accidental overwrites and narrows the race window; it is not a distributed CAS
-or transaction with a sync engine. Backups and conflict-preserving sync settings
-remain necessary.
+## 开发与测试
 
-## Synchronization model
-
-Second-Mind does not embed a sync client. `SYNC_PROVIDER` and
-`SYNC_DISPLAY_NAME` describe which external process materializes the local
-Vault.
-
-- **Filesystem:** no managed synchronization; point Second-Mind at an existing
-  local directory.
-- **Official Obsidian Headless:** an optional Compose overlay builds the
-  upstream `obsidian-headless` package locally and shares the Vault directory.
-  It requires an Obsidian Sync subscription and separate interactive setup.
-- **External:** another operator-managed process presents a normal local Vault.
-
-The optional Headless component is an external upstream open-beta package that
-requires Node.js 22. Its npm metadata is currently `UNLICENSED`. It is excluded
-from the main image; the included Dockerfile is a **local installation recipe**.
-Do not publish or redistribute the resulting sidecar image without upstream
-permission. Review the current [official Headless documentation](https://obsidian.md/help/sync/headless),
-[npm metadata](https://www.npmjs.com/package/obsidian-headless), and
-[sync guide](docs/sync.md) before enabling it.
-
-Self-hosted LiveSync/CouchDB support is not present: there is no CouchDB
-service, credential loader, Setup URI handler, or tested materializer.
-
-## Security boundaries
-
-Implemented controls include:
-
-- one configured administrator identity; signed `HttpOnly`, `SameSite=Strict`
-  session cookies; in-memory login throttling;
-- same-origin checks and the legacy compatibility header
-  `X-VaultMind-Request: 1` on mutating API calls;
-- restrictive browser security headers and sanitized Markdown rendering;
-- file-backed secrets with permission checks;
-- excluded hidden/configuration paths, root containment, and symlink denial;
-- remote-provider HTTPS enforcement unless explicitly overridden;
-- non-root Docker execution, read-only root filesystem, dropped capabilities,
-  `no-new-privileges`, PID limit, and loopback-only port publication.
-
-Important boundaries:
-
-- the current auth model is single-user and has no RBAC, SSO, or tenant
-  isolation;
-- the Docker Vault bind mount is read/write at the kernel level, so application
-  path policy and host permissions are part of the write boundary;
-- images and PDFs are persisted as confirmed attachments but are not scanned,
-  OCRed, or interpreted by the model;
-- browser dictation uses the browser's optional speech-recognition facility;
-  some browser/platform implementations may send audio to their vendor, so
-  verify that privacy behavior before dictating sensitive notes;
-- remote providers receive private text; use local models when data must not
-  leave the server;
-- Docker daemon, host root, service account, backups, and sync credentials are
-  privileged trust boundaries.
-
-Read the full [security model](docs/security.md) and
-[networking guide](docs/networking.md) before remote deployment. Keep the app
-on loopback and use Tailscale Serve or an HTTPS reverse proxy; do not expose raw
-port 8787 to the internet.
-
-## Tests and retrieval evaluation
-
-Install with Node.js 22 or newer, then run the complete local verification:
+所有自动测试使用临时目录、合成数据和 mock Provider，不访问真实付费 API。
 
 ```bash
 npm ci
+npm run check
+npm test
+npm run security:scan
+npm run security:history
+npm run site:check
 npm run verify
 ```
 
-`verify` performs syntax checks, the Node test suite, and a publication-blocker
-scan for secrets/private paths. The suite covers authentication, request guards,
-provider adapters, streaming, Chinese BM25 and hybrid retrieval, embedding
-degradation, atomic index recovery, the authenticated API, draft conflicts,
-preimage recovery copies, attachments, and filesystem policy.
+Linux 发布门禁还执行 Compose config、镜像 build、隔离容器的 `health/live` 与 `health/ready`、浏览器 E2E、KaTeX 回归、镜像 history/inspect，以及截图 OCR/metadata 检查。
 
-Coverage is available separately:
+## 文档
 
-```bash
-npm run test:coverage
-```
-
-Run the included synthetic retrieval smoke evaluation:
-
-```bash
-VAULT_PATH=examples/demo-vault \
-INDEX_DIR=/tmp/second-mind-demo-index \
-EMBEDDING_PROVIDER=disabled \
-npm run eval -- --k 3 --min-recall 1
-```
-
-The three-query synthetic fixture currently reports Recall@3 `1.0000`, MRR
-`0.8333`, and nDCG@3 `0.8770`. These numbers validate the evaluation pipeline;
-they are **not** evidence of production retrieval quality. Replace the fixture
-with a private, human-reviewed dataset before comparing models or retrieval
-configurations. See [eval/README.md](eval/README.md).
-
-Compose definitions can be rendered without starting containers:
-
-```bash
-docker compose -f compose.yaml config --quiet
-docker compose -f compose.yaml -f compose.secrets.yaml config --quiet
-docker compose -f compose.yaml -f compose.obsidian-sync.yaml config --quiet
-```
-
-## Project structure
-
-```text
-public/                         Chinese responsive web UI
-src/
-  server.mjs                   HTTP API, security headers, health checks
-  task-manager.mjs             Q&A and note-generation task/SSE pipeline
-  knowledge-index.mjs          chunking, BM25, vectors, RRF, persistence
-  llm-client.mjs               OpenAI-compatible and Anthropic adapters
-  embedding-client.mjs         OpenAI-compatible and DashScope adapters
-  path-policy.mjs              Vault containment, exclusions, symlink policy
-  vault-store.mjs              drafts, recovery copies, confirmed writes
-  auth.mjs                     single-admin sessions and request guard
-test/                          unit and end-to-end Node tests
-eval/                          synthetic evaluation dataset and runner
-examples/demo-vault/           publishable demo corpus
-scripts/                       checks, reindexing, evaluation, secret scan
-compose*.yaml                  base, secret, and optional sync deployments
-docker/                        local-only Obsidian Headless build recipe
-deploy/                        Caddy, Nginx, and systemd examples
-docs/                          deployment, networking, security, and sync guides
-```
-
-## Deployment paths
-
-- Docker Compose: [docs/deployment.md](docs/deployment.md)
-- Private access with Tailscale Serve: [docs/networking.md](docs/networking.md)
-- Public cloud HTTPS with Caddy or Nginx: [docs/networking.md](docs/networking.md)
-- Dedicated systemd service: [docs/deployment.md](docs/deployment.md)
-- Optional official Headless sidecar: [docs/sync.md](docs/sync.md)
-
-Obsidian Sync is not a backup. Back up the Vault, private application state,
-and deployment secrets independently, and test restoration.
-
-## Current limitations
-
-- Single administrator and single Node.js process; no RBAC, SSO, distributed
-  task queue, or horizontal scaling.
-- Filesystem-backed JSON index and conversation state are intended for a
-  personal/small-team-sized single-node deployment, not an enterprise corpus.
-- BM25 scoring is computed in process; very large Vaults need a different
-  inverted-index/storage layer.
-- Only supported text formats are indexed. Images and PDFs are previewed or
-  attached, not OCRed or semantically parsed.
-- Server-side speech transcription is unavailable; browser dictation depends
-  on browser/platform support and may use a browser-vendor speech service.
-- No general web search, shell access, arbitrary agent tools, or autonomous
-  Vault mutation.
-- Login throttling and active task state are in memory and reset on restart.
-- Recovery copies and repeated draft hash checks do not provide a distributed
-  lock or CAS with Sync.
-- Obsidian Headless is an optional upstream dependency and is not distributed
-  in the main image.
-- Self-hosted LiveSync is not implemented.
-
-## Roadmap
-
-The following are design directions, not shipped features or delivery
-commitments:
-
-- [ ] A separate, tested Self-hosted LiveSync materializer with isolated
-  CouchDB credentials, end-to-end encryption handling, and conflict/rename/
-  attachment recovery tests.
-- [ ] A pluggable sync/materializer interface beyond status labels.
-- [ ] A scalable lexical/vector storage adapter and background job queue.
-- [ ] An optional, permission-scoped read-only Agent loop for model runtimes
-  that support tools, with deterministic budgets and subagent isolation.
-- [ ] Optional OCR/multimodal ingestion with explicit privacy controls.
-- [ ] Multi-user identity/RBAC after a documented tenant-isolation design.
-- [ ] Larger human-reviewed retrieval datasets, regression dashboards, and
-  deployment observability.
+- [配置与 Provider](docs/configuration.md)
+- [HTTP API](docs/api.md)
+- [架构](docs/architecture.md)
+- [数据流](docs/data-flow.md)
+- [部署](docs/deployment.md)
+- [安全](docs/security.md)
+- [网络访问](docs/networking.md)
+- [Vault 同步边界](docs/sync.md)
 
 ## License
 
-Second-Mind's repository code is available under the [MIT License](LICENSE).
-Third-party components retain their own licenses. The optional locally built
-`obsidian-headless` package is not covered by Second-Mind's MIT license.
+[MIT](LICENSE)

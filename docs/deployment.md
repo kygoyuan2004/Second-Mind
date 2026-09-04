@@ -1,332 +1,193 @@
 # Deployment guide
 
-Second-Mind can run as a hardened Docker Compose service or as a dedicated
-systemd service. The application requires Node.js 22 or newer. A model endpoint
-is required; embeddings are optional and lexical retrieval remains available
-when `EMBEDDING_PROVIDER=disabled`.
+The supported default is a Docker-first, loopback-only deployment created by `install.sh` or `install.ps1`. The installer runs its shared Node.js 22 initialization logic inside Docker, so the host needs Docker and Git but not Node.js, OpenSSL, or hand-written runtime JSON.
 
-This guide deliberately keeps the application on loopback by default. Read
-[networking.md](networking.md) before making it reachable from another device.
+## Installer quick start
 
-## Docker Compose
+Install and start Docker first.
 
-The public product name is Second-Mind. Existing technical identifiers such as
-the `vaultmind:local` image tag, `vaultmind-data` volume, and `VAULTMIND_*`
-Compose variables are intentionally retained for upgrade compatibility. They
-do not change the browser-visible product name, and renaming an existing volume
-without migrating its data can make private state appear to be missing.
-
-### 1. Prepare host directories
-
-Choose a real Obsidian Vault outside the repository. The repository's `vault/`
-directory is suitable only for a disposable demonstration.
+Linux or macOS:
 
 ```bash
-install -d -m 0750 /srv/vaultmind/vault
-install -d -m 0700 ./secrets
+git clone https://github.com/kygoyuan2004/Second-Mind.git
+cd Second-Mind
+./install.sh
 ```
 
-The container runs as UID/GID `1000:1000` by default. Either give that identity
-read/write access to the Vault, or set `VAULTMIND_UID` and `VAULTMIND_GID` to
-the Vault owner's numeric IDs. The named `vaultmind-data` volume is initialized
-from an image directory owned by `1000:1000`; if you select another identity,
-provision that volume for the same numeric UID/GID before starting the app.
-Keeping UID 1000 and granting a narrow host ACL is usually simpler. Do not solve
-permission errors with mode `0777`.
+Windows PowerShell with Docker Desktop, WSL2 backend, and Linux containers:
 
-For example, after building `vaultmind:local`, an operator intentionally using
-numeric identity `1234:1234` can initialize the application volume before the
-first `up` (replace the example IDs with the Vault owner's IDs):
+```powershell
+git clone https://github.com/kygoyuan2004/Second-Mind.git
+cd Second-Mind
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+The interactive installer asks for:
+
+1. one Vault or a parent containing immediate-child Vaults;
+2. an administrator password of at least 12 characters;
+3. a loopback port, default `8787`.
+
+It validates Docker/Compose, path accessibility, separation from private state, runtime-volume ownership, port availability, and readiness. It never stops the process or container that already owns a port.
+
+The application image defaults to `ghcr.io/kygoyuan2004/second-mind:latest`. Setup first pulls the image matching the Docker engine's `linux/amd64` or `linux/arm64` platform. If no pullable image is available, it builds from the current checkout.
+
+Platform-specific details:
+
+- [Linux](quickstart-linux.md)
+- [macOS](quickstart-macos.md)
+- [Windows](quickstart-windows.md)
+
+The Linux quick path assumes a conventional rootful Docker Engine. The installer does not configure rootless user/UID mappings, named-volume ownership for those mappings, or SELinux bind-mount relabeling. Rootless or SELinux-enforcing deployments need an administrator-designed and tested permission policy.
+
+## Installer state and multiple instances
+
+Each installation receives a random `second-mind-*` instance ID, its own Compose project, named runtime-data volume, secret files, generated `.env`, Compose overlay, and backup directory. Defaults are:
+
+| Host | Private configuration root |
+|---|---|
+| Linux | `$XDG_CONFIG_HOME/second-mind`, or `~/.config/second-mind` |
+| macOS | `~/Library/Application Support/Second Mind` |
+| Windows | `%LOCALAPPDATA%\Second Mind` |
+
+Set `SECOND_MIND_CONFIG_HOME` before the first command to select another dedicated directory. It must not be a filesystem root, user-profile root, Git checkout, Vault, or a directory containing/contained by the Vault. The installer writes a marker and rejects a nonempty unrelated directory.
+
+Unix permissions are restricted where supported. The PowerShell wrapper replaces inherited ACL entries with access for the current user, Local System, and local Administrators. Docker administrators and host administrators can still read volumes and secrets.
+
+Running `init` again reuses the selected instance and refuses to replace its Vault or administrator secret. Use `--new-instance` to create another isolated instance. Use `--instance second-mind-ID` on an operations command to select an existing instance explicitly.
+
+For automation, provide the password to the host wrapper through the process environment rather than a command-line argument:
 
 ```bash
-docker volume create vaultmind-data
-docker run --rm --user 0 --entrypoint chown \
-  -v vaultmind-data:/state \
-  vaultmind:local -R 1234:1234 /state
+SECOND_MIND_ADMIN_PASSWORD="$INJECTED_SECRET" \
+  ./install.sh init --non-interactive --vault /path/to/vault-parent --port 8787
 ```
 
-If the optional Headless sidecar is enabled, its two private named volumes must
-be provisioned for that same identity too; follow the UID/GID section in
-[sync.md](sync.md) before interactive login.
+The wrapper pipes that value to the short-lived initializer over standard input; it is not added to Docker arguments or the container environment. This example shows the interface, not a recommendation to place a real password in shell history, a checked-in file, or a shared host environment. Prefer a CI secret store or interactive prompt.
 
-Create four local secret files. The provider files may be empty when a local
-endpoint does not require authentication.
+## Single Vault and parent discovery
+
+The selected host directory is mounted at `/vaults` inside the application container.
+
+- If the selected root contains an actual, non-symlink `.obsidian` directory, the application keeps a single compatible knowledge base.
+- Otherwise, first startup discovers only immediate child directories containing an actual, non-symlink `.obsidian` directory.
+- It does not recurse through grandchildren.
+- Later registry edits are limited to paths relative to the authorized mount.
+
+Every later managed entry must itself be an Obsidian Vault root, not another parent directory. Its stable ID is permanently bound in private state to the first canonical Vault path, including across deletion and restart. Reuse the original ID only for that same path; use a new ID for a different Vault, including when different contents replace a mount at the identical host path.
+
+The mount must be readable and writable by the configured container UID/GID because confirmed diary, plan, scratch-note, and attachment saves write into a Vault. The installer performs a temporary write probe and removes it immediately. Do not solve permission failures with mode `0777` or by mounting an entire home directory.
+
+Docker `--mount` uses comma-separated syntax and cannot reliably encode a host path containing a comma. Choose a parent path without commas. Spaces, non-ASCII names, and Windows drive-letter paths are preserved by the shared installer logic and covered by tests.
+
+## Day-to-day operations
+
+Unix:
 
 ```bash
-umask 077
-openssl rand -base64 24 > ./secrets/admin_password
-openssl rand -hex 32 > ./secrets/session_secret
-install -m 0600 /dev/null ./secrets/llm_api_key
-install -m 0600 /dev/null ./secrets/embedding_api_key
+./install.sh doctor
+./install.sh status
+./install.sh logs --no-follow --tail 200
+./install.sh backup
+./install.sh update
 ```
 
-Write provider keys with a local editor that does not create world-readable
-backup files. Never paste a secret into `compose.yaml`, a command-line option,
-an issue, or a screenshot.
+PowerShell uses the same subcommands, for example:
 
-### 2. Set non-secret Compose values
-
-Docker Compose reads a repository-local `.env` for interpolation. Keep secrets
-in the files above; use `.env` only for values such as these:
-
-```dotenv
-VAULT_HOST_PATH=/srv/vaultmind/vault
-VAULTMIND_BIND_IP=127.0.0.1
-VAULTMIND_PORT=8787
-TIMEZONE=Asia/Shanghai
-
-LLM_PROVIDER=openai-compatible
-LLM_API_BASE=http://host.docker.internal:11434/v1
-LLM_MODEL=qwen3:8b
-
-EMBEDDING_PROVIDER=disabled
+```powershell
+.\install.ps1 doctor
+.\install.ps1 status
+.\install.ps1 logs --no-follow --tail 200
+.\install.ps1 backup
+.\install.ps1 update
 ```
 
-`host.docker.internal` is mapped to the Docker host on Linux by the Compose
-file. For a remote provider, use an `https://` endpoint and keep
-`ALLOW_INSECURE_PROVIDER_HTTP=false`. Plain HTTP for a provider on a separate
-host or Docker service requires an explicit opt-in and a trusted private
-network.
+`doctor` checks the Docker client/engine and Compose, Linux-container mode, rendered configuration, knowledge-base access, runtime volume, selected port, Docker disk usage, and, when running, liveness/readiness and PDF sandbox capability.
 
-### 3. Build and start
+`status` displays Compose state and checks the live and ready endpoints. `logs` follows by default; `--no-follow` returns a bounded tail and `--tail N` accepts 1 to 10000 lines.
 
-Use the secrets overlay for normal deployments:
+`update` validates the same boundaries, pulls the configured image or builds the current checkout, recreates the exact instance without changing its data volume, and waits up to two minutes for readiness. It does not automatically roll back an image when readiness fails. Make and verify a backup first, retain the previous reviewed image, and review release notes and schema compatibility before changing an image tag or source revision.
+
+## Backup semantics
+
+`backup` creates a timestamped directory inside that instance's private configuration root. It contains:
+
+- the selected Vault or Vault parent tree;
+- the complete application data volume, including every per-base index and history;
+- generated instance metadata and Compose configuration;
+- authentication and Provider secret files;
+- SHA-256 inventories for the copied Vault and runtime-data trees;
+- a manifest marked complete only after every component succeeds.
+
+The backup does not automatically include private volumes, account/link state, or remote state owned by an independent sync engine. Design and test that recovery path separately.
+
+Symbolic links are copied as links rather than followed. Backups contain private notes, derived indexes, conversations, audit metadata, and credentials. Encrypt them, restrict access, and keep an independent copy.
+
+The command performs a live file-by-file copy. It is not an atomic snapshot across application writes and an external sync process. For a strict point-in-time backup, stop the exact application instance and pause its sync process first. Then create the backup, verify the manifest and inventories, and restart deliberately.
+
+The installer does not currently preserve every platform ACL or extended attribute.
+
+## Restore
+
+There is no automatic restore command. A safe manual procedure is:
+
+1. Stop the exact target instance and any sync process that can write the Vault.
+2. Copy the backup to a separate verification directory.
+3. Require a complete manifest and verify inventory hashes and expected paths.
+4. Inspect configuration and Provider destinations before restoring credentials.
+5. Restore the Vault, private configuration, and runtime data to a new isolated instance or volume.
+6. Start on a different loopback port and test sign-in, base selection, search, conversations, and drafts.
+7. Only then decide whether to replace the original deployment.
+
+Do not restore private state into a Vault, merge two knowledge-base state directories, or let external sync run during the copy.
+
+## Removal
+
+There is no destructive uninstall command. To remove running containers while preserving data, run `docker compose down` using the exact project name, generated env file, repository Compose files, and generated instance overlay. Do not add `--volumes`.
+
+The operation preserves:
+
+- the host Vault or parent directory;
+- the named runtime-data volume;
+- installer configuration and secret files;
+- installer-created backups.
+
+Before permanent deletion, make and verify a backup. List and inspect the exact named volume and the exact instance configuration directory, then remove only those targets. Never use a wildcard or broad recursive delete against a user profile, config root, repository root, or Vault.
+
+## Manual Compose deployment
+
+Advanced operators may run the Compose files without the installer. They become responsible for all checks the installer normally performs.
+
+1. Choose a dedicated Vault/Vault-parent path and a private data volume.
+2. Create independent files for `admin_password`, `session_secret`, `llm_api_key`, `embedding_api_key`, `web_search_api_key`, and `responses_api_key`. Empty optional Provider files are valid; authentication files are not.
+3. Restrict the secret files and keep them outside the checkout.
+4. Set `KNOWLEDGE_BASE_HOST_PATH`, bind IP, port, UID/GID, and the six host-file mappings—`ADMIN_PASSWORD_SECRET_PATH`, `SESSION_SECRET_SECRET_PATH`, `LLM_API_KEY_SECRET_PATH`, `EMBEDDING_API_KEY_SECRET_PATH`, `WEB_SEARCH_API_KEY_SECRET_PATH`, and `BAILIAN_RESPONSES_FALLBACK_API_KEY_SECRET_PATH`—in a private env file.
+5. Render and review configuration before starting.
 
 ```bash
-docker compose \
-  -f compose.yaml \
-  -f compose.secrets.yaml \
-  up -d --build
+docker compose --env-file /secure/path/instance.env \
+  -f compose.yaml -f compose.secrets.yaml config --quiet
+
+docker compose --env-file /secure/path/instance.env \
+  -f compose.yaml -f compose.secrets.yaml up -d
 ```
 
-The base Compose file also accepts `ADMIN_PASSWORD`, `SESSION_SECRET`,
-`LLM_API_KEY`, and `EMBEDDING_API_KEY` from the process environment for a short
-local test. File-backed secrets are preferred. Startup fails closed when the
-administrator password is shorter than 12 characters or the session secret is
-shorter than 32 characters.
+Compose defaults to a non-root runtime user, read-only root filesystem, dropped capabilities, `no-new-privileges`, PID limit, private `/tmp`, loopback publication, health check, one bind mount, and one named data volume. These controls do not protect against a compromised Docker daemon, host administrator, kernel, or overly broad host mount.
 
-Check health without opening a public port:
+Use a unique `COMPOSE_PROJECT_NAME` for each manual instance and verify the project-scoped volume name before startup. Do not share one runtime volume between instances.
 
-```bash
-docker compose ps
-curl --fail http://127.0.0.1:8787/health/live
-curl --fail http://127.0.0.1:8787/health/ready
-```
+## Native Node.js and systemd
 
-`live` verifies the HTTP process. `ready` also verifies that retrieval has
-initialized; a large Vault can remain in `starting` state while its first index
-is built.
+Node.js 22 or newer is required. Native operation is an advanced manual path. It must reproduce authentication secret permissions, data/Vault separation, service-user ownership, loopback binding, process supervision, and backup behavior.
 
-The runtime container:
+The files under `deploy/systemd/` are legacy single-base templates, not installer output. They still start the compatibility entry point and require every placeholder to be reviewed. They do not create the Docker-first multi-instance layout, configure the managed Provider UI, or implement backup/update/restore. Use `src/bootstrap.mjs` for the unified managed bootstrap when designing a new native service.
 
-- runs as a non-root UID;
-- drops every Linux capability and enables `no-new-privileges`;
-- uses a read-only root filesystem and a small, non-executable `/tmp`;
-- writes application state only to the `vaultmind-data` volume;
-- bind-mounts the selected Vault and publishes port 8787 on `127.0.0.1` only.
+Do not run as root to bypass a permission problem. Validate the rendered unit with the target systemd release because supported sandbox directives differ.
 
-Application policy restricts writes to `DIARY_DIR`, `PLAN_DIR`, and
-`SCRATCH_DIR`. The Docker bind mount itself is read/write, so the host account
-and its backups remain part of the security boundary.
+## Image and release handling
 
-### 4. Upgrade and roll back
+The main application image contains only runtime source, browser assets, and production dependencies. It does not include installer configuration, Vaults, secrets, backups, deployment examples, or the optional sync package. CI is expected to publish `linux/amd64` and `linux/arm64` with provenance and an SBOM.
 
-Back up first, then rebuild from a reviewed revision:
+For repeatable production rollouts, pin an immutable release tag or digest rather than `latest`, retain the previous reviewed image, and test migration plus manual restore on a copy. The current installer has no automatic rollback command.
 
-```bash
-docker compose pull --ignore-buildable
-docker compose \
-  -f compose.yaml \
-  -f compose.secrets.yaml \
-  up -d --build --remove-orphans
-```
-
-The current defaults write new notes below `Second-Mind/Diary`,
-`Second-Mind/Plans`, and `Second-Mind/Inbox`. An older deployment that used the
-former defaults must choose one explicit upgrade path after taking a backup:
-
-- keep using the old locations by setting `DIARY_DIR=VaultMind/Diary`,
-  `PLAN_DIR=VaultMind/Plans`, and `SCRATCH_DIR=VaultMind/Inbox`; or
-- stop Second-Mind and every Sync writer, move or merge the old directories
-  into `Second-Mind/`, update configuration, verify ownership and conflicts,
-  and only then restart the services.
-
-Second-Mind never migrates Vault notes automatically. Do not leave this choice
-implicit, because doing so can split old and newly generated notes across both
-directory trees.
-
-Pin the Node base image by digest and review dependency changes for a
-reproducible production deployment. Keep the previous application image until
-the new image passes both health checks and a test query.
-
-## Persistent data and backup
-
-Treat these locations as separate backup sets:
-
-| Data | Default location | Backup requirement |
-|---|---|---|
-| Obsidian notes and attachments | Host path in `VAULT_HOST_PATH` | Required |
-| Conversations, drafts, recovery preimages, audit log, index | `vaultmind-data` volume | Required except a disposable/rebuildable index |
-| Deployment secrets | Local `secrets/` or a secret manager | Required, encrypted |
-| Obsidian Headless credentials/state | Optional named volumes documented in [sync.md](sync.md) | Protect or recreate deliberately |
-
-Sync is not a backup. Keep versioned snapshots on storage independent from the
-host and from the Sync provider. For the cleanest point-in-time snapshot, stop
-the application and optional Sync sidecar, snapshot the Vault and data volume,
-then restart them. Periodically restore into an isolated directory and verify
-that notes, attachments, conversations, and authentication all work.
-
-The index can be rebuilt from the Vault, but conversations, drafts, and audit
-records cannot. Decide retention and backup policy accordingly.
-
-### Recovering a replaced note
-
-A successful update of an existing diary or plan returns a `recoveryId`. The
-corresponding directory contains `metadata.json` (original relative path and
-hash) and `note.md` (the verified preimage). Recovery copies expire after
-`RECOVERY_RETENTION_DAYS` and do not replace normal backups.
-
-For Docker Compose, copy a candidate out without changing the volume:
-
-```bash
-docker compose cp app:/app/data/recovery/RECOVERY_ID/metadata.json ./recovery-metadata.json
-docker compose cp app:/app/data/recovery/RECOVERY_ID/note.md ./recovered-note.md
-sha256sum ./recovered-note.md
-```
-
-For a native deployment, read the same two files below `RECOVERY_DIR`. Verify
-that the checksum equals `sourceHash` in the metadata. Before restoring, stop
-Second-Mind and the Sync materializer, make a separate copy of the current target
-note, and inspect both versions. Then place the selected version at the exact
-`targetRelative` path recorded in metadata and restart Sync followed by
-Second-Mind. Never restore blindly while a sync engine is writing the Vault.
-
-## systemd deployment
-
-The files in `deploy/systemd/` are templates, not install scripts. Replace every
-`@PLACEHOLDER@`; a remaining placeholder is a deployment error. Use absolute
-paths without whitespace for path placeholders so systemd can parse its
-space-separated path directives without deployment-specific escaping.
-
-Recommended layout:
-
-```text
-/opt/vaultmind/                    application, root-owned and read-only
-/var/lib/vaultmind/                runtime state, service-owned
-/etc/vaultmind/vaultmind.env       non-secret environment, mode 0600
-/etc/vaultmind/secrets/            individual service-readable secret files
-/srv/vaultmind/vault/              Vault shared with the selected sync process
-```
-
-These filesystem and service names are legacy deployment identifiers retained
-so an upgrade can reuse established units, permissions, backups, and paths.
-They may be changed deliberately for a new installation, but all rendered
-systemd placeholders and operational commands must then use the same names.
-
-Keep the environment file root-owned at mode `0600`. Secret files must also be
-readable by the unprivileged service: use root ownership, the dedicated service
-group, and mode `0640`, or service ownership and mode `0600`. They must never be
-group/other writable. Create the referenced LLM and embedding key files even
-when a local provider needs no key; an empty, correctly permissioned file is
-valid.
-
-Create a dedicated unprivileged service account. Pre-create the configured
-diary, plan, and scratch directories and grant the service account write access
-only to them. The example unit exposes the rest of the Vault read-only through
-systemd's mount namespace and sets `VAULT_AUTO_CREATE_PATHS=false`.
-
-Install production dependencies as an administrator in `/opt/vaultmind`, run
-the static vendor sync during deployment, then make the tree non-writable by
-the service account. Install the rendered unit in `/etc/systemd/system/` and
-validate it before enabling:
-
-```bash
-sudo systemd-analyze verify /etc/systemd/system/vaultmind.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now vaultmind.service
-sudo systemctl status vaultmind.service
-```
-
-Keep `HOST=127.0.0.1`. Put Caddy, Nginx, or Tailscale Serve in front of the
-service rather than changing the application to listen on every interface.
-
-## Configuration reference
-
-All paths below are resolved relative to the project root unless they are
-absolute.
-
-### Core, authentication, and state
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `APP_NAME` | `Second Mind` | Display name |
-| `VAULT_LABEL` | `My Obsidian Vault` | Non-secret Vault label shown in the UI |
-| `HOST` / `PORT` | `127.0.0.1` / `8787` | Application listener |
-| `TIMEZONE` | `UTC` | IANA time zone used for dated notes |
-| `TRUST_PROXY` | `false` | Trust the first `X-Forwarded-For` value; enable only behind an exclusive trusted proxy |
-| `ADMIN_USERNAME` | `admin` | Single administrator username |
-| `ADMIN_PASSWORD` or `_FILE` | required | Administrator password, minimum 12 characters |
-| `SESSION_SECRET` or `_FILE` | required | Session-signing secret, minimum 32 characters |
-| `SESSION_TTL_SECONDS` | `43200` | Session lifetime, 300–2,592,000 seconds |
-| `SECURE_COOKIE` | `false` | Add the cookie `Secure` attribute; required behind HTTPS |
-| `DATA_DIR` | `./data` | Private mutable state root |
-| `INDEX_DIR` | `DATA_DIR/index` | Retrieval index |
-| `DRAFT_DIR` | `DATA_DIR/drafts` | Unconfirmed drafts and temporary attachments |
-| `RECOVERY_DIR` | `DATA_DIR/recovery` | Hash-verified preimages of replaced notes |
-| `CONVERSATION_FILE` | `DATA_DIR/conversations.json` | Conversation history |
-| `AUDIT_FILE` | `DATA_DIR/audit.jsonl` | Security and write audit events |
-| `PUBLIC_DIR` | `./public` | Static web assets |
-
-### Vault
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `VAULT_PATH` | `./vault` | Local filesystem Vault root |
-| `VAULT_AUTO_CREATE_PATHS` | `true` | Create the three writable note directories inside an existing Vault root |
-| `DIARY_DIR` | `Second-Mind/Diary` | Diary write allowlist |
-| `PLAN_DIR` | `Second-Mind/Plans` | Plan write allowlist |
-| `SCRATCH_DIR` | `Second-Mind/Inbox` | Inbox/scratch write allowlist |
-| `DIARY_TEMPLATE` / `PLAN_TEMPLATE` | empty | Optional relative template files inside the Vault |
-| `VAULT_EXCLUDED_PATHS` | hidden/config directories | Comma-separated directory denylist; retain `.obsidian` and `.livesync` |
-
-### Model and embeddings
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `LLM_PROVIDER` | `openai-compatible` | `openai-compatible` or `anthropic` |
-| `LLM_API_BASE` | local OpenAI-compatible URL | Provider base URL |
-| `LLM_API_KEY` or `_FILE` | empty | Provider credential |
-| `LLM_MODEL` | provider-dependent | Model identifier |
-| `LLM_TIMEOUT_MS` | `120000` | Request timeout |
-| `LLM_MAX_OUTPUT_TOKENS` | `3000` | Maximum generated tokens |
-| `LLM_TEMPERATURE` | `0.2` | Sampling temperature, 0–2 |
-| `EMBEDDING_PROVIDER` | `disabled` | `disabled`, `openai-compatible`, or `dashscope` |
-| `EMBEDDING_API_BASE` / `EMBEDDING_ENDPOINT` | provider-dependent | Base URL or full override |
-| `EMBEDDING_API_KEY` or `_FILE` | LLM key fallback | Separate least-privilege key is recommended |
-| `EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model identifier |
-| `EMBEDDING_DIMENSIONS` | `768` | Must exactly match provider output |
-| `EMBEDDING_BATCH_SIZE` | `16` | Documents per embedding request |
-| `EMBEDDING_TIMEOUT_MS` | `30000` | Embedding request timeout |
-| `ALLOW_INSECURE_PROVIDER_HTTP` | `false` | Explicitly allow non-loopback provider HTTP |
-
-Changing the embedding model or dimensions requires rebuilding the index.
-
-### Retrieval, limits, and sync label
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `RAG_TOP_K` | `8` | Retrieved passages supplied to the model |
-| `RAG_MAX_CONTEXT_CHARS` | `30000` | Maximum retrieved context size |
-| `DEEP_TASKS_ENABLED` | `true` | Publish provider-neutral Deep Retrieval for Q&A |
-| `RAG_DEEP_TOP_K` | `16` | Per-search and final source-file ceiling for Deep Retrieval |
-| `INDEX_WATCH` | `true` | Watch the Vault for changes |
-| `INDEX_RECONCILE_SECONDS` | `300` | Full reconciliation interval |
-| `MAX_JSON_BODY_BYTES` | `25165824` | Maximum JSON request body |
-| `MAX_ATTACHMENT_COUNT` | `8` | Attachments per task |
-| `MAX_ATTACHMENT_BYTES` | `5242880` | Bytes per attachment |
-| `MAX_ATTACHMENT_TOTAL_BYTES` | `15728640` | Aggregate attachment bytes |
-| `RECOVERY_RETENTION_DAYS` | `30` | Retention for verified note preimages |
-| `SYNC_PROVIDER` | `filesystem` | `filesystem`, `obsidian-headless`, or `external`; this is status/configuration, not an embedded client |
-| `SYNC_DISPLAY_NAME` | provider-dependent | Human-readable sync label |
-
-Read [data-flow.md](data-flow.md) before selecting a remote provider.
+See [configuration](configuration.md), [networking](networking.md), [security](security.md), and [sync](sync.md) before enabling remote access or external synchronization.

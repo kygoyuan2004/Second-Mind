@@ -1,110 +1,56 @@
 # Vault synchronization
 
-Second-Mind operates on ordinary files in a local directory. It does not copy,
-upload, or reconcile a Vault by itself. `SYNC_PROVIDER` and
-`SYNC_DISPLAY_NAME` describe the operator-selected mechanism; an external
-process must materialize the files.
+Second Mind reads ordinary files from local Vault directories. It does not upload, download, merge, or reconcile a Vault itself. `SYNC_PROVIDER` and `SYNC_DISPLAY_NAME` are descriptive status fields only. An independent process must materialize any remotely synchronized files.
 
-Supported deployment states are:
+Supported labels are:
 
 | Value | Meaning |
 |---|---|
-| `filesystem` | No sync process is managed. Second-Mind reads a local directory. |
-| `obsidian-headless` | The optional sidecar or a host service runs the official Headless Sync client. |
-| `external` | Another operator-managed file sync process owns synchronization. |
+| `filesystem` | No sync process is managed; Second Mind reads local files |
+| `obsidian-headless` | An optional sidecar or host service runs Obsidian Headless |
+| `external` | Another operator-managed process owns synchronization |
 
-Never run two synchronization engines against the same local Vault. Sync is
-also not a substitute for snapshots or tested backups.
+Never run two sync engines against the same local Vault. Sync is not a point-in-time snapshot and is not a substitute for tested backup.
 
-## Official Obsidian Headless Sync
+## Multi-knowledge-base boundary
 
-Obsidian provides an official command-line client that can keep a Vault in
-continuous sync without the desktop app. It currently:
+Each registered knowledge base has an independent local root, index, conversation store, drafts, recovery copies, and audit log. The registry does not create one remote-sync identity per base and does not manage sync credentials.
 
-- is an **open beta**;
-- requires Node.js 22 or newer;
-- requires an active Obsidian Sync subscription;
-- uses the same Sync encryption model as Obsidian clients;
-- is distributed in the `obsidian-headless` npm package, whose metadata is
-  marked **UNLICENSED**.
+If the application mount is a parent containing several Vaults, the operator must design and test synchronization for each child. Do not assume that a tool pointed at the parent will preserve separate Vault identity, hidden configuration, encryption, conflict, or delete semantics.
 
-Review the current [official Headless Sync documentation](https://obsidian.md/help/sync/headless)
-and upstream terms before installation. This repository does not include that
-package in the main image.
+The supplied `compose.obsidian-sync.yaml` is designed for one selected Vault root per application instance. It mounts the selected host path at `/vault` and runs one continuous client. Do not apply that overlay to a multi-Vault parent as if it were multi-base orchestration. Use separate reviewed sync clients, or separate Second Mind instances, when each Vault needs an independent remote link.
 
-### Important single-client rule
+## Optional Obsidian Headless boundary
 
-Do not run Obsidian Desktop Sync and Obsidian Headless Sync on the same device
-and local Vault. Obsidian explicitly warns that this can create conflicts. The
-usual topology is desktop/mobile Obsidian on personal devices and exactly one
-Headless client on the server.
+Obsidian publishes a command-line sync client. Its requirements, commands, licensing, and support status can change. Review the current [official Headless Sync documentation](https://obsidian.md/help/sync/headless), package metadata, account requirements, encryption behavior, and terms immediately before deployment.
 
-Back up the Vault before initial setup, changing sync modes, changing
-encryption, or relinking a remote Vault.
+This repository intentionally:
 
-## Optional Docker sidecar
+- excludes the package from the main Second Mind image;
+- provides only a local-build Docker recipe and optional Compose overlay;
+- marks the resulting image local and configures `pull_policy: never`;
+- keeps Headless authentication/link state in volumes not mounted by the application;
+- gives the sync sidecar no LLM, WebSearch, or embedding credentials;
+- documents that the locally built sidecar image must not be pushed or attached to a release.
 
-`compose.obsidian-sync.yaml` is intentionally an operator opt-in. It builds the
-upstream package locally and labels the resulting image `:local`.
+The sidecar still has network access and full read/write access to the selected Vault because synchronization requires both. Treat it as a high-trust component.
 
-**Do not push, export, attach to a release, or publish that image.** The local
-Dockerfile is an installation recipe, not a sublicense for upstream code.
-Change `OBSIDIAN_HEADLESS_VERSION` only after reading the upstream changelog and
-testing a backup copy of the Vault.
+## Single-client and backup rules
 
-The sidecar uses:
+Before linking a remote Vault, changing encryption, changing sync products, or relinking a device:
 
-- the same host Vault bind mount as Second-Mind;
-- `vaultmind-obsidian-sync-config` for the login token;
-- `vaultmind-obsidian-sync-vault-state` mounted over the server-side
-  `/vault/.obsidian` directory for link, device, and encryption state;
-- a non-root UID, read-only image filesystem, dropped capabilities, and a
-  private `/tmp`.
+1. stop other sync clients for the same local directory;
+2. create and verify an independent backup;
+3. test with a copy of non-sensitive data;
+4. confirm the remote/local direction and conflict policy;
+5. start exactly one server-side continuous client;
+6. monitor authentication, quota, encryption, conflict, and delete behavior.
 
-The `vaultmind-*` volume/image names, `VAULTMIND_UID`/`VAULTMIND_GID`, and the
-example `vaultmind-server` device name are legacy deployment identifiers kept
-for compatibility. They do not define the product brand. Do not rename an
-existing volume or linked Sync device unless its private state and remote link
-have been deliberately migrated.
+Do not run desktop and Headless clients concurrently against the same local directory. Different personal devices may use the same remote service, but each local Vault directory should have one responsible sync engine.
 
-Both `HOME` and `XDG_CONFIG_HOME` point inside the private configuration
-volume. This contains CLI state even if an upstream beta release changes which
-of those standard locations it uses; the deployment does not depend on a
-specific token filename.
+## Local sidecar setup
 
-The application container does not mount either private Sync volume. Its path
-policy also excludes `.obsidian` from indexing and file access.
-
-### UID/GID ownership
-
-The default `1000:1000` identity matches the ownership baked into both local
-images and is the simplest path. If `VAULTMIND_UID`/`VAULTMIND_GID` are changed,
-that identity must be able to write the host Vault, `vaultmind-data`, and both
-private Headless volumes. Build both images first, then initialize the named
-volumes before `login` or `up`. For example, for an intentionally selected
-`1234:1234` identity (replace both numbers with the Vault owner's numeric IDs):
-
-```bash
-docker volume create vaultmind-data
-docker volume create vaultmind-obsidian-sync-config
-docker volume create vaultmind-obsidian-sync-vault-state
-
-docker run --rm --user 0 --entrypoint chown \
-  -v vaultmind-data:/state \
-  vaultmind:local -R 1234:1234 /state
-
-docker run --rm --user 0 --entrypoint chown \
-  -v vaultmind-obsidian-sync-config:/config \
-  -v vaultmind-obsidian-sync-vault-state:/vault/.obsidian \
-  vaultmind-obsidian-sync:local -R 1234:1234 /config /vault/.obsidian
-```
-
-These commands change only the three named volumes shown. Verify their exact
-names and back up any existing state before applying `chown` to a non-new
-volume. Keeping container UID 1000 and granting only the required host Vault
-ACL avoids this advanced setup; never use mode `0777` as a shortcut.
-
-### One-time interactive setup
+The examples below reflect the repository's current wrapper. Confirm them against the official CLI before using a real account.
 
 Build only the local sidecar:
 
@@ -115,48 +61,23 @@ docker compose \
   build obsidian-sync
 ```
 
-Log in interactively. Omit email, password, MFA code, and encryption password
-from command-line arguments so they do not enter shell history or the process
-list:
+Run interactive commands without placing account passwords, MFA codes, tokens, or encryption passwords in command arguments:
 
 ```bash
 docker compose \
   -f compose.yaml \
   -f compose.obsidian-sync.yaml \
   run --rm --no-deps obsidian-sync login
-```
 
-List the account's remote Vaults:
-
-```bash
 docker compose \
   -f compose.yaml \
   -f compose.obsidian-sync.yaml \
   run --rm --no-deps obsidian-sync sync-list-remote
 ```
 
-Link the local server directory. Replace the example Vault and device names;
-enter an end-to-end encryption password only at the prompt:
+Use the official documentation and `ob --help` to link the selected `/vault` directory, choose a device name, configure encryption interactively, inspect status, and set conflict behavior. Do not guess flags from an older guide.
 
-```bash
-docker compose \
-  -f compose.yaml \
-  -f compose.obsidian-sync.yaml \
-  run --rm --no-deps obsidian-sync \
-  sync-setup --vault "REMOTE VAULT NAME" --path /vault \
-  --device-name "vaultmind-server" --config-dir .obsidian
-```
-
-Inspect the resulting configuration before continuous operation:
-
-```bash
-docker compose \
-  -f compose.yaml \
-  -f compose.obsidian-sync.yaml \
-  run --rm --no-deps obsidian-sync sync-status --path /vault
-```
-
-Then start the application, file-backed secrets, and continuous Sync together:
+After the Vault is linked and a backup is available, start the application, file-backed secrets, and sidecar:
 
 ```bash
 docker compose \
@@ -166,92 +87,77 @@ docker compose \
   up -d --build
 ```
 
-Watch for authentication, conflict, quota, and encryption errors:
+Inspect status without copying output into public logs:
 
 ```bash
-docker compose logs -f obsidian-sync
+docker compose \
+  -f compose.yaml \
+  -f compose.obsidian-sync.yaml \
+  logs --follow obsidian-sync
 ```
 
-Do not log command output to a public CI system. Sync status and errors can
-contain Vault names or filesystem paths.
+Status and errors may contain account, device, remote Vault, or filesystem identifiers.
 
-### Conflict behavior
+## Sidecar state and permissions
 
-Second-Mind prepares diary, plan, and inbox changes as drafts. A save is rejected
-when the target note changed after preview generation. This reduces accidental
-overwrite risk but does not make simultaneous filesystem writers transactional.
+The optional overlay uses:
 
-For important edits:
+- the selected host Vault bind mounted read/write at `/vault`;
+- `obsidian-sync-config` for the CLI home/config state;
+- `obsidian-sync-vault-state` mounted at `/vault/.obsidian` for server-side link/device state;
+- the configured non-root UID/GID;
+- a read-only image filesystem, dropped capabilities, and private `/tmp`.
 
-1. wait for Headless Sync to become current;
-2. generate and review the draft;
-3. save once;
-4. confirm that Headless Sync uploads the resulting change;
-5. resolve any reported conflict before continuing.
+Because the `.obsidian` mount shadows that directory only inside the sidecar, server-side link state stays out of the application view and host Vault configuration. The application independently excludes `.obsidian` from indexing and reads.
 
-Prefer the Headless client's explicit conflict-preserving strategy over a mode
-that silently overwrites one side. Re-check current CLI options with
-`ob sync-config --help`, because the client is still beta.
+The default container identity is `1000:1000`. A custom identity must be able to write the selected Vault and both private sidecar volumes. Prefer targeted ownership/ACL changes. Never grant world-writable mode or recursively change an unverified user directory.
 
-### Credentials, backup, and removal
+Docker administrators can read the sidecar volumes and Vault. Restrict Docker access accordingly.
 
-The two named volumes contain sensitive authentication and Vault-link state.
-They are not part of the Git repository and are not mounted into the app.
-Restrict Docker daemon access: a Docker administrator can read every secret and
-volume on the host.
+## Write conflicts
 
-Back up encryption/link state only into encrypted storage. It is also valid to
-exclude the auth token from backup and deliberately perform `ob login` and
-`ob sync-setup` again during disaster recovery. Document which approach you
-use and test it.
+Second Mind prepares note changes in private draft storage and compares the target hash again at confirmation. Existing diary/plan replacement also creates a recovery preimage. These checks detect many concurrent edits, but there is no distributed transaction with a sync client.
 
-To revoke local authentication, stop the sidecar and run `ob logout` with the
-same config volume. Removing a named volume is destructive; verify its exact
-name and maintain a recoverable backup before doing so.
+For an important save:
 
-## Host systemd sidecar
+1. wait for sync to become current;
+2. generate and inspect the draft;
+3. confirm one write;
+4. wait for the sync client to upload it;
+5. resolve any preserved conflict before continuing.
 
-`deploy/systemd/obsidian-headless-sync.service.example` is a generic template
-for operators who install the official CLI themselves. Render all placeholders
-and run interactive `ob login` and `ob sync-setup` as the same dedicated user,
-with the exact `HOME` and `XDG_CONFIG_HOME` used by the unit. Never place the
-Obsidian account password, MFA code, token, or Vault encryption password in the
-unit or its environment file.
+Prefer conflict-preserving behavior. Test how the chosen sync engine handles atomic renames, rapid edits, attachments, deletes, and hidden directories.
 
-Use a dedicated, mode-`0700` home/configuration directory owned by the Sync
-account. The template checks only that those directories exist; it deliberately
-does not assume an undocumented credential filename.
+## Backup and removal
 
-The Sync service needs read/write access to the entire Vault. The Second-Mind
-service should still receive write access only to its diary, plan, and inbox
-directories.
+The Second Mind installer backup copies the selected Vault/Vault parent, application runtime data, deployment configuration, and application credentials. It does not automatically include every independent sync volume or remote recovery mechanism.
 
-## Other external filesystem sync
+For point-in-time consistency, stop both the exact application instance and its sync clients before backup. Decide separately whether to back up sync authentication/link state into encrypted storage or to reauthenticate/relink during disaster recovery. Test that choice.
 
-Set `SYNC_PROVIDER=external` when another trusted process already presents a
-normal local Vault directory. The operator is responsible for atomic file
-replacement, conflict preservation, hidden configuration files, permissions,
-and backup. Do not point Second-Mind at a network filesystem whose rename,
-locking, or watcher semantics are unknown without testing reconciliation and
-draft conflicts.
+To revoke one sidecar, stop it and use the current official logout/unlink procedure with the same private volumes. Removing a named volume is destructive. Verify its exact Compose project and volume name, make a recoverable backup, and ensure no other instance uses it.
+
+## Host service option
+
+`deploy/systemd/obsidian-headless-sync.service.example` is a manual template for an operator-installed CLI. Replace every placeholder and use a dedicated service user plus mode-`0700` home/config directories. Run interactive login and link operations as that same identity with the same `HOME` and `XDG_CONFIG_HOME`.
+
+Never put an account password, MFA value, access token, or Vault encryption password in the unit or environment file. The sync service needs full Vault write access; a native Second Mind service should still be restricted to its configured write directories where the host sandbox supports that policy.
+
+## Other filesystem sync
+
+Use `SYNC_PROVIDER=external` when another trusted process presents ordinary local files. The operator owns:
+
+- authentication and encryption;
+- path and permission design;
+- atomic-replace and watcher compatibility;
+- conflict, delete, and rename preservation;
+- hidden configuration handling;
+- network egress and logging;
+- snapshots and restore tests.
+
+Do not use an untested network filesystem whose rename, consistency, locking, inode, or notification semantics differ from a local filesystem.
 
 ## Self-hosted LiveSync status
 
-Self-hosted LiveSync support is **not implemented** in this release. There is no
-CouchDB service, LiveSync credential loader, Setup URI handler, or supported
-LiveSync materializer in these deployment files.
+Self-hosted LiveSync is not implemented. The repository has no CouchDB service, LiveSync credential loader, Setup URI handler, or supported materializer that turns its database into the ordinary per-base filesystem contract.
 
-A future implementation should be a separate `SyncProvider`/materializer that:
-
-- converts the remote database into an ordinary local Vault for the existing
-  indexer;
-- keeps CouchDB credentials and the Vault encryption passphrase outside the
-  Vault view exposed to the application;
-- uses HTTPS, least-privilege database credentials, and end-to-end encryption;
-- never runs concurrently with Obsidian Sync for the same Vault;
-- has integration tests for deletes, renames, conflicts, attachments, hidden
-  configuration, and recovery.
-
-The community [Self-hosted LiveSync project](https://github.com/vrtmrz/obsidian-livesync)
-is useful design input, but its existence must not be presented as Second-Mind
-support.
+Adding it would require a separate reviewed materializer with isolated credentials, encryption handling, conflict/delete/attachment tests, and a prohibition on concurrent sync engines for the same Vault. The existence of a community project must not be presented as Second Mind support.

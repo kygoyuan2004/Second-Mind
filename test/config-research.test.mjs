@@ -57,6 +57,9 @@ test('only an exact read-only Docker secret mount can waive host mode bits', () 
   assert.equal(isReadOnlyContainerSecretMount('/run/secrets/admin_password', parentOnly), false);
   assert.equal(isReadOnlyContainerSecretMount('/tmp/admin_password', readOnly), false);
   assert.equal(isReadOnlyContainerSecretMount('/run/secrets/nested/value', readOnly), false);
+  assert.equal(isReadOnlyContainerSecretMount('/run/secrets/../secrets/admin_password', readOnly), false);
+  assert.equal(isReadOnlyContainerSecretMount('run/secrets/admin_password', readOnly), false);
+  assert.equal(isReadOnlyContainerSecretMount('\\run\\secrets\\admin_password', readOnly), false);
 });
 
 test('organization-official domains are normalized, minimized, and strictly validated', () => {

@@ -99,7 +99,15 @@ test('symbolic links are denied even when their target remains inside the Vault'
   const store = new VaultStore(project.config);
   await store.ready;
   await fsp.writeFile(path.join(project.vaultPath, 'real.md'), '# real');
-  await fsp.symlink('real.md', path.join(project.vaultPath, 'alias.md'));
+  try {
+    await fsp.symlink('real.md', path.join(project.vaultPath, 'alias.md'));
+  } catch (error) {
+    if (process.platform === 'win32' && ['EACCES', 'EPERM'].includes(error?.code)) {
+      t.skip('Windows host does not grant symbolic-link creation capability.');
+      return;
+    }
+    throw error;
+  }
   await assert.rejects(() => store.existingFile('alias.md'), { code: 'VAULT_SYMLINK_DENIED' });
 });
 

@@ -345,7 +345,15 @@ test('application state cannot resolve back inside the Vault through a symbolic 
   await fsp.mkdir(project.dataDir, { recursive: true });
   const hiddenState = path.join(project.vaultPath, '.private-state');
   await fsp.mkdir(hiddenState);
-  await fsp.symlink(hiddenState, project.config.indexDir);
+  try {
+    await fsp.symlink(hiddenState, project.config.indexDir);
+  } catch (error) {
+    if (process.platform === 'win32' && ['EACCES', 'EPERM'].includes(error?.code)) {
+      t.skip('Windows host does not grant symbolic-link creation capability.');
+      return;
+    }
+    throw error;
+  }
   await assert.rejects(
     () => createApp(appConfig(project), { llm: new FakeLlm() }),
     /resolves inside VAULT_PATH/,

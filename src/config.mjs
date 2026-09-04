@@ -125,7 +125,9 @@ function decodeMountInfoPath(value) {
 }
 
 function isReadOnlyContainerSecretMount(filename, mountInfo) {
-  const resolved = path.resolve(filename);
+  const raw = String(filename);
+  const resolved = path.posix.resolve(raw);
+  if (!path.posix.isAbsolute(raw) || raw !== resolved) return false;
   if (path.posix.dirname(resolved) !== '/run/secrets'
       || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u.test(path.posix.basename(resolved))) {
     return false;

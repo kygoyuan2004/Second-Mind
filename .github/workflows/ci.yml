@@ -37,6 +37,25 @@ jobs:
         run: npm ci
       - name: Check source and public contracts
         run: npm run check
+      - name: Prepare reproducible isolated browser gate
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          CHROME_FOR_TESTING_SHA256: 99f05b875209cdbf7490dc431a525fd373788521fb9e8aca68c761fc5fc400e5
+        run: |
+          set -Eeuo pipefail
+          archive="${RUNNER_TEMP}/chrome-for-testing-134.0.6998.88.zip"
+          browser_root="${RUNNER_TEMP}/chrome-for-testing-134.0.6998.88"
+          curl --proto '=https' --tlsv1.2 --fail --location \
+            --retry 4 --retry-all-errors \
+            --output "$archive" \
+            https://storage.googleapis.com/chrome-for-testing-public/134.0.6998.88/linux64/chrome-linux64.zip
+          printf '%s  %s\n' "$CHROME_FOR_TESTING_SHA256" "$archive" | sha256sum --check --strict
+          mkdir -p "$browser_root"
+          unzip -q "$archive" -d "$browser_root"
+          browser="${browser_root}/chrome-linux64/chrome"
+          test -x "$browser"
+          echo "SECOND_MIND_TEST_CHROME=$browser" >> "$GITHUB_ENV"
       - name: Run offline tests
         run: npm test
       - name: Parse POSIX installer

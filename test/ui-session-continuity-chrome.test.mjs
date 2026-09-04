@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicRoot = path.join(projectRoot, 'public');
-const chromePath = '/usr/bin/google-chrome';
+const chromePath = path.resolve(process.env.SECOND_MIND_TEST_CHROME || '/usr/bin/google-chrome');
 const streamedMathAnswer = String.raw`公式：
 
 [M_{\text{train}} = 16P]

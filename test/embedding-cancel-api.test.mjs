@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { createApp } from '../src/server.mjs';
 import { temporaryProject } from './helpers.mjs';
@@ -26,7 +26,7 @@ function publicIndex() {
 function appConfig(project) {
   return {
     ...project.config,
-    publicDir: path.resolve(new URL('../public', import.meta.url).pathname),
+    publicDir: fileURLToPath(new URL('../public', import.meta.url)),
     appName: 'Embedding cancel fixture',
     vaultLabel: 'Fixture Vault',
     host: '127.0.0.1',

@@ -16,6 +16,7 @@ test('test runner keeps POSIX container guarantees explicit on Windows', () => {
     'completeness-eval.test.mjs',
     'embedding-runtime.test.mjs',
     'knowledge-base-registry.test.mjs',
+    'multi-knowledge-base-api.test.mjs',
     'provider-config-api.test.mjs',
     'runtime-admin-api.test.mjs',
     'runtime-admin-v2-security.test.mjs',

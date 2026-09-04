@@ -744,7 +744,7 @@ test('the executable preflight protocol reports a Vault without touching state',
 
 test('Windows PowerShell 5.1 compiles and invokes the native marker APIs', {
   skip: process.platform !== 'win32',
-}, async () => {
+}, async (t) => {
   const powershell = await fsp.readFile(path.resolve('install.ps1'), 'utf8');
   const typeDefinition = /Add-Type -TypeDefinition @'\r?\n([\s\S]*?)\r?\n'@/u.exec(powershell)?.[1];
   assert.ok(typeDefinition, 'the installer must contain an embedded native type definition');
@@ -775,14 +775,19 @@ try {
 }
 `;
 
+  const smokeRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'second-mind-powershell-smoke-'));
+  t.after(() => fsp.rm(smokeRoot, { recursive: true, force: true }));
+  const smokeScript = path.join(smokeRoot, 'native-marker-smoke.ps1');
+  await fsp.writeFile(smokeScript, smoke, 'utf8');
+
   const result = await new Promise((resolve, reject) => {
     const child = spawn('powershell.exe', [
       '-NoLogo',
       '-NoProfile',
       '-NonInteractive',
       '-ExecutionPolicy', 'Bypass',
-      '-Command', '-',
-    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+      '-File', smokeScript,
+    ], { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     child.stdout.setEncoding('utf8');
@@ -790,8 +795,7 @@ try {
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.once('error', reject);
-    child.once('exit', (code, signal) => resolve({ code, signal, stdout, stderr }));
-    child.stdin.end(smoke);
+    child.once('close', (code, signal) => resolve({ code, signal, stdout, stderr }));
   });
   assert.equal(result.code, 0, result.stderr || `PowerShell exited via ${result.signal}`);
   assert.match(result.stdout, /native marker smoke: OK/u);

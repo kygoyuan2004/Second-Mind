@@ -13,10 +13,22 @@ const WATCH_DEBOUNCE_MS = 750;
 const DEFAULT_RECONCILE_INTERVAL_MS = 5 * 60_000;
 const RRF_K = 60;
 const QUERY_VECTOR_CACHE_LIMIT = 256;
+const TEMPORAL_INVENTORY_MAX_FILES = 500;
+const QUERY_RETRIEVAL_INSTRUCTION =
+  'Given a knowledge-base question, retrieve passages that directly answer it. Preserve names, dates, paths, identifiers, and temporal context.';
+const BM25_DOCUMENT_CACHE = new WeakMap();
 
 const STOP_TERMS = new Set([
   '请', '帮我', '查找', '搜索', '检索', '列出', '全部', '所有', '包含', '提到',
   '文件', '内容', '关于', '什么', '哪些', 'the', 'and', 'for', 'with', 'from',
+]);
+
+const QUERY_LOW_INFORMATION_TERMS = new Set([
+  ...STOP_TERMS,
+  '请问', '告诉我', '请告诉我', '想知道', '我想知道', '一下',
+  '是', '谁', '谁是', '是谁', '什么人', '的', '了', '吗', '呢', '吧',
+  '如何', '怎么', '为什么', '为何', '哪里', '哪儿', '何时', '什么时候',
+  '在', '里', '中', '有', '与', '和', '及', '或',
 ]);
 
 function sha256(value) {
@@ -67,6 +79,104 @@ export function tokenize(value) {
     tokens.push(identifier, ...identifier.split(/[._$-]+/).filter((part) => part.length > 1));
   }
   return tokens.filter((token) => token && !STOP_TERMS.has(token));
+}
+
+function trimQueryEdges(value) {
+  return String(value || '').replace(/^[\s\p{P}]+|[\s\p{P}]+$/gu, '').trim();
+}
+
+function querySurface(value) {
+  let output = trimQueryEdges(normalizeText(value));
+  const politePrefix = /^(?:(?:请问|请告诉我|告诉我|请帮我|帮我|麻烦你?|我想知道|想知道|能否|可以(?:帮我)?)(?:一下)?[\s\p{P}]*)+/u;
+  let previous;
+  do {
+    previous = output;
+    output = trimQueryEdges(output.replace(politePrefix, ''));
+  } while (output && output !== previous);
+  return output;
+}
+
+function compactComparableText(value) {
+  return normalizeText(value).replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+function explicitEntityAnchor(value) {
+  const surface = querySurface(value);
+  const match = /^\s*谁是\s*(.+?)\s*$/u.exec(surface) ||
+    /^\s*(.+?)\s*(?:是谁|是什么人)\s*$/u.exec(surface);
+  const anchor = trimQueryEdges(match?.[1] || '');
+  const compact = compactComparableText(anchor);
+  if (
+    [...compact].length < 2 || QUERY_LOW_INFORMATION_TERMS.has(anchor) ||
+    QUERY_LOW_INFORMATION_TERMS.has(compact)
+  ) return '';
+  return anchor;
+}
+
+function queryCore(value) {
+  const anchor = explicitEntityAnchor(value);
+  if (anchor) return anchor;
+  return trimQueryEdges(querySurface(value)
+    .replace(/^(?:谁|什么是|如何|怎么|为什么|为何|哪里|哪儿|何时|什么时候)[\s\p{P}]*/u, '')
+    .replace(/(?:是谁|是什么人|是什么|有哪些|有多少|怎么样|怎么回事|吗|呢|吧)[\s\p{P}]*$/u, ''));
+}
+
+function segmentedQueryCandidates(value) {
+  const candidates = [];
+  let hanRun = '';
+  const flushHanRun = () => {
+    if (!hanRun) return;
+    const characters = [...hanRun];
+    if (characters.length > 1) candidates.push(hanRun);
+    candidates.push(...cjkTokens(hanRun));
+    hanRun = '';
+  };
+
+  try {
+    const segmenter = new Intl.Segmenter('zh-CN', { granularity: 'word' });
+    for (const segment of segmenter.segment(value)) {
+      const token = segment.segment.trim();
+      if (!segment.isWordLike || !token) {
+        flushHanRun();
+        continue;
+      }
+      if (QUERY_LOW_INFORMATION_TERMS.has(token)) {
+        flushHanRun();
+        continue;
+      }
+      if (/^[\p{Script=Han}]+$/u.test(token)) {
+        hanRun += token;
+        continue;
+      }
+      flushHanRun();
+      candidates.push(...tokenize(token));
+    }
+    flushHanRun();
+  } catch {
+    candidates.push(...tokenize(value));
+  }
+
+  for (const identifier of value.match(/[a-z_$][a-z0-9_$.-]*/g) || []) {
+    candidates.push(identifier, ...identifier.split(/[._$-]+/).filter(Boolean));
+  }
+  return candidates.filter((term) => term && !QUERY_LOW_INFORMATION_TERMS.has(term));
+}
+
+function queryTermsFor(value) {
+  const candidates = [...new Set(segmentedQueryCandidates(queryCore(value)))];
+  const informative = candidates.filter((term) => (
+    (/^[\p{Script=Han}]+$/u.test(term) && [...term].length >= 2) ||
+    /[\p{Script=Latin}\p{N}]/u.test(term)
+  ));
+  if (informative.length) return informative;
+  return candidates.filter((term) => (
+    /^[\p{Script=Han}]$/u.test(term) || /[\p{L}\p{N}_$+.-]/u.test(term)
+  ));
+}
+
+function chunkContainsEntity(chunk, anchor) {
+  const needle = compactComparableText(anchor);
+  return Boolean(needle && compactComparableText(searchableText(chunk)).includes(needle));
 }
 
 function headingFor(line) {
@@ -242,13 +352,31 @@ function searchableText(chunk) {
   return `${chunk.path}\n${chunk.headings?.join(' ') || chunk.heading || ''}\n${chunk.content}`;
 }
 
+function bm25Document(chunk) {
+  const searchText = searchableText(chunk);
+  const cached = BM25_DOCUMENT_CACHE.get(chunk);
+  if (cached?.searchText === searchText) return cached;
+  const tokens = tokenize(searchText);
+  const document = {
+    chunk,
+    searchText,
+    tokens,
+    frequencies: termFrequencies(tokens),
+    normalizedPath: normalizeText(chunk.path),
+    normalizedHeading: normalizeText(chunk.headings?.join(' ') || chunk.heading),
+  };
+  BM25_DOCUMENT_CACHE.set(chunk, document);
+  return document;
+}
+
 export function bm25Search(query, chunks, limit = 30) {
-  const queryTerms = [...new Set(tokenize(query))];
-  if (!queryTerms.length || !chunks.length) return [];
-  const documents = chunks.map((chunk) => {
-    const tokens = tokenize(searchableText(chunk));
-    return { chunk, tokens, frequencies: termFrequencies(tokens) };
-  });
+  const queryTerms = queryTermsFor(query);
+  const entityAnchor = explicitEntityAnchor(query);
+  const scopedChunks = entityAnchor
+    ? chunks.filter((chunk) => chunkContainsEntity(chunk, entityAnchor))
+    : chunks;
+  if (!queryTerms.length || !scopedChunks.length) return [];
+  const documents = scopedChunks.map(bm25Document);
   const averageLength = documents.reduce((sum, document) => sum + document.tokens.length, 0) /
     Math.max(1, documents.length);
   const documentFrequency = new Map(queryTerms.map((term) => [term, 0]));
@@ -263,8 +391,7 @@ export function bm25Search(query, chunks, limit = 30) {
   for (const document of documents) {
     let score = 0;
     const matchedTerms = [];
-    const normalizedPath = normalizeText(document.chunk.path);
-    const normalizedHeading = normalizeText(document.chunk.headings?.join(' ') || document.chunk.heading);
+    const { normalizedPath, normalizedHeading } = document;
     for (const term of queryTerms) {
       const frequency = document.frequencies.get(term) || 0;
       const frequencyInCorpus = documentFrequency.get(term) || 0;
@@ -335,7 +462,7 @@ function reciprocalRankFusion(keyword, semantic) {
 
 function matchedTermsFor(chunk, query) {
   const haystack = normalizeText(searchableText(chunk));
-  return [...new Set(tokenize(query))].filter((term) => haystack.includes(term));
+  return queryTermsFor(query).filter((term) => haystack.includes(term));
 }
 
 function snippetFor(content, terms, length = 320) {
@@ -351,14 +478,95 @@ function snippetFor(content, terms, length = 320) {
   return `${start ? '…' : ''}${snippet}${start + length < text.length ? '…' : ''}`;
 }
 
-function publicFileResults(items, query, limit) {
+export function logicalDocumentKey(relative) {
+  const value = String(relative || '');
+  const extension = path.extname(value);
+  const stem = path.basename(value, extension)
+    .replace(/(?:_整理版|-整理版|（整理版）)$/u, '');
+  const directory = path.dirname(value);
+  return `${directory === '.' ? '' : `${directory}/`}${stem}${extension}`
+    .normalize('NFKC')
+    .toLocaleLowerCase();
+}
+
+function isOrganizedDocument(relative) {
+  return /(?:_整理版|-整理版|（整理版）)(?=\.[^.]+$)/u.test(String(relative || ''));
+}
+
+function learningLikePath(relative) {
+  const segments = String(relative || '')
+    .normalize('NFKC')
+    .toLocaleLowerCase('zh-CN')
+    .split(/[\\/]+/u)
+    .filter(Boolean);
+  return segments.some((segment) => (
+    /(?:^|[_\s.-])(?:learn(?:ing)?|study|course|paper|research|tutorial|project|reading|book|knowledge)(?:[_\s.-]|$)/iu.test(segment) ||
+    /学习|课程|读书|阅读|论文|研究|教程|教材|文献|项目|知识/u.test(segment)
+  ));
+}
+
+function learningLikeContent(chunks) {
+  return (Array.isArray(chunks) ? chunks : []).some((chunk) => (
+    /学习|复习|课程|读书|阅读|论文|研究|教程|教材|文献|项目|learn|study|course|paper|research|tutorial/iu.test(
+      `${chunk?.heading || ''}\n${chunk?.content || ''}`,
+    )
+  ));
+}
+
+function validFileMtime(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function logicalPathAssociations(paths) {
+  const output = new Map();
+  for (const relative of paths || []) {
+    const key = logicalDocumentKey(relative);
+    if (!output.has(key)) output.set(key, []);
+    output.get(key).push(String(relative));
+  }
+  for (const values of output.values()) values.sort((left, right) => (
+    Number(isOrganizedDocument(right)) - Number(isOrganizedDocument(left)) ||
+    left.localeCompare(right)
+  ));
+  return output;
+}
+
+function publicFileResults(items, query, limit, allPaths = []) {
+  const associations = logicalPathAssociations(allPaths);
   const selected = new Map();
-  for (const item of items) {
-    if (selected.has(item.path)) continue;
+  for (const [rank, item] of items.entries()) {
+    const logicalKey = logicalDocumentKey(item.path);
+    const existing = selected.get(logicalKey);
+    if (existing) {
+      existing.paths.add(item.path);
+      existing.matchedTerms.push(...(item.matchedTerms || []));
+      existing.bestScore = Math.max(
+        existing.bestScore,
+        Number(item.rrfScore ?? item.vectorScore ?? item.bm25Score ?? 0),
+      );
+      if (isOrganizedDocument(item.path) && !isOrganizedDocument(existing.item.path)) {
+        existing.item = item;
+      }
+      continue;
+    }
+    selected.set(logicalKey, {
+      logicalKey,
+      item,
+      rank,
+      paths: new Set([item.path]),
+      matchedTerms: [...(item.matchedTerms || [])],
+      bestScore: Number(item.rrfScore ?? item.vectorScore ?? item.bm25Score ?? 0),
+    });
+  }
+  return [...selected.values()]
+    .sort((left, right) => left.rank - right.rank)
+    .slice(0, limit)
+    .map((entry) => {
+    const item = entry.item;
     const matchedTerms = item.matchedTerms?.length
-      ? [...new Set(item.matchedTerms)]
+      ? [...new Set(entry.matchedTerms)]
       : matchedTermsFor(item, query);
-    selected.set(item.path, {
+    return {
       path: item.path,
       name: item.name || path.basename(item.path),
       heading: item.heading || '',
@@ -366,12 +574,13 @@ function publicFileResults(items, query, limit) {
       lineEnd: item.lineEnd,
       snippet: snippetFor(item.content, matchedTerms),
       content: item.content,
-      score: Number(item.rrfScore ?? item.vectorScore ?? item.bm25Score ?? 0),
+      score: entry.bestScore,
       matchedTerms,
-    });
-    if (selected.size >= limit) break;
-  }
-  return [...selected.values()];
+      logicalKey: entry.logicalKey,
+      relatedPaths: (associations.get(entry.logicalKey) || [...entry.paths])
+        .filter((relative) => relative !== item.path),
+    };
+  });
 }
 
 function generationId() {
@@ -869,7 +1078,11 @@ export class KnowledgeIndex {
     const key = sha256(`${this.signature.provider}\0${this.signature.model}\0${this.signature.dimensions}\0${query}`);
     const cached = this.queryVectors.get(key);
     if (cached) return { vector: cached, cacheHit: true };
-    const vectors = await this.client.embed([query], { textType: 'query', signal });
+    const vectors = await this.client.embed([query], {
+      textType: 'query',
+      instruct: QUERY_RETRIEVAL_INSTRUCTION,
+      signal,
+    });
     const vector = Array.isArray(vectors?.[0]) ? vectors[0].map(Number) : null;
     if (
       !vector || vector.length !== this.signature.dimensions ||
@@ -911,18 +1124,35 @@ export class KnowledgeIndex {
     if (!query) return { route: requestedRoute, query, results: [], diagnostics };
 
     const recallLimit = Math.max(30, limit * 4);
-    const keyword = bm25Search(query, this.generation.chunks, recallLimit);
+    const indexedPaths = Object.keys(this.generation.files || {});
+    const entityAnchor = explicitEntityAnchor(query);
+    const retrievalChunks = entityAnchor
+      ? this.generation.chunks.filter((chunk) => chunkContainsEntity(chunk, entityAnchor))
+      : this.generation.chunks;
+    diagnostics.entityAnchorApplied = Boolean(entityAnchor);
+    if (entityAnchor) diagnostics.entityMatchedChunks = retrievalChunks.length;
+    const keyword = bm25Search(query, retrievalChunks, recallLimit);
     diagnostics.keywordCandidates = keyword.length;
     if (requestedRoute === 'keyword') {
       return {
         route: 'keyword',
         query,
-        results: publicFileResults(keyword, query, limit),
+        results: publicFileResults(keyword, query, limit, indexedPaths),
         diagnostics,
       };
     }
 
-    const embeddedChunks = this.generation.chunks.filter((chunk) => (
+    if (entityAnchor && !retrievalChunks.length) {
+      diagnostics.semanticCandidates = 0;
+      return {
+        route: requestedRoute,
+        query,
+        results: [],
+        diagnostics,
+      };
+    }
+
+    const embeddedChunks = retrievalChunks.filter((chunk) => (
       Array.isArray(chunk.vector) && chunk.vector.length === this.signature.dimensions
     ));
     if (!this.embeddingEnabled || !embeddedChunks.length) {
@@ -931,7 +1161,7 @@ export class KnowledgeIndex {
       return {
         route: 'keyword',
         query,
-        results: publicFileResults(keyword, query, limit),
+        results: publicFileResults(keyword, query, limit, indexedPaths),
         diagnostics,
       };
     }
@@ -951,7 +1181,7 @@ export class KnowledgeIndex {
       return {
         route: 'keyword',
         query,
-        results: publicFileResults(keyword, query, limit),
+        results: publicFileResults(keyword, query, limit, indexedPaths),
         diagnostics,
       };
     }
@@ -960,7 +1190,7 @@ export class KnowledgeIndex {
       return {
         route: 'semantic',
         query,
-        results: publicFileResults(semantic, query, limit),
+        results: publicFileResults(semantic, query, limit, indexedPaths),
         diagnostics,
       };
     }
@@ -968,9 +1198,237 @@ export class KnowledgeIndex {
     return {
       route: 'hybrid',
       query,
-      results: publicFileResults(fused, query, limit),
+      results: publicFileResults(fused, query, limit, indexedPaths),
       diagnostics,
     };
+  }
+
+  /**
+   * Build a complete logical-file inventory from the immutable active index
+   * generation before using content relevance to order it. This deliberately
+   * differs from search(): a low BM25/vector score can change ordering inside
+   * the requested mtime window, but can never admit an out-of-window file or
+   * remove an in-window logical file from the inventory.
+   */
+  async temporalInventory(queryInput, options = {}) {
+    await this.ready;
+    options.signal?.throwIfAborted?.();
+    const query = String(queryInput || '').trim();
+    const startMs = Number(options?.range?.startMs);
+    const endMs = Number(options?.range?.endMs);
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || startMs >= endMs) {
+      const error = new Error('Temporal inventory requires a valid [start,end) mtime range.');
+      error.code = 'INVALID_TEMPORAL_RANGE';
+      error.status = 400;
+      throw error;
+    }
+    const requestedScope = options.scope === 'learning' ? 'learning' : 'all';
+    const indexedPaths = Object.keys(this.generation.files || {});
+    const chunksByPath = this.chunksByPath(this.generation);
+    // Time is the mandatory inclusion gate. Learning classification only
+    // affects ordering: diary or inbox notes may contain the user's learning
+    // record and must not disappear merely because their directory is not
+    // named "learning".
+    const eligiblePaths = indexedPaths;
+    const invalidMtimePaths = eligiblePaths.filter((relative) => {
+      return !validFileMtime(this.generation.files?.[relative]?.mtimeMs);
+    });
+    const inRangePaths = eligiblePaths.filter((relative) => {
+      const mtimeMs = this.generation.files?.[relative]?.mtimeMs;
+      return validFileMtime(mtimeMs) && mtimeMs >= startMs && mtimeMs < endMs;
+    });
+    const learningMatches = new Set(requestedScope === 'learning'
+      ? inRangePaths.filter((relative) => (
+          learningLikePath(relative) || learningLikeContent(chunksByPath.get(relative))
+        ))
+      : inRangePaths);
+    const scopeApplied = requestedScope !== 'learning' || inRangePaths.length === 0 || learningMatches.size > 0;
+    const pathSet = new Set(inRangePaths);
+    const inRangeChunks = this.generation.chunks.filter((chunk) => pathSet.has(chunk.path));
+    const rankedChunks = bm25Search(query, inRangeChunks, Math.max(1, inRangeChunks.length));
+    const rankedById = new Map(rankedChunks.map((chunk, index) => [chunk.id, {
+      rank: index,
+      score: Number(chunk.bm25Score) || 0,
+      matchedTerms: chunk.matchedTerms || [],
+    }]));
+    const groups = new Map();
+    for (const relative of inRangePaths) {
+      const key = logicalDocumentKey(relative);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(relative);
+    }
+    const logicalResults = [];
+    for (const [logicalKey, paths] of groups) {
+      options.signal?.throwIfAborted?.();
+      const orderedPaths = [...paths].sort((left, right) => (
+        Number(isOrganizedDocument(right)) - Number(isOrganizedDocument(left)) ||
+        Number(this.generation.files?.[right]?.mtimeMs || 0) -
+          Number(this.generation.files?.[left]?.mtimeMs || 0) ||
+        left.localeCompare(right)
+      ));
+      const representative = orderedPaths[0];
+      const representativeChunks = (chunksByPath.get(representative) || []).map((chunk) => {
+        const rank = rankedById.get(chunk.id);
+        return {
+          ...chunk,
+          bm25Score: rank?.score || 0,
+          matchedTerms: rank?.matchedTerms || matchedTermsFor(chunk, query),
+          temporalRank: rank?.rank ?? Number.MAX_SAFE_INTEGER,
+        };
+      }).sort((left, right) => (
+        left.temporalRank - right.temporalRank || left.lineStart - right.lineStart
+      ));
+      const best = representativeChunks[0] || {
+        path: representative,
+        name: path.basename(representative),
+        heading: '',
+        lineStart: null,
+        lineEnd: null,
+        content: '',
+        matchedTerms: [],
+      };
+      const allGroupChunks = paths.flatMap((relative) => chunksByPath.get(relative) || []);
+      const bestGroupRank = allGroupChunks.reduce((bestRank, chunk) => (
+        Math.min(bestRank, rankedById.get(chunk.id)?.rank ?? Number.MAX_SAFE_INTEGER)
+      ), Number.MAX_SAFE_INTEGER);
+      const bestGroupScore = allGroupChunks.reduce((score, chunk) => (
+        Math.max(score, rankedById.get(chunk.id)?.score || 0)
+      ), 0);
+      const mtimeMs = Math.max(...paths.map((relative) => (
+        Number(this.generation.files?.[relative]?.mtimeMs) || 0
+      )));
+      logicalResults.push({
+        path: representative,
+        name: best.name || path.basename(representative),
+        heading: best.heading || '',
+        lineStart: best.lineStart,
+        lineEnd: best.lineEnd,
+        snippet: snippetFor(best.content, best.matchedTerms),
+        content: best.content,
+        score: bestGroupScore,
+        matchedTerms: best.matchedTerms,
+        logicalKey,
+        relatedPaths: orderedPaths.slice(1),
+        mtimeMs,
+        modifiedAt: new Date(mtimeMs).toISOString(),
+        scopeMatch: requestedScope !== 'learning' || paths.some((relative) => learningMatches.has(relative)),
+        temporalRank: bestGroupRank,
+        deepExcerpts: representativeChunks.slice(0, 2).map((chunk) => ({
+          path: representative,
+          lineStart: chunk.lineStart,
+          lineEnd: chunk.lineEnd,
+          content: chunk.content,
+          snippet: snippetFor(chunk.content, chunk.matchedTerms),
+          matchedTerms: chunk.matchedTerms,
+          mtimeMs,
+          modifiedAt: new Date(mtimeMs).toISOString(),
+        })),
+      });
+    }
+    logicalResults.sort((left, right) => (
+      Number(right.scopeMatch) - Number(left.scopeMatch) ||
+      left.temporalRank - right.temporalRank ||
+      right.score - left.score ||
+      right.mtimeMs - left.mtimeMs ||
+      left.path.localeCompare(right.path)
+    ));
+    const limit = Math.max(1, Math.min(
+      TEMPORAL_INVENTORY_MAX_FILES,
+      Number(options.limit) || TEMPORAL_INVENTORY_MAX_FILES,
+    ));
+    const results = logicalResults.slice(0, limit).map(({ temporalRank, ...item }) => item);
+    const truncated = results.length < logicalResults.length;
+    const metadataComplete = invalidMtimePaths.length === 0 && !truncated;
+    const inventory = {
+      basis: 'file_mtime',
+      range: {
+        startMs,
+        endMs,
+        startInclusive: new Date(startMs).toISOString(),
+        endExclusive: new Date(endMs).toISOString(),
+        timeZone: String(options?.range?.timeZone || ''),
+      },
+      scopeRequested: requestedScope,
+      scopeApplied,
+      totalIndexedFiles: indexedPaths.length,
+      eligiblePhysicalFiles: eligiblePaths.length,
+      inRangePhysicalFiles: inRangePaths.length,
+      scopeMatchedPhysicalFiles: learningMatches.size,
+      logicalFilesInRange: logicalResults.length,
+      returnedLogicalFiles: results.length,
+      invalidMtimeFiles: invalidMtimePaths.length,
+      metadataComplete,
+      truncated,
+      generation: this.generation.generation,
+    };
+    return {
+      route: 'mtime-inventory',
+      query,
+      results,
+      inventory,
+      diagnostics: {
+        effectiveRoute: 'mtime-inventory',
+        generation: this.generation.generation,
+        mtimeStartInclusive: inventory.range.startInclusive,
+        mtimeEndExclusive: inventory.range.endExclusive,
+        scopeRequested: requestedScope,
+        scopeApplied,
+        indexedFiles: indexedPaths.length,
+        inRangePhysicalFiles: inRangePaths.length,
+        scopeMatchedPhysicalFiles: learningMatches.size,
+        logicalFilesInRange: logicalResults.length,
+        returnedLogicalFiles: results.length,
+        invalidMtimeFiles: invalidMtimePaths.length,
+        metadataComplete,
+        truncated,
+      },
+    };
+  }
+
+  /**
+   * Pin the exact in-memory generation used by a task. Index updates replace
+   * `this.generation` atomically, so retaining this object reference is enough
+   * to keep both ordinary searches and mtime inventories coherent without
+   * copying a potentially large vector index.
+   */
+  acquireSnapshot() {
+    if (this.closed) {
+      const error = new Error('Knowledge index is closed.');
+      error.code = 'KNOWLEDGE_INDEX_CLOSED';
+      error.status = 503;
+      throw error;
+    }
+    const view = Object.create(this);
+    view.generation = this.generation;
+    view.activeGenerationName = this.activeGenerationName;
+    view.manifest = { ...this.manifest };
+    let released = false;
+    const assertHeld = () => {
+      if (released) {
+        const error = new Error('Knowledge index snapshot has already been released.');
+        error.code = 'INDEX_SNAPSHOT_RELEASED';
+        error.status = 409;
+        throw error;
+      }
+    };
+    return Object.freeze({
+      generation: String(view.generation?.generation || 'unbuilt'),
+      status: () => {
+        assertHeld();
+        return view.status();
+      },
+      search: (...args) => {
+        assertHeld();
+        return view.search(...args);
+      },
+      temporalInventory: (...args) => {
+        assertHeld();
+        return view.temporalInventory(...args);
+      },
+      release: () => {
+        released = true;
+      },
+    });
   }
 
   status() {
@@ -1013,9 +1471,11 @@ export const knowledgeIndexConstants = {
 };
 
 export const knowledgeIndexInternals = {
+  explicitEntityAnchor,
   generationUsesAllowedPaths,
   markdownBlocks,
   reciprocalRankFusion,
   publicFileResults,
+  queryTermsFor,
   validGeneration,
 };

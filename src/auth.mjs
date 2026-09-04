@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { markPublicMessage } from './public-errors.mjs';
 
 const COOKIE_NAME = 'vaultmind_session';
 const MAX_USERNAME_LENGTH = 128;
@@ -10,7 +11,7 @@ function authError(status, message, code) {
   const error = new Error(message);
   error.status = status;
   error.code = code;
-  return error;
+  return markPublicMessage(error);
 }
 
 function digest(value) {

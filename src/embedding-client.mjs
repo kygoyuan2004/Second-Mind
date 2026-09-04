@@ -221,14 +221,35 @@ function validateVectors(payload, provider, expectedCount, dimensions) {
   return vectors;
 }
 
+function detectVectorDimensions(payload, provider) {
+  const rows = vectorRows(payload, provider);
+  if (rows.length !== 1 || !Array.isArray(rows[0]?.vector)) {
+    throw new EmbeddingClientError(
+      'Embedding provider did not return exactly one probe vector.',
+      'EMBEDDING_INVALID_RESPONSE',
+    );
+  }
+  const vector = rows[0].vector.map(Number);
+  if (
+    vector.length < 8 || vector.length > 32_768 ||
+    vector.some((value) => !Number.isFinite(value))
+  ) {
+    throw new EmbeddingClientError(
+      'Embedding provider returned an invalid probe vector.',
+      'EMBEDDING_INVALID_VECTOR',
+    );
+  }
+  return vector.length;
+}
+
 function requestBody(provider, config, texts, options) {
   if (provider === 'dashscope') {
     const textType = options.textType === 'query' ? 'query' : 'document';
     const parameters = {
       text_type: textType,
-      dimension: config.dimensions,
       output_type: 'dense',
     };
+    if (options.detectDimensions !== true) parameters.dimension = config.dimensions;
     if (textType === 'query' && options.instruct) {
       parameters.instruct = String(options.instruct);
     }
@@ -241,7 +262,6 @@ function requestBody(provider, config, texts, options) {
   return {
     model: config.model,
     input: texts,
-    dimensions: config.dimensions,
   };
 }
 
@@ -331,6 +351,9 @@ export class EmbeddingClient {
           { status: response.status },
         );
       }
+      if (options.detectDimensions === true) {
+        return detectVectorDimensions(payload, this.provider);
+      }
       return validateVectors(payload, this.provider, texts.length, this.dimensions);
     } catch (error) {
       if (error?.name === 'AbortError' || controller.signal.aborted) {
@@ -390,10 +413,22 @@ export class EmbeddingClient {
     }
     return output;
   }
+
+  async detectDimensions(options = {}) {
+    if (!this.enabled) {
+      throw new EmbeddingClientError('Embeddings are disabled.', 'EMBEDDING_DISABLED');
+    }
+    return this.request(['Second Mind embedding dimension check.'], {
+      ...options,
+      detectDimensions: true,
+      textType: 'document',
+    });
+  }
 }
 
 export const embeddingClientInternals = {
   endpointFor,
+  detectVectorDimensions,
   isLocalHostname,
   redact,
   requestBody,

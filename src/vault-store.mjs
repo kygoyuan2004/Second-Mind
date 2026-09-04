@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { VaultPathPolicy, isInside, mimeTypeFor, normalizeRelative, pathError } from './path-policy.mjs';
+import { markPublicMessage } from './public-errors.mjs';
 
 const DRAFT_KINDS = new Set(['diary', 'plan', 'scratch']);
 const MAX_DRAFT_BYTES = 512 * 1024;
@@ -39,7 +40,7 @@ function vaultError(status, message, code = 'VAULT_ERROR') {
   const error = new Error(message);
   error.status = status;
   error.code = code;
-  return error;
+  return markPublicMessage(error);
 }
 
 function sha256(value) {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { createApp } from '../src/server.mjs';
@@ -55,7 +56,7 @@ function appConfig(project) {
     auth: {
       username: 'admin',
       password: 'correct horse battery staple',
-      sessionSecret: '0123456789abcdef0123456789abcdef',
+      sessionSecret: 'TEST_ONLY_NOT_A_REAL_SESSION_SECRET',
       sessionTtlSeconds: 3600,
       secureCookie: false,
     },
@@ -115,7 +116,9 @@ test('authenticated API supports grounded Q&A and review-before-write diary flow
   assert.equal(live.response.headers.get('x-content-type-options'), 'nosniff');
   const ready = await requestJson(base, '/health/ready');
   assert.equal(ready.response.status, 200);
-  assert.equal(ready.body.retrieval.documentCount, 1);
+  assert.deepEqual(ready.body.retrieval, { ready: true });
+  assert.equal(Object.hasOwn(ready.body, 'knowledgeBases'), false);
+  assert.equal(JSON.stringify(ready.body).includes('Fixture Vault'), false);
 
   const anonymous = await requestJson(base, '/api/session');
   assert.equal(anonymous.body.authenticated, false);
@@ -185,6 +188,54 @@ test('authenticated API supports grounded Q&A and review-before-write diary flow
     headers: { cookie: clearedCookie },
   });
   assert.equal(loggedOutSession.body.authenticated, false);
+});
+
+test('authenticated legacy status never exposes raw index failure diagnostics', async (t) => {
+  const project = await temporaryProject('vaultmind-index-status-');
+  const privatePath = path.join(project.vaultPath, 'private-provider-state.json');
+  const privateUrl = 'https://private-index-provider.invalid/v1';
+  const internalFailure = {
+    code: 'EACCES',
+    message: `Index request to ${privateUrl} failed while reading ${privatePath}`,
+  };
+  let app;
+  t.after(async () => {
+    if (app) {
+      await app.manager.close();
+      await new Promise((resolve) => app.server.close(resolve));
+    }
+    await project.cleanup();
+  });
+
+  app = await createApp(appConfig(project), { llm: new FakeLlm() });
+  await app.ready;
+  app.index.lastError = internalFailure;
+  const internalStatus = app.index.status();
+  assert.deepEqual(internalStatus.lastError, internalFailure);
+
+  await new Promise((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+  const address = app.server.address();
+  const base = `http://127.0.0.1:${address.port}`;
+  const login = await requestJson(base, '/api/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-vaultmind-request': '1' },
+    body: JSON.stringify({ username: 'admin', password: 'correct horse battery staple' }),
+  });
+  assert.equal(login.response.status, 200);
+
+  const status = await requestJson(base, '/api/knowledge/status', {
+    headers: { cookie: login.response.headers.get('set-cookie') },
+  });
+  assert.equal(status.response.status, 200);
+  assert.deepEqual(status.body.retrieval.lastError, { code: 'KNOWLEDGE_INDEX_ERROR' });
+  assert.equal(Object.hasOwn(status.body.retrieval.lastError, 'message'), false);
+  assert.equal(status.body.retrieval.generation, internalStatus.generation);
+  assert.equal(status.body.retrieval.embedding.enabled, false);
+  const serialized = JSON.stringify(status.body);
+  assert.equal(serialized.includes(privatePath), false);
+  assert.equal(serialized.includes(privateUrl), false);
+  assert.equal(serialized.includes(internalFailure.code), false);
+  assert.deepEqual(app.index.status().lastError, internalFailure);
 });
 
 test('authenticated HTTP API exposes and executes bounded Deep retrieval', async (t) => {
@@ -345,4 +396,43 @@ test('liveness is available while a slow first index build keeps readiness pendi
   const ready = await requestJson(base, '/health/ready');
   assert.equal(ready.response.status, 200);
   assert.equal(ready.body.status, 'ready');
+});
+
+test('a post-open file stream failure is contained without logging its private path', async (t) => {
+  const project = await temporaryProject('vaultmind-stream-failure-');
+  const privatePath = '/srv/private-fixture/secret-note.md';
+  const logs = [];
+  const originalConsoleError = console.error;
+  let app;
+  console.error = (...values) => logs.push(values.map(String).join(' '));
+  t.after(async () => {
+    console.error = originalConsoleError;
+    if (app) {
+      await app.manager.close();
+      await new Promise((resolve) => app.server.close(resolve));
+    }
+    await project.cleanup();
+  });
+
+  app = await createApp(appConfig(project), {
+    llm: new FakeLlm(),
+    createReadStream: () => {
+      const stream = new Readable({ read() {} });
+      queueMicrotask(() => {
+        stream.emit('open', 1);
+        queueMicrotask(() => stream.destroy(new Error(`read failed: ${privatePath}`)));
+      });
+      return stream;
+    },
+  });
+  await app.ready;
+  await new Promise((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+  const address = app.server.address();
+  const base = `http://127.0.0.1:${address.port}`;
+
+  await fetch(`${base}/`).then((response) => response.arrayBuffer()).catch(() => {});
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(logs.some((line) => line.includes('FILE_STREAM_FAILED')), true);
+  assert.equal(logs.some((line) => line.includes(privatePath)), false);
+  assert.equal((await requestJson(base, '/health/live')).response.status, 200);
 });

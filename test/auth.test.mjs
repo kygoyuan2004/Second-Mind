@@ -5,7 +5,7 @@ import { SessionManager, requireWriteGuard } from '../src/auth.mjs';
 const config = {
   username: 'admin',
   password: 'correct horse battery staple',
-  sessionSecret: '0123456789abcdef0123456789abcdef',
+  sessionSecret: 'TEST_ONLY_NOT_A_REAL_SESSION_SECRET',
   sessionTtlSeconds: 3600,
   secureCookie: true,
 };

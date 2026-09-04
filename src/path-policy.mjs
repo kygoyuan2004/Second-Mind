@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
+import { markPublicMessage } from './public-errors.mjs';
 
 export const INDEXED_EXTENSIONS = new Set([
   '.md', '.txt', '.json', '.canvas', '.base', '.csv', '.yaml', '.yml', '.log',
@@ -28,7 +29,7 @@ export function pathError(status, message, code = 'INVALID_VAULT_PATH') {
   const error = new Error(message);
   error.status = status;
   error.code = code;
-  return error;
+  return markPublicMessage(error);
 }
 
 export function normalizeRelative(value, options = {}) {

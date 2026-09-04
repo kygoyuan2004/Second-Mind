@@ -4,23 +4,32 @@
   "description": "Self-hosted, provider-neutral RAG workspace for Obsidian vaults",
   "type": "module",
   "license": "MIT",
-  "private": false,
+  "private": true,
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "start": "node src/server.mjs",
+    "start": "node src/bootstrap.mjs",
     "dev": "node --watch src/server.mjs",
     "check": "node scripts/check.mjs",
+    "site:build": "node scripts/site-build.mjs",
+    "site:check": "node scripts/site-check.mjs",
+    "docs:screenshots": "node scripts/capture-screenshots.mjs",
     "test": "node --test --test-reporter=spec",
     "test:coverage": "node --test --experimental-test-coverage",
     "index": "node scripts/reindex.mjs",
     "eval": "node scripts/evaluate-retrieval.mjs",
+    "eval:completeness30": "node scripts/evaluate-completeness-30.mjs",
+    "benchmark": "node scripts/benchmark-compare.mjs",
+    "benchmark:adjudicate": "node scripts/benchmark-adjudicate.mjs",
     "security:scan": "node scripts/scan-secrets.mjs",
+    "security:ocr": "node scripts/scan-screenshot-ocr.mjs",
+    "security:history": "node scripts/scan-history.mjs",
     "verify": "npm run check && npm test && npm run security:scan",
     "postinstall": "node scripts/sync-vendor-assets.mjs"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
     "dompurify": "3.4.14",
     "katex": "0.18.4",
     "marked": "18.0.11"

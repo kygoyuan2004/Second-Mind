@@ -41,8 +41,9 @@ test('OpenAI-compatible embeddings use /embeddings, allow an empty API key, and 
   assert.deepEqual(requests[0].body, {
     model: 'local-embedding',
     input: ['first', 'second'],
-    dimensions: 3,
   });
+  assert.equal(Object.hasOwn(requests[0].body, 'dimensions'), false,
+    'minimal OpenAI-compatible services must not be required to support the optional dimensions field');
   assert.deepEqual(client.status(), {
     enabled: true,
     provider: 'openai-compatible',
@@ -96,6 +97,36 @@ test('DashScope uses its native payload and accepts both legacy and OpenAI-shape
       instruct: 'Retrieve notes.',
     },
   });
+});
+
+test('embedding dimension probes infer the vector length without sending a requested dimension', async () => {
+  for (const provider of ['dashscope', 'openai-compatible']) {
+    let request;
+    const client = new EmbeddingClient({
+      provider,
+      apiBase: provider === 'dashscope'
+        ? 'https://dashscope.example.test'
+        : 'https://embeddings.example.test/v1',
+      apiKey: 'dimension-probe-fixture-key',
+      model: 'embedding-fixture',
+      dimensions: 1_024,
+      timeoutMs: 1_000,
+    }, {
+      fetchFn: async (_url, options) => {
+        request = JSON.parse(options.body);
+        const row = { index: 0, text_index: 0, embedding: Array(12).fill(0.25) };
+        return response(200, provider === 'dashscope'
+          ? { output: { embeddings: [row] } }
+          : { data: [row] });
+      },
+    });
+    assert.equal(await client.detectDimensions(), 12);
+    if (provider === 'dashscope') {
+      assert.equal(Object.hasOwn(request.parameters, 'dimension'), false);
+    } else {
+      assert.equal(Object.hasOwn(request, 'dimensions'), false);
+    }
+  }
 });
 
 test('timeouts and caller cancellation abort fetch with stable error codes', async () => {

@@ -211,11 +211,30 @@ test('Deep fusion keeps distinct passages from one file and cites only context-i
   const full = taskManagerInternals.sourceContext(merged, 2_000);
   assert.match(full.text, /evidence A/);
   assert.match(full.text, /evidence B/);
+  assert.match(full.text, /<source id="V[0-9a-f]{16}" path="one\.md"/u);
   assert.deepEqual(full.includedPaths, ['one.md', 'two.md']);
+  assert.equal(full.includedSources[0].kind, 'vault');
+  assert.equal(full.includedSources[0].path, 'one.md');
 
   const bounded = taskManagerInternals.sourceContext(merged, 70);
   assert.ok(bounded.text.length <= 70);
   assert.deepEqual(bounded.includedPaths, ['one.md']);
+});
+
+test('Vault citations retain only exact paths actually supplied to the model', () => {
+  const sources = [{
+    id: taskManagerInternals.vaultSourceId('notes/verified.md'),
+    kind: 'vault',
+    path: 'notes/verified.md',
+    title: 'notes/verified.md',
+  }];
+  const finalized = taskManagerInternals.finalizeVaultCitations(
+    '可信 [[notes/verified.md]]；伪造 [[private/unknown.md]]；别名 [[notes/verified.md|标题]]。',
+    sources,
+  );
+  assert.match(finalized.body, /\[\[notes\/verified\.md\]\]/u);
+  assert.equal((finalized.body.match(/未核验知识库来源/gu) || []).length, 2);
+  assert.deepEqual(finalized.referencedSources, sources);
 });
 
 test('source context keeps a match near the end of an oversized Markdown block', () => {
@@ -239,6 +258,92 @@ test('source context keeps a match near the end of an oversized Markdown block',
   }], 30_000);
   assert.match(normalizedOnly.text, /TARGET_EVIDENCE/);
   assert.deepEqual(normalizedOnly.includedPaths, ['normalized.md']);
+});
+
+test('bounded research sources never leave retained documents with an orphan source ID', () => {
+  const oldOfficial = {
+    id: 'W1', url: 'https://www.city-a.gov.cn/old', title: 'earlier official evidence',
+    authorityLevel: 0, publishedAt: '2025-01-01',
+  };
+  const current = Array.from({ length: 10 }, (_, index) => ({
+    id: `W${index + 2}`,
+    url: `https://source-${index}.example/item`,
+    title: `current ${index}`,
+    authorityLevel: 5,
+    publishedAt: '2026-01-01',
+  }));
+  const registry = new Map([oldOfficial, ...current].map((source) => [source.url, source]));
+  const sources = taskManagerInternals.boundedResearchSources({
+    priorSources: [],
+    currentSources: current,
+    registry,
+    documents: [{ sourceId: 'W1', sourceIds: ['W1'], text: 'verified body' }],
+    claims: [{ text: 'verified claim', sourceIds: ['W1'] }],
+    limit: 10,
+  });
+  const documents = taskManagerInternals.retainDocumentsForSources(
+    [{ sourceId: 'W1', sourceIds: ['W1'], text: 'verified body' }],
+    sources,
+  );
+
+  assert.equal(sources.length, 10);
+  assert.equal(sources.some((source) => source.id === 'W1'), true);
+  assert.equal(documents.length, 1);
+  assert.equal(
+    documents.every((document) => document.sourceIds.every((id) => (
+      sources.some((source) => source.id === id)
+    ))),
+    true,
+  );
+
+  const displaced = taskManagerInternals.boundedResearchSources({
+    priorSources: [],
+    currentSources: current.map((source) => ({ ...source, authorityLevel: 0 })),
+    registry: new Map([oldOfficial, ...current].map((source) => [source.url, {
+      ...source,
+      authorityLevel: source.id === 'W1' ? 6 : 0,
+    }])),
+    documents: [{ sourceId: 'W1', sourceIds: ['W1'], text: 'low-authority body' }],
+    claims: [],
+    limit: 10,
+  });
+  assert.equal(displaced.some((source) => source.id === 'W1'), false);
+  assert.deepEqual(taskManagerInternals.retainDocumentsForSources(
+    [{ sourceId: 'W1', sourceIds: ['W1'], text: 'low-authority body' }],
+    displaced,
+  ), []);
+
+  assert.deepEqual(taskManagerInternals.retainDocumentsForSources(
+    [{ sourceId: 'W1', sourceIds: ['W1', 'W2'], text: 'combined body' }],
+    [{ id: 'W1' }],
+  ), [], 'a combined body must not be relabelled after one source is pruned');
+
+  const unreferencedPrior = taskManagerInternals.boundedResearchSources({
+    priorSources: [oldOfficial],
+    currentSources: current.slice(0, 1),
+    registry,
+    documents: [],
+    claims: [],
+    limit: 10,
+  });
+  assert.equal(
+    unreferencedPrior.some((source) => source.id === 'W1'),
+    false,
+    'prior source metadata must not become citable without a current claim or document reference',
+  );
+});
+
+test('document budget is global and never appends or charges beyond the remaining space', () => {
+  const documents = [{ sourceId: 'W1', sourceIds: ['W1'], text: '12345678' }];
+  assert.equal(taskManagerInternals.remainingDocumentBudget(documents, 10), 2);
+  assert.equal(taskManagerInternals.appendBoundedDocuments(documents, [{
+    sourceId: 'W2', sourceIds: ['W2'], text: 'abcdef',
+  }], 10), 1);
+  assert.equal(documents[1].text, 'ab');
+  assert.equal(taskManagerInternals.remainingDocumentBudget(documents, 10), 0);
+  assert.equal(taskManagerInternals.appendBoundedDocuments(documents, [{
+    sourceId: 'W3', sourceIds: ['W3'], text: 'must-not-enter',
+  }], 10), 0);
 });
 
 test('Deep uses a safe top-k fallback when an older programmatic config has no deep block', async (t) => {
@@ -285,13 +390,13 @@ test('late cancellation cannot race a result already entering its atomic state c
   let commitStarted;
   const enteredCommit = new Promise((resolve) => { commitStarted = resolve; });
   const commitGate = new Promise((resolve) => { releaseCommit = resolve; });
-  fixture.conversations.save = async () => {
+  fixture.conversations.save = async (snapshot) => {
     saveCalls += 1;
     if (saveCalls === 2) {
       commitStarted();
       await commitGate;
     }
-    return originalSave();
+    return originalSave(snapshot);
   };
 
   const created = await fixture.manager.createTask('admin', {

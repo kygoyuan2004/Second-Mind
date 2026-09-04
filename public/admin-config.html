@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta id="admin-description" name="description" content="Second Mind 管理员 Provider 配置">
+    <meta name="theme-color" content="#f4f6fb">
+    <title>Provider 配置 · Second Mind</title>
+    <link rel="stylesheet" href="./admin-config.css?v=2.1.6">
+  </head>
+  <body>
+    <a class="skip-link" href="#admin-main">跳到配置内容</a>
+
+    <header class="admin-header">
+      <a class="brand" href="/" aria-label="返回知识库工作台">
+        <span class="brand-mark" aria-hidden="true">SM</span>
+        <span><strong id="admin-brand-name">Second Mind</strong><small>管理员配置</small></span>
+      </a>
+      <div class="header-actions">
+        <span id="admin-user" class="admin-user" hidden></span>
+        <a class="button button-secondary" href="/">返回知识库</a>
+      </div>
+    </header>
+
+    <main id="admin-main" class="admin-page">
+      <section id="admin-gate" class="gate" aria-live="polite">
+        <div class="gate-mark" aria-hidden="true">⚙</div>
+        <div>
+          <p class="eyebrow">安全访问</p>
+          <h1 id="gate-title">正在验证管理员身份</h1>
+          <p id="gate-message">请稍候，系统正在读取当前会话。</p>
+          <a id="gate-action" class="button button-primary" href="/" hidden>返回登录</a>
+          <button id="gate-retry" class="button button-secondary" type="button" hidden>重新连接</button>
+        </div>
+      </section>
+
+      <section id="admin-app" hidden>
+        <header class="page-heading">
+          <div>
+            <p class="eyebrow">Provider configuration</p>
+            <h1 id="admin-page-title">Second Mind 配置</h1>
+            <p>当前知识库：<strong id="admin-vault-name">正在读取</strong>。新任务使用保存后的版本，运行中的任务不受影响。</p>
+            <label id="admin-knowledge-base-field" class="field heading-knowledge-base" hidden>
+              <span>配置索引所属知识库</span>
+              <select id="admin-knowledge-base-select"></select>
+            </label>
+          </div>
+          <div class="heading-actions">
+            <button id="config-reload" class="button button-secondary" type="button">刷新配置</button>
+            <button id="config-save" class="button button-primary" type="button">检查并保存</button>
+          </div>
+        </header>
+
+        <section class="status-strip" aria-label="配置状态">
+          <div><small>配置版本</small><strong id="config-revision">—</strong></div>
+          <div><small>配置来源</small><strong id="config-source-label">网页托管</strong></div>
+          <div><small>有效状态</small><strong id="config-validity">正在读取</strong></div>
+          <div><small>索引状态</small><strong id="index-summary">—</strong></div>
+        </section>
+
+        <div id="config-stale-notice" class="notice notice-warning" role="status" hidden>
+          当前文件正在写入或校验未通过，服务仍在使用最后一份有效配置。请稍后刷新。
+        </div>
+        <div id="config-message" class="notice" role="status" aria-live="polite" hidden></div>
+
+        <section id="knowledge-base-config" class="config-card" aria-labelledby="knowledge-bases-heading" hidden>
+          <div class="card-heading">
+            <div>
+              <p class="section-number">00</p>
+              <h2 id="knowledge-bases-heading">知识库注册表</h2>
+            </div>
+            <p>只能填写启动时允许的挂载点及其相对目录。删除注册项不会删除笔记、索引、会话或草稿。</p>
+          </div>
+          <div class="section-actions">
+            <button id="knowledge-base-add" class="button button-secondary" type="button">添加知识库</button>
+            <button id="knowledge-base-save" class="button button-primary" type="button">保存注册表</button>
+          </div>
+          <div id="knowledge-base-list" class="knowledge-base-list" aria-live="polite"></div>
+          <p class="field-help">路径始终相对于管理员在安装时授权的挂载点；网页不会显示服务器绝对路径。修改或移除前，相关知识库不能有运行中的任务。</p>
+        </section>
+
+        <form id="runtime-config-form" novalidate>
+          <section class="config-card" aria-labelledby="providers-heading">
+            <div class="card-heading">
+              <div>
+                <p class="section-number">01</p>
+                <h2 id="providers-heading">LLM Provider</h2>
+              </div>
+              <p>选择供应商、填写 API 地址和 Key。已有或新建 Provider 都可单独检查；结果在本轮暂存，最终保存不会重复调用已通过的模型。</p>
+            </div>
+
+            <div class="branding-fields field-grid" aria-label="工作台名称">
+              <label class="field">
+                <span>工作台标题</span>
+                <input id="branding-app-name" maxlength="120" placeholder="Second Mind" required>
+              </label>
+              <label class="field">
+                <span>知识库名称</span>
+                <input id="branding-vault-label" maxlength="120" placeholder="我的知识库" required>
+              </label>
+            </div>
+
+            <div class="section-actions">
+              <label class="field compact-field">
+                <span>新增供应商</span>
+                <select id="connection-preset">
+                  <option value="bailian">阿里云百炼</option>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="glm">智谱 GLM</option>
+                  <option value="kimi">Kimi / Moonshot</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <button id="connection-add" class="button button-secondary" type="button">添加 Provider</button>
+            </div>
+            <div id="connection-list" class="provider-list" aria-live="polite"></div>
+
+            <div class="subsection-heading">
+              <div>
+                <h3>生成模型</h3>
+                <p>最多三个。模型 ID 会原样发送给所选供应商；显示名可以留空。</p>
+              </div>
+              <button id="model-add" class="button button-secondary" type="button">添加模型</button>
+            </div>
+            <select id="default-model" hidden aria-label="默认模型"></select>
+            <div id="model-list" class="model-list" aria-live="polite"></div>
+          </section>
+
+          <section class="config-card" aria-labelledby="web-heading">
+            <div class="card-heading">
+              <div>
+                <p class="section-number">02</p>
+                <h2 id="web-heading">联网搜索</h2>
+              </div>
+              <p>百炼与 Tavily 的 Key 相互隔离；失败时不会自动切换供应商。</p>
+            </div>
+            <label class="toggle-field">
+              <input id="web-enabled" type="checkbox">
+              <span><strong>启用联网补充</strong><small>新任务使用当前选中的搜索供应商。</small></span>
+            </label>
+            <fieldset class="provider-switch">
+              <legend>搜索供应商</legend>
+              <label><input type="radio" name="web-provider" value="bailian-mcp"><span>百炼 WebSearch</span></label>
+              <label><input type="radio" name="web-provider" value="tavily-rest"><span>Tavily</span></label>
+            </fieldset>
+            <div id="web-provider-list" class="provider-panels">
+              <section class="provider-panel" data-web-provider-panel="bailian-mcp" aria-labelledby="bailian-title">
+                <div class="provider-panel-heading">
+                  <div><strong id="bailian-title">百炼 WebSearch</strong><small>官方 MCP 搜索；凭据只用于百炼。</small></div>
+                  <span data-web-key-state>尚未读取 Key 状态</span>
+                </div>
+                <div class="field-grid">
+                  <input data-web-key-action type="hidden" value="keep">
+                  <label class="field field-wide" data-web-key-field>
+                    <span>百炼 WebSearch API Key</span>
+                    <input data-web-key type="password" maxlength="512" autocomplete="new-password" spellcheck="false" inputmode="text" placeholder="已配置时留空即可保留">
+                    <small data-web-key-help>留空保留服务端现有 Key；输入新值即替换。</small>
+                  </label>
+                  <label class="toggle-field field-wide compact-toggle">
+                    <input type="checkbox" data-web-extract>
+                    <span><strong>网页抽取兜底</strong><small>安全直读不足时允许百炼 Responses 抽取，可能额外计费。</small></span>
+                  </label>
+                </div>
+              </section>
+              <section class="provider-panel" data-web-provider-panel="tavily-rest" aria-labelledby="tavily-title">
+                <div class="provider-panel-heading">
+                  <div><strong id="tavily-title">Tavily</strong><small>直接调用 Search API；凭据只用于 Tavily。</small></div>
+                  <span data-web-key-state>尚未读取 Key 状态</span>
+                </div>
+                <div class="field-grid">
+                  <input data-web-key-action type="hidden" value="keep">
+                  <label class="field field-wide" data-web-key-field>
+                    <span>Tavily API Key</span>
+                    <input data-web-key type="password" maxlength="512" autocomplete="new-password" spellcheck="false" inputmode="text" placeholder="已配置时留空即可保留">
+                    <small data-web-key-help>留空保留服务端现有 Key；输入新值即替换。</small>
+                  </label>
+                  <label class="toggle-field field-wide compact-toggle">
+                    <input type="checkbox" data-web-extract>
+                    <span><strong>Tavily Extract 兜底</strong><small>只读取本轮搜索选中的 URL，可能额外计费。</small></span>
+                  </label>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section class="config-card" aria-labelledby="embedding-heading">
+            <div class="card-heading">
+              <div>
+                <p class="section-number">03</p>
+                <h2 id="embedding-heading">RAG 向量模型</h2>
+              </div>
+              <p>粘贴 Embedding 地址、模型 ID 和 Key 后，可在独立槽位构建并原子切换索引。</p>
+            </div>
+            <div class="field-grid">
+              <label class="field">
+                <span>供应商协议</span>
+                <select id="embedding-provider" required>
+                  <option value="dashscope">DashScope</option>
+                  <option value="openai-compatible">OpenAI-compatible</option>
+                  <option value="disabled">禁用语义检索</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Embedding 模型 ID</span>
+                <input id="embedding-model" maxlength="160" placeholder="qwen3.7-text-embedding" spellcheck="false" required>
+              </label>
+              <label class="field field-wide">
+                <span>API Base URL</span>
+                <input id="embedding-url" type="url" maxlength="2048" placeholder="https://dashscope.aliyuncs.com" autocomplete="url" spellcheck="false" required>
+                <small>OpenAI-compatible 服务须实现 <code>POST {apiBase}/embeddings</code>；URL 中不要附带凭据。</small>
+              </label>
+              <label class="field">
+                <span>当前 / 已探测维度</span>
+                <input id="embedding-dimensions" value="构建时自动探测" readonly aria-readonly="true">
+                <small>构建前自动探测；成功后显示活动索引的真实维度。</small>
+              </label>
+              <input id="embedding-key-action" type="hidden" value="keep">
+              <label id="embedding-key-field" class="field field-wide">
+                <span>Embedding API Key</span>
+                <input id="embedding-key" type="password" maxlength="512" autocomplete="new-password" spellcheck="false" inputmode="text" placeholder="已配置时留空即可保留">
+                <small id="embedding-key-help">留空保留服务端现有 Key；输入新值即替换。</small>
+              </label>
+              <div class="credential-state field-wide"><span id="embedding-key-state">尚未读取 Key 状态</span></div>
+            </div>
+
+            <div class="privacy-warning">
+              构建索引会把可索引文本发送到所配置的 Embedding 服务，并可能产生费用；失败或取消不会切换半成品索引。
+            </div>
+            <div class="index-panel" aria-labelledby="index-progress-title">
+              <div class="index-panel-heading">
+                <div><small>活动索引</small><strong id="active-index">正在读取</strong></div>
+                <div><small>待构建配置</small><strong id="pending-index">无</strong></div>
+              </div>
+              <div id="index-progress-block" hidden>
+                <div class="progress-copy"><strong id="index-progress-title">索引构建中</strong><span id="index-progress-text">准备中</span></div>
+                <progress id="index-progress" max="100" value="0">0%</progress>
+              </div>
+              <p id="index-detail">只有点击下方按钮才会验证模型并产生向量调用费用。</p>
+              <div class="index-actions">
+                <button id="embedding-build" class="button button-build" type="button">验证并构建索引</button>
+                <button id="embedding-cancel" class="button button-secondary danger-button" type="button" hidden>取消本次构建</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="config-card confirmation-card" aria-labelledby="confirmation-heading">
+            <div class="card-heading">
+              <div>
+                <p class="section-number">04</p>
+                <h2 id="confirmation-heading">确认管理员操作</h2>
+              </div>
+              <p>保存配置或启动索引构建前，需要再次验证管理员密码。</p>
+            </div>
+            <label class="field field-wide">
+              <span>当前管理员密码</span>
+              <input id="admin-password" type="password" maxlength="1024" autocomplete="current-password" required>
+              <small>密码只随本次请求发送；请求结束后立即清空，不写入浏览器存储。</small>
+            </label>
+          </section>
+
+          <section class="save-warning" aria-labelledby="save-warning-heading">
+            <h2 id="save-warning-heading">“检查并保存”会执行真实连通测试</h2>
+            <p>单卡“检查连接”只调用目标 Provider，不调用 WebSearch、不保存生效；检查结果在服务器临时保留，页面任意修改 Provider、模型或联网配置后自动失效。最终保存只实测尚未检查的模型，再检查当前搜索供应商及抽取兜底，可能产生费用；保存 receipt 不会再次调用模型。</p>
+          </section>
+
+          <section class="security-note" aria-labelledby="security-heading">
+            <h2 id="security-heading">凭据安全</h2>
+            <ul>
+              <li>所有 API Key 独立保存在服务器，不回显、不写入 URL 或浏览器存储。</li>
+              <li>切换供应商不会在不同服务间复用 Key；改变 API 地址时必须填写目标地址对应的新 Key。</li>
+              <li>已配置的 Key 留空即可保留，输入新值即替换；删除 Provider 会同时删除它的服务端凭据。</li>
+              <li>请求发出后 Key 会从页面清空，页面内存只保留不含密钥的暂存编号，精确候选仅在服务器内存保留最多 10 分钟。</li>
+            </ul>
+          </section>
+        </form>
+      </section>
+    </main>
+
+    <template id="connection-template">
+      <article class="provider-card" data-connection-card>
+        <header>
+          <div class="provider-title"><strong data-connection-title>新 Provider</strong><small data-connection-usage>未被模型使用</small></div>
+          <div class="provider-actions">
+            <button class="button button-secondary provider-check-button" type="button" data-connection-check>检查连接</button>
+            <button class="icon-button danger-button" type="button" data-connection-delete aria-label="删除供应商">删除</button>
+          </div>
+        </header>
+        <div class="field-grid provider-grid">
+          <label class="field">
+            <span>供应商</span>
+            <select data-provider-preset required>
+              <option value="bailian">阿里云百炼</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="glm">智谱 GLM</option>
+              <option value="kimi">Kimi / Moonshot</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label class="field field-wide">
+            <span>API Base URL</span>
+            <input data-connection-field="apiBase" type="url" maxlength="2048" placeholder="https://api.example.com" autocomplete="url" spellcheck="false" required>
+          </label>
+          <div class="endpoint-preview field-wide">
+            <span>实际请求 Endpoint</span>
+            <code data-provider-endpoint>—</code>
+            <a data-provider-docs target="_blank" rel="noopener noreferrer nofollow">查看官方文档</a>
+          </div>
+          <input data-connection-key-action type="hidden" value="keep">
+          <label class="field field-wide" data-connection-key-field>
+            <span>API Key</span>
+            <input data-connection-key type="password" maxlength="512" autocomplete="new-password" spellcheck="false" inputmode="text" placeholder="已配置时留空即可保留">
+            <small data-connection-key-help>留空保留服务端现有 Key；输入新值即替换。</small>
+          </label>
+          <div class="credential-state field-wide"><span data-connection-key-state>尚未读取 Key 状态</span></div>
+          <details class="advanced-panel field-wide" data-provider-advanced>
+            <summary>Custom 高级选项</summary>
+            <p>仅自定义兼容服务需要调整；官方预设会自动填写。</p>
+            <div class="field-grid">
+              <label class="field">
+                <span>接口协议</span>
+                <select data-connection-field="protocol" required>
+                  <option value="anthropic-messages">Anthropic Messages</option>
+                  <option value="openai-chat-completions">OpenAI Chat Completions</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Key 传递方式</span>
+                <select data-connection-field="authMode" required>
+                  <option value="x-api-key">x-api-key</option>
+                  <option value="bearer">Bearer</option>
+                  <option value="none">无鉴权</option>
+                </select>
+              </label>
+            </div>
+          </details>
+          <input data-connection-field="id" type="hidden">
+          <input data-connection-field="label" type="hidden">
+        </div>
+      </article>
+    </template>
+
+    <template id="knowledge-base-template">
+      <article class="knowledge-base-card" data-knowledge-base-card>
+        <div class="field-grid">
+          <label class="field"><span>稳定 ID</span><input data-knowledge-base-field="knowledgeBaseId" maxlength="64" pattern="[a-z0-9][a-z0-9._-]{0,63}" required></label>
+          <label class="field"><span>显示名称</span><input data-knowledge-base-field="name" maxlength="120" required></label>
+          <label class="field"><span>允许的挂载点</span><select data-knowledge-base-field="mountId" required></select></label>
+          <label class="field"><span>相对目录</span><input data-knowledge-base-field="relativePath" maxlength="1024" placeholder="team-notes" required></label>
+          <label class="toggle-field compact-toggle"><input data-knowledge-base-field="enabled" type="checkbox"><span><strong>启用</strong><small>禁用后不可检索或写入</small></span></label>
+          <label class="toggle-field compact-toggle"><input data-knowledge-base-default type="radio" name="knowledge-base-default"><span><strong>默认</strong><small>未指定时使用</small></span></label>
+        </div>
+        <footer><span data-knowledge-base-status></span><button class="icon-button danger-button" data-knowledge-base-delete type="button">移除注册项</button></footer>
+      </article>
+    </template>
+
+    <template id="model-template">
+      <article class="model-card" data-model-row>
+        <header>
+          <label class="row-enabled"><input type="checkbox" data-model-field="enabled"><span>启用</span></label>
+          <label class="row-default"><input type="radio" name="default-model-card" data-model-default><span>设为默认</span></label>
+          <span class="check-state" data-model-check-state>待检查</span>
+          <div class="row-actions">
+            <button class="icon-button" type="button" data-model-move="up" aria-label="上移模型">↑</button>
+            <button class="icon-button" type="button" data-model-move="down" aria-label="下移模型">↓</button>
+            <button class="icon-button danger-button" type="button" data-model-delete aria-label="删除模型">删除</button>
+          </div>
+        </header>
+        <div class="field-grid model-grid">
+          <label class="field">
+            <span>供应商</span>
+            <select data-model-field="connectionId" required></select>
+          </label>
+          <label class="field">
+            <span>真实模型 ID</span>
+            <input data-model-field="actualModel" maxlength="240" placeholder="例如 qwen3.8-max-0902" required spellcheck="false">
+            <small>请使用供应商直连接口公布的模型 ID，不要填写客户端别名。</small>
+          </label>
+          <label class="field field-wide">
+            <span>显示名 <em>可选</em></span>
+            <input data-model-field="displayName" maxlength="80" placeholder="留空时显示真实模型 ID">
+          </label>
+          <details class="advanced-panel model-reasoning-panel field-wide" data-model-reasoning>
+            <summary>思考强度映射 <span data-model-reasoning-summary>自动（推荐）</span></summary>
+            <p>主页面始终显示低、中、高、极高、最大五档。自动模式会按当前供应商能力安全映射；手动模式仍会经过能力投影，不会发送供应商不支持的参数。</p>
+            <label class="reasoning-mode-toggle">
+              <input data-model-reasoning-manual type="checkbox">
+              <span>手动设置五档映射</span>
+            </label>
+            <div class="reasoning-mapping-grid" data-model-reasoning-grid hidden>
+              <label><span>低</span><select data-model-reasoning-tier="low"></select></label>
+              <label><span>中</span><select data-model-reasoning-tier="medium"></select></label>
+              <label><span>高</span><select data-model-reasoning-tier="high"></select></label>
+              <label><span>极高</span><select data-model-reasoning-tier="xhigh"></select></label>
+              <label><span>最大</span><select data-model-reasoning-tier="max"></select></label>
+            </div>
+            <p class="reasoning-effective" data-model-reasoning-effective></p>
+          </details>
+          <p class="model-check-note field-wide">联网检查结果会逐模型显示在卡片顶部；请使用所属 Provider 的“检查连接”。</p>
+          <input data-model-field="id" type="hidden">
+          <input data-model-field="shortLabel" type="hidden">
+          <input data-model-field="requestProfile" type="hidden">
+          <input data-model-field="efforts" type="hidden">
+          <select data-model-field="defaultEffort" hidden aria-label="默认思考强度"></select>
+        </div>
+      </article>
+    </template>
+
+    <div id="admin-toast" class="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="./admin-config.js?v=2.1.6"></script>
+  </body>
+</html>

@@ -16,15 +16,30 @@ trap {
     exit 1
 }
 
-if ($null -eq ('SecondMindInstaller.NativePath' -as [type])) {
+if ($null -eq ('SecondMindInstallerV2.NativePath' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
-namespace SecondMindInstaller
+namespace SecondMindInstallerV2
 {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct NativeFileInformation
+    {
+        public uint FileAttributes;
+        public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
+        public uint VolumeSerialNumber;
+        public uint FileSizeHigh;
+        public uint FileSizeLow;
+        public uint NumberOfLinks;
+        public uint FileIndexHigh;
+        public uint FileIndexLow;
+    }
+
     public static class NativePath
     {
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
@@ -43,6 +58,15 @@ namespace SecondMindInstaller
             [Out] StringBuilder path,
             uint pathLength,
             uint flags);
+
+        [DllImport("kernel32.dll", ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetFileInformationByHandle(
+            SafeFileHandle file,
+            out NativeFileInformation information);
+
+        [DllImport("kernel32.dll", ExactSpelling = true, SetLastError = true)]
+        public static extern uint GetFileType(SafeFileHandle file);
     }
 }
 '@
@@ -56,7 +80,7 @@ function Resolve-CanonicalDirectory([string] $Directory) {
 
     # Opening the directory without FILE_FLAG_OPEN_REPARSE_POINT makes Windows
     # resolve every reparse point in the path, including ancestor junctions.
-    $handle = [SecondMindInstaller.NativePath]::CreateFileW(
+    $handle = [SecondMindInstallerV2.NativePath]::CreateFileW(
         $resolved,
         [uint32] 0,
         [uint32] 7,
@@ -75,7 +99,7 @@ function Resolve-CanonicalDirectory([string] $Directory) {
         $capacity = 512
         while ($true) {
             $buffer = [Text.StringBuilder]::new($capacity)
-            $length = [SecondMindInstaller.NativePath]::GetFinalPathNameByHandleW(
+            $length = [SecondMindInstallerV2.NativePath]::GetFinalPathNameByHandleW(
                 $handle,
                 $buffer,
                 [uint32] $buffer.Capacity,
@@ -200,6 +224,118 @@ function Protect-StateDirectory([string] $Directory) {
     Set-Acl -LiteralPath $Directory -AclObject $directoryAcl
 }
 
+function Get-NativeFileInformation([Microsoft.Win32.SafeHandles.SafeFileHandle] $Handle) {
+    $information = New-Object SecondMindInstallerV2.NativeFileInformation
+    if (-not [SecondMindInstallerV2.NativePath]::GetFileInformationByHandle(
+        $Handle,
+        [ref] $information
+    )) {
+        $nativeError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        throw [System.ComponentModel.Win32Exception]::new($nativeError, 'Cannot inspect installer state marker')
+    }
+    return $information
+}
+
+function Assert-NativeStateMarkerFile(
+    [Microsoft.Win32.SafeHandles.SafeFileHandle] $Handle,
+    $Information
+) {
+    $diskFileType = [uint32] 1
+    $directoryAttribute = [uint32] 0x10
+    $reparseAttribute = [uint32] 0x400
+    if ([SecondMindInstallerV2.NativePath]::GetFileType($Handle) -ne $diskFileType -or
+        ($Information.FileAttributes -band $directoryAttribute) -ne 0 -or
+        ($Information.FileAttributes -band $reparseAttribute) -ne 0 -or
+        $Information.NumberOfLinks -ne 1) {
+        throw 'Installer state marker must be a regular, non-reparse file with one hard link.'
+    }
+    $fileSize = ([uint64] $Information.FileSizeHigh * [uint64] 4294967296) +
+        [uint64] $Information.FileSizeLow
+    $expectedSize = [uint64] [Text.Encoding]::UTF8.GetByteCount("second-mind-installer-state-v1`n")
+    if ($fileSize -ne $expectedSize) {
+        throw 'Installer state marker is invalid.'
+    }
+}
+
+function Test-NativeFileIdentity($Left, $Right) {
+    return $Left.VolumeSerialNumber -eq $Right.VolumeSerialNumber -and
+        $Left.FileIndexHigh -eq $Right.FileIndexHigh -and
+        $Left.FileIndexLow -eq $Right.FileIndexLow
+}
+
+function Open-NativeStateMarker([string] $Marker, [switch] $AllowMissing) {
+    $handle = [SecondMindInstallerV2.NativePath]::CreateFileW(
+        $Marker,
+        [uint32] 2147483648,
+        [uint32] 1,
+        [IntPtr]::Zero,
+        [uint32] 3,
+        [uint32] 0x00200000,
+        [IntPtr]::Zero
+    )
+    if ($handle.IsInvalid) {
+        $nativeError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        $handle.Dispose()
+        if ($AllowMissing -and $nativeError -in @(2, 3)) { return $null }
+        throw [System.ComponentModel.Win32Exception]::new($nativeError, 'Cannot open installer state marker safely')
+    }
+    return $handle
+}
+
+function Read-ValidatedStateMarker([string] $Marker) {
+    $expectedHandle = Open-NativeStateMarker $Marker -AllowMissing
+    if ($null -eq $expectedHandle) { return $null }
+    try {
+        $expected = Get-NativeFileInformation $expectedHandle
+        Assert-NativeStateMarkerFile $expectedHandle $expected
+        $handle = Open-NativeStateMarker $Marker
+        $stream = $null
+        $reader = $null
+        try {
+            $opened = Get-NativeFileInformation $handle
+            Assert-NativeStateMarkerFile $handle $opened
+            if (-not (Test-NativeFileIdentity $expected $opened)) {
+                throw 'Installer state marker changed while it was being opened.'
+            }
+            $stream = [IO.FileStream]::new($handle, [IO.FileAccess]::Read)
+            $reader = [IO.StreamReader]::new(
+                $stream,
+                [Text.UTF8Encoding]::new($false, $true),
+                $true,
+                1024,
+                $true
+            )
+            $value = $reader.ReadToEnd()
+            $openedAfterRead = Get-NativeFileInformation $handle
+            Assert-NativeStateMarkerFile $handle $openedAfterRead
+            if (-not (Test-NativeFileIdentity $expected $openedAfterRead)) {
+                throw 'Installer state marker changed while it was being read.'
+            }
+
+            $linkedHandle = Open-NativeStateMarker $Marker
+            try {
+                $linkedAfterRead = Get-NativeFileInformation $linkedHandle
+                Assert-NativeStateMarkerFile $linkedHandle $linkedAfterRead
+                if (-not (Test-NativeFileIdentity $expected $linkedAfterRead)) {
+                    throw 'Installer state marker changed while it was being read.'
+                }
+            } finally {
+                $linkedHandle.Dispose()
+            }
+            if ($value -ne "second-mind-installer-state-v1`n") {
+                throw 'Installer state marker is invalid.'
+            }
+            return $value
+        } finally {
+            if ($null -ne $reader) { $reader.Dispose() }
+            if ($null -ne $stream) { $stream.Dispose() }
+            $handle.Dispose()
+        }
+    } finally {
+        $expectedHandle.Dispose()
+    }
+}
+
 function Assert-DedicatedStateDirectory(
     [string] $Directory,
     [string] $Repository,
@@ -221,10 +357,10 @@ function Assert-DedicatedStateDirectory(
     }
     $marker = Join-Path $canonicalDirectory '.second-mind-installer-state'
     $entries = @(Get-ChildItem -LiteralPath $canonicalDirectory -Force)
-    if ([IO.File]::Exists($marker)) {
-        if ([IO.File]::ReadAllText($marker) -ne "second-mind-installer-state-v1`n") {
-            throw 'Installer state marker is invalid.'
-        }
+    $markerValue = Read-ValidatedStateMarker $marker
+    if ($null -ne $markerValue) {
+        # Read-ValidatedStateMarker already checked the exact contents through
+        # the same no-reparse handle whose identity was compared with the path.
     } elseif ($entries.Count -ne 0) {
         throw 'Installer state must be empty before first use.'
     }

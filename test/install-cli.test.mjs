@@ -11,6 +11,7 @@ import {
   finalizeBackup,
   hostPathsOverlap,
   initializeInstance,
+  installerInternals,
   InstallerError,
   isHostFilesystemRoot,
   loadSelectedInstance,
@@ -315,6 +316,105 @@ test('state roots must be dedicated before permissions or files are changed', as
   );
   assert.equal(await fsp.readFile(sentinel, 'utf8'), 'untouched\n');
   assert.deepEqual(await fsp.readdir(unrelatedState), ['keep.txt']);
+});
+
+test('installer-state markers reject symbolic and hard-linked files without touching their targets', async (t) => {
+  const setup = await fixture(t, 'state-marker-links');
+  const marker = path.join(setup.stateRoot, '.second-mind-installer-state');
+  const external = path.join(setup.root, 'external-marker.txt');
+  const markerContents = 'second-mind-installer-state-v1\n';
+  await fsp.writeFile(external, markerContents, { mode: 0o600 });
+
+  let symlinkCreated = false;
+  try {
+    await fsp.symlink(external, marker, 'file');
+    symlinkCreated = true;
+  } catch (error) {
+    if (process.platform !== 'win32' || !['EPERM', 'EACCES'].includes(error.code)) throw error;
+    t.diagnostic('Skipping the symbolic marker assertion: file symlinks are not permitted.');
+  }
+  if (symlinkCreated) {
+    await assert.rejects(
+      preflightInstaller({ ...setup.options, operation: 'init', vault: setup.vault }),
+      (error) => error.code === 'STATE_ROOT_INVALID',
+    );
+    assert.equal(await fsp.readFile(external, 'utf8'), markerContents);
+    await fsp.unlink(marker);
+  }
+
+  await fsp.link(external, marker);
+  await assert.rejects(
+    preflightInstaller({ ...setup.options, operation: 'init', vault: setup.vault }),
+    (error) => error.code === 'STATE_ROOT_INVALID',
+  );
+  assert.equal(await fsp.readFile(external, 'utf8'), markerContents);
+  assert.equal((await fsp.lstat(external, { bigint: true })).nlink, 2n);
+  await fsp.unlink(marker);
+
+  await fsp.mkdir(marker);
+  await assert.rejects(
+    preflightInstaller({ ...setup.options, operation: 'init', vault: setup.vault }),
+    (error) => error.code === 'STATE_ROOT_INVALID',
+  );
+  assert.equal(await fsp.readFile(external, 'utf8'), markerContents);
+});
+
+test('installer-state marker validation rejects a path swapped between lstat and open', async (t) => {
+  const setup = await fixture(t, 'state-marker-race');
+  const marker = path.join(setup.stateRoot, '.second-mind-installer-state');
+  const displaced = path.join(setup.stateRoot, 'displaced-marker');
+  const markerContents = 'second-mind-installer-state-v1\n';
+  await fsp.writeFile(marker, markerContents, { mode: 0o600 });
+  let replaced = false;
+  const racingFileSystem = {
+    lstat: (...arguments_) => fsp.lstat(...arguments_),
+    async open(filename, flags, mode) {
+      await fsp.rename(filename, displaced);
+      await fsp.writeFile(filename, markerContents, { mode: 0o600, flag: 'wx' });
+      replaced = true;
+      return fsp.open(filename, flags, mode);
+    },
+  };
+
+  await assert.rejects(
+    installerInternals.readInstallerStateMarker(marker, racingFileSystem),
+    (error) => error.code === 'STATE_ROOT_INVALID'
+      && /changed while it was being opened/u.test(error.message),
+  );
+  assert.equal(replaced, true);
+  assert.equal(await fsp.readFile(marker, 'utf8'), markerContents);
+  assert.equal(await fsp.readFile(displaced, 'utf8'), markerContents);
+});
+
+test('installer-state marker validation rejects a path swapped after its handle opens', {
+  skip: process.platform === 'win32',
+}, async (t) => {
+  const setup = await fixture(t, 'state-marker-post-open-race');
+  const marker = path.join(setup.stateRoot, '.second-mind-installer-state');
+  const displaced = path.join(setup.stateRoot, 'opened-marker');
+  const markerContents = 'second-mind-installer-state-v1\n';
+  await fsp.writeFile(marker, markerContents, { mode: 0o600 });
+  let lstatCalls = 0;
+  const racingFileSystem = {
+    async lstat(filename, options) {
+      lstatCalls += 1;
+      if (lstatCalls === 2) {
+        await fsp.rename(filename, displaced);
+        await fsp.writeFile(filename, markerContents, { mode: 0o600, flag: 'wx' });
+      }
+      return fsp.lstat(filename, options);
+    },
+    open: (...arguments_) => fsp.open(...arguments_),
+  };
+
+  await assert.rejects(
+    installerInternals.readInstallerStateMarker(marker, racingFileSystem),
+    (error) => error.code === 'STATE_ROOT_INVALID'
+      && /changed while it was being read/u.test(error.message),
+  );
+  assert.equal(lstatCalls, 2);
+  assert.equal(await fsp.readFile(marker, 'utf8'), markerContents);
+  assert.equal(await fsp.readFile(displaced, 'utf8'), markerContents);
 });
 
 test('read-only installer preflight resolves the Vault without creating state', async (t) => {
@@ -642,6 +742,61 @@ test('the executable preflight protocol reports a Vault without touching state',
   assert.deepEqual(await fsp.readdir(setup.stateRoot), []);
 });
 
+test('Windows PowerShell 5.1 compiles and invokes the native marker APIs', {
+  skip: process.platform !== 'win32',
+}, async () => {
+  const powershell = await fsp.readFile(path.resolve('install.ps1'), 'utf8');
+  const typeDefinition = /Add-Type -TypeDefinition @'\r?\n([\s\S]*?)\r?\n'@/u.exec(powershell)?.[1];
+  assert.ok(typeDefinition, 'the installer must contain an embedded native type definition');
+  const markerFunctions = powershell.slice(
+    powershell.indexOf('function Get-NativeFileInformation'),
+    powershell.indexOf('function Assert-DedicatedStateDirectory'),
+  );
+  assert.match(markerFunctions, /function Read-ValidatedStateMarker/u);
+  const smoke = `$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+${typeDefinition}
+'@
+${markerFunctions}
+$marker = [IO.Path]::GetTempFileName()
+try {
+    [IO.File]::WriteAllText(
+        $marker,
+        "second-mind-installer-state-v1\`n",
+        [Text.UTF8Encoding]::new($false)
+    )
+    $value = Read-ValidatedStateMarker $marker
+    if ($value -ne "second-mind-installer-state-v1\`n") {
+        throw 'The validated marker content changed.'
+    }
+    Write-Output 'native marker smoke: OK'
+} finally {
+    Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+}
+`;
+
+  const result = await new Promise((resolve, reject) => {
+    const child = spawn('powershell.exe', [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy', 'Bypass',
+      '-Command', '-',
+    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.once('error', reject);
+    child.once('exit', (code, signal) => resolve({ code, signal, stdout, stderr }));
+    child.stdin.end(smoke);
+  });
+  assert.equal(result.code, 0, result.stderr || `PowerShell exited via ${result.signal}`);
+  assert.match(result.stdout, /native marker smoke: OK/u);
+});
+
 test('host wrappers keep secrets out of command arguments and require no host Node utilities', async () => {
   const [shell, powershell] = await Promise.all([
     fsp.readFile(path.resolve('install.sh'), 'utf8'),
@@ -669,8 +824,29 @@ test('host wrappers keep secrets out of command arguments and require no host No
   assert.ok(powershell.includes('SetAccessRuleProtection($true, $false)'));
   assert.ok(powershell.includes('CreateFileW'));
   assert.ok(powershell.includes('GetFinalPathNameByHandleW'));
+  assert.ok(powershell.includes('SecondMindInstallerV2.NativePath'));
+  assert.equal(powershell.includes('SecondMindInstaller.NativePath'), false);
+  assert.ok(powershell.includes('GetFileInformationByHandle'));
+  assert.ok(powershell.includes('GetFileType'));
+  assert.ok(powershell.includes('NumberOfLinks'));
+  assert.ok(powershell.includes('FileIndexHigh'));
   assert.ok(powershell.includes('[uint32] 0x02000000'));
+  assert.ok(powershell.includes('[uint32] 0x00200000'));
+  assert.ok(powershell.includes('[uint32] 2147483648'));
+  assert.ok(powershell.includes('Read-ValidatedStateMarker'));
+  assert.doesNotMatch(powershell, /ReadAllText\(\$marker\)/u);
   assert.doesNotMatch(powershell, /ResolveLinkTarget/u);
+  const markerValidation = powershell.slice(
+    powershell.indexOf('function Read-ValidatedStateMarker'),
+    powershell.indexOf('function Assert-DedicatedStateDirectory'),
+  );
+  const expectedIdentity = markerValidation.indexOf('$expected = Get-NativeFileInformation');
+  const openedIdentity = markerValidation.indexOf('$opened = Get-NativeFileInformation');
+  const linkedIdentity = markerValidation.indexOf('$linkedAfterRead = Get-NativeFileInformation');
+  assert.ok(expectedIdentity >= 0 && expectedIdentity < openedIdentity);
+  assert.ok(openedIdentity < linkedIdentity);
+  assert.ok(markerValidation.includes('Open-NativeStateMarker $Marker -AllowMissing'));
+  assert.equal(markerValidation.includes('Get-Item'), false);
 
   const shellKnowledgeProbe = shell.slice(
     shell.indexOf('probe_knowledge_base()'),

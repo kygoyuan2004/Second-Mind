@@ -296,6 +296,121 @@ async function atomicWrite(filename, contents, mode = 0o600) {
   await fsp.chmod(filename, mode).catch(() => {});
 }
 
+function assertInstallerStateMarker(stat) {
+  if (!stat.isFile() || stat.nlink !== 1n) {
+    fail(
+      'Installer state marker must be a regular file with one hard link.',
+      'STATE_ROOT_INVALID',
+    );
+  }
+}
+
+function assertInstallerStateMarkerSize(stat) {
+  if (stat.size !== BigInt(Buffer.byteLength(STATE_MARKER_CONTENT))) {
+    fail('Installer state marker is invalid.', 'STATE_ROOT_INVALID');
+  }
+}
+
+function sameFileIdentity(left, right) {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+function noFollowFlag() {
+  const flag = fsConstants.O_NOFOLLOW;
+  if (process.platform === 'win32') {
+    // Native Windows libuv exposes no effective O_NOFOLLOW. The host wrapper
+    // validates reparse points through Win32 handles, and supported installs
+    // run this shared logic again inside the Linux installer container.
+    return Number.isSafeInteger(flag) ? flag : 0;
+  }
+  if (!Number.isSafeInteger(flag) || flag === 0) {
+    fail('The installer cannot enforce no-follow marker access.', 'STATE_ROOT_INVALID');
+  }
+  return flag;
+}
+
+async function readInstallerStateMarker(filename, fileSystem = fsp) {
+  let expected;
+  let handle;
+  try {
+    expected = await fileSystem.lstat(filename, { bigint: true });
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    fail('Installer state marker could not be inspected safely.', 'STATE_ROOT_INVALID');
+  }
+  assertInstallerStateMarker(expected);
+
+  try {
+    handle = await fileSystem.open(filename, fsConstants.O_RDONLY | noFollowFlag());
+    const opened = await handle.stat({ bigint: true });
+    assertInstallerStateMarker(opened);
+    if (!sameFileIdentity(expected, opened)) {
+      fail('Installer state marker changed while it was being opened.', 'STATE_ROOT_INVALID');
+    }
+    assertInstallerStateMarkerSize(opened);
+
+    const markerValue = await handle.readFile({ encoding: 'utf8' });
+    const [openedAfterRead, linkedAfterRead] = await Promise.all([
+      handle.stat({ bigint: true }),
+      fileSystem.lstat(filename, { bigint: true }),
+    ]);
+    assertInstallerStateMarker(openedAfterRead);
+    assertInstallerStateMarker(linkedAfterRead);
+    assertInstallerStateMarkerSize(openedAfterRead);
+    assertInstallerStateMarkerSize(linkedAfterRead);
+    if (
+      !sameFileIdentity(opened, openedAfterRead)
+      || !sameFileIdentity(opened, linkedAfterRead)
+    ) {
+      fail('Installer state marker changed while it was being read.', 'STATE_ROOT_INVALID');
+    }
+    if (markerValue !== STATE_MARKER_CONTENT) {
+      fail('Installer state marker is invalid.', 'STATE_ROOT_INVALID');
+    }
+    return markerValue;
+  } catch (error) {
+    if (error instanceof InstallerError) throw error;
+    fail('Installer state marker could not be read safely.', 'STATE_ROOT_INVALID');
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+}
+
+async function createInstallerStateMarker(filename) {
+  let handle;
+  try {
+    handle = await fsp.open(
+      filename,
+      fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | noFollowFlag(),
+      0o600,
+    );
+    const opened = await handle.stat({ bigint: true });
+    assertInstallerStateMarker(opened);
+    await handle.writeFile(STATE_MARKER_CONTENT, 'utf8');
+    await handle.chmod(0o600).catch(() => {});
+    await handle.sync();
+    const [openedAfterWrite, linkedAfterWrite] = await Promise.all([
+      handle.stat({ bigint: true }),
+      fsp.lstat(filename, { bigint: true }),
+    ]);
+    assertInstallerStateMarker(openedAfterWrite);
+    assertInstallerStateMarker(linkedAfterWrite);
+    assertInstallerStateMarkerSize(openedAfterWrite);
+    assertInstallerStateMarkerSize(linkedAfterWrite);
+    if (
+      !sameFileIdentity(opened, openedAfterWrite)
+      || !sameFileIdentity(opened, linkedAfterWrite)
+    ) {
+      fail('Installer state marker changed while it was being created.', 'STATE_ROOT_INVALID');
+    }
+  } catch (error) {
+    if (error instanceof InstallerError) throw error;
+    fail('Installer state marker could not be created safely.', 'STATE_ROOT_INVALID');
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+}
+
 function hostJoin(hostOs, ...parts) {
   const joined = platformPath(hostOs).join(...parts);
   return String(hostOs).toLowerCase().startsWith('win') ? portableWindowsPath(joined) : joined;
@@ -424,7 +539,7 @@ async function ensureStateRoot(roots, options = {}) {
   }
   await privateDirectory(roots.stateRoot);
   if (inspection.markerValue === null) {
-    await atomicWrite(path.join(roots.stateRoot, STATE_MARKER), STATE_MARKER_CONTENT);
+    await createInstallerStateMarker(path.join(roots.stateRoot, STATE_MARKER));
   }
 }
 
@@ -442,17 +557,12 @@ async function inspectStateRoot(roots, options = {}) {
   if (stat && !stat.isDirectory()) fail('Installer state path must be a directory.', 'STATE_ROOT_INVALID');
   if (!stat) return { exists: false, markerValue: null };
   const marker = path.join(roots.stateRoot, STATE_MARKER);
-  const markerValue = await fsp.readFile(marker, 'utf8').catch((error) => {
-    if (error.code === 'ENOENT') return null;
-    throw error;
-  });
+  const markerValue = await readInstallerStateMarker(marker);
   if (markerValue === null) {
     const entries = await fsp.readdir(roots.stateRoot);
     if (entries.length !== 0) {
       fail('Installer state must be an empty dedicated directory or an existing Second Mind state directory.', 'STATE_ROOT_NOT_DEDICATED');
     }
-  } else if (markerValue !== STATE_MARKER_CONTENT) {
-    fail('Installer state marker is invalid.', 'STATE_ROOT_INVALID');
   }
   return { exists: true, markerValue };
 }
@@ -1241,6 +1351,7 @@ export const installerInternals = Object.freeze({
   overlayDocument,
   parsePort,
   parseRuntimeId,
+  readInstallerStateMarker,
   validatePassword,
   validateInstanceId,
 });

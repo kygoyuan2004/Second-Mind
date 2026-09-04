@@ -560,6 +560,43 @@ test('runtime ownership helper handles nested trees without following symlinks',
   });
   assert.equal(result.uid, process.getuid?.() ?? 0);
   assert.equal(await fsp.readFile(external, 'utf8'), 'outside\n');
+  assert.equal(path.basename(result.marker), '.second-mind-volume');
+  assert.equal(await fsp.readFile(result.marker, 'utf8'), 'second-mind-runtime-volume-v1\n');
+  assert.equal((await fsp.stat(runtime)).mode & 0o777, 0o700);
+  assert.equal((await fsp.stat(result.marker)).mode & 0o777, 0o600);
+  assert.deepEqual(await ownRuntimeTree(runtime, {
+    outputUid: String(process.getuid?.() ?? 0),
+    outputGid: String(process.getgid?.() ?? 0),
+  }), result);
+});
+
+test('runtime ownership helper rejects symbolic and hard-linked volume markers', {
+  skip: process.platform === 'win32',
+}, async (t) => {
+  const setup = await fixture(t, 'ownership-marker');
+  const runtime = path.join(setup.root, 'runtime');
+  const external = path.join(setup.root, 'external.txt');
+  await fsp.mkdir(runtime);
+  await fsp.writeFile(external, 'outside\n');
+  await fsp.symlink(external, path.join(runtime, '.second-mind-volume'));
+  await assert.rejects(
+    () => ownRuntimeTree(runtime, {
+      outputUid: String(process.getuid?.() ?? 0),
+      outputGid: String(process.getgid?.() ?? 0),
+    }),
+    { code: 'RUNTIME_VOLUME_MARKER_INVALID' },
+  );
+  assert.equal(await fsp.readFile(external, 'utf8'), 'outside\n');
+  await fsp.unlink(path.join(runtime, '.second-mind-volume'));
+  await fsp.link(external, path.join(runtime, '.second-mind-volume'));
+  await assert.rejects(
+    () => ownRuntimeTree(runtime, {
+      outputUid: String(process.getuid?.() ?? 0),
+      outputGid: String(process.getgid?.() ?? 0),
+    }),
+    { code: 'RUNTIME_VOLUME_MARKER_INVALID' },
+  );
+  assert.equal(await fsp.readFile(external, 'utf8'), 'outside\n');
 });
 
 test('the executable CLI accepts noninteractive passwords only through standard input', async (t) => {

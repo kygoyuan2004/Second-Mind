@@ -61,7 +61,7 @@ test('capture CLI parses explicit destinations and rejects ambiguous arguments',
     '--chrome', '/opt/chrome',
   ]), {
     outputDir: path.resolve('tmp/release-captures'),
-    chromePath: '/opt/chrome',
+    chromePath: path.resolve('/opt/chrome'),
     help: false,
   });
   assert.equal(parseArguments(['--help']).help, true);

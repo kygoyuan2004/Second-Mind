@@ -3,6 +3,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { pathToFileURL } from 'node:url';
 import {
   benchmarkChromePdfInternals,
   createChromePdfRunner,
@@ -30,7 +31,7 @@ test('Chrome runner uses argv-only local rendering and verifies the PDF', async 
   });
   assert.deepEqual(await runner({ htmlPath, pdfPath }), { pageCount: 3 });
   assert.equal(calls.length, 2);
-  assert.equal(calls[0].args.at(-1), new URL(`file://${htmlPath}`).href);
+  assert.equal(calls[0].args.at(-1), pathToFileURL(htmlPath).href);
   assert.ok(calls[0].args.includes('--disable-background-networking'));
   assert.deepEqual(calls[1].args, [pdfPath]);
 });

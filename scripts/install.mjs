@@ -17,6 +17,8 @@ const MINIMUM_PASSWORD_LENGTH = 12;
 const MAX_PASSWORD_STDIN_BYTES = 16 * 1024;
 const STATE_MARKER = '.second-mind-installer-state';
 const STATE_MARKER_CONTENT = 'second-mind-installer-state-v1\n';
+const RUNTIME_VOLUME_MARKER = '.second-mind-volume';
+const RUNTIME_VOLUME_MARKER_CONTENT = 'second-mind-runtime-volume-v1\n';
 const INSTANCE_PATTERN = /^second-mind-[a-z0-9][a-z0-9-]{5,48}[a-z0-9]$/u;
 const COMMANDS = new Set(['init', 'doctor', 'status', 'logs', 'update', 'backup']);
 const INTERNAL_COMMANDS = new Set([
@@ -1022,15 +1024,93 @@ export async function probeKnowledgeBasePath(targetInput) {
   return { ...access, obsidianVault: true };
 }
 
-async function ownTreeEntry(filename, uid, gid) {
+async function ownTreeEntry(filename, uid, gid, skippedPath = '') {
+  if (filename === skippedPath) return;
   const stat = await fsp.lstat(filename);
   if (stat.isDirectory()) {
     for (const entry of await fsp.readdir(filename)) {
-      await ownTreeEntry(path.join(filename, entry), uid, gid);
+      await ownTreeEntry(path.join(filename, entry), uid, gid, skippedPath);
     }
   }
   if (stat.isSymbolicLink() && typeof fsp.lchown === 'function') await fsp.lchown(filename, uid, gid);
   else await fsp.chown(filename, uid, gid);
+}
+
+function assertRuntimeVolumeMarker(stat) {
+  if (!stat.isFile() || stat.nlink !== 1n) {
+    fail('Runtime volume marker must be a regular file with one hard link.',
+      'RUNTIME_VOLUME_MARKER_INVALID');
+  }
+}
+
+function sameRuntimeVolumeMarker(left, right) {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+async function openRuntimeVolumeMarker(target) {
+  const filename = path.join(target, RUNTIME_VOLUME_MARKER);
+  let expected = null;
+  let handle;
+  try {
+    expected = await fsp.lstat(filename, { bigint: true });
+    assertRuntimeVolumeMarker(expected);
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+
+  try {
+    const flags = fsConstants.O_WRONLY | fsConstants.O_NOFOLLOW |
+      (expected ? 0 : fsConstants.O_CREAT | fsConstants.O_EXCL);
+    handle = await fsp.open(filename, flags, 0o600);
+    const opened = await handle.stat({ bigint: true });
+    assertRuntimeVolumeMarker(opened);
+    if (expected && !sameRuntimeVolumeMarker(opened, expected)) {
+      fail('Runtime volume marker changed while it was being opened.',
+        'RUNTIME_VOLUME_MARKER_INVALID');
+    }
+    return { filename, handle, opened };
+  } catch (error) {
+    await handle?.close().catch(() => {});
+    if (error instanceof InstallerError) throw error;
+    fail('Runtime volume marker could not be prepared safely.',
+      'RUNTIME_VOLUME_MARKER_INVALID');
+  }
+}
+
+async function finalizeRuntimeVolumeMarker(marker, uid, gid) {
+  try {
+    const linked = await fsp.lstat(marker.filename, { bigint: true });
+    const opened = await marker.handle.stat({ bigint: true });
+    assertRuntimeVolumeMarker(linked);
+    assertRuntimeVolumeMarker(opened);
+    if (
+      !sameRuntimeVolumeMarker(linked, marker.opened) ||
+      !sameRuntimeVolumeMarker(opened, marker.opened)
+    ) {
+      fail('Runtime volume marker changed while ownership was being prepared.',
+        'RUNTIME_VOLUME_MARKER_INVALID');
+    }
+    await marker.handle.truncate(0);
+    await marker.handle.writeFile(RUNTIME_VOLUME_MARKER_CONTENT, 'utf8');
+    await marker.handle.chown(uid, gid);
+    await marker.handle.chmod(0o600);
+    await marker.handle.sync();
+    const finalLink = await fsp.lstat(marker.filename, { bigint: true });
+    const finalOpened = await marker.handle.stat({ bigint: true });
+    assertRuntimeVolumeMarker(finalLink);
+    assertRuntimeVolumeMarker(finalOpened);
+    if (
+      !sameRuntimeVolumeMarker(finalLink, marker.opened) ||
+      !sameRuntimeVolumeMarker(finalOpened, marker.opened)
+    ) {
+      fail('Runtime volume marker changed before ownership was committed.',
+        'RUNTIME_VOLUME_MARKER_INVALID');
+    }
+  } catch (error) {
+    if (error instanceof InstallerError) throw error;
+    fail('Runtime volume marker could not be finalized safely.',
+      'RUNTIME_VOLUME_MARKER_INVALID');
+  }
 }
 
 export async function ownRuntimeTree(targetInput, options = {}) {
@@ -1039,8 +1119,15 @@ export async function ownRuntimeTree(targetInput, options = {}) {
   const gid = parseRuntimeId(options.outputGid, 'Runtime GID');
   const stat = await fsp.stat(target).catch(() => null);
   if (!stat?.isDirectory()) fail('Runtime data path must be a directory.', 'RUNTIME_PATH_INVALID');
-  await ownTreeEntry(target, uid, gid);
-  return { path: target, uid, gid };
+  const marker = await openRuntimeVolumeMarker(target);
+  try {
+    await ownTreeEntry(target, uid, gid, marker.filename);
+    await fsp.chmod(target, 0o700);
+    await finalizeRuntimeVolumeMarker(marker, uid, gid);
+    return { path: target, uid, gid, marker: marker.filename };
+  } finally {
+    await marker.handle.close().catch(() => {});
+  }
 }
 
 export async function finalizeBackup(rootInput) {

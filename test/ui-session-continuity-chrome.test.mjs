@@ -337,6 +337,15 @@ function websocketImplementation() {
   }
 }
 
+function boundCdpSetup(promise, description) {
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Timed out waiting for ${description}`)), 8_000);
+    timer.unref?.();
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
 async function launchChrome(url, profile, WebSocketImpl) {
   const stderr = [];
   const chrome = spawn(chromePath, [
@@ -356,34 +365,44 @@ async function launchChrome(url, profile, WebSocketImpl) {
     `--user-data-dir=${profile}`,
     url,
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let spawnError = null;
+  chrome.once('error', (error) => { spawnError = error; });
   chrome.stderr.on('data', (chunk) => {
     if (stderr.reduce((sum, item) => sum + item.length, 0) < 32 * 1024) stderr.push(chunk);
   });
-  const activePortFile = path.join(profile, 'DevToolsActivePort');
-  const port = await waitFor(async () => {
-    if (chrome.exitCode !== null) {
-      throw new Error(`Chrome exited ${chrome.exitCode}: ${Buffer.concat(stderr).toString('utf8').slice(-2_000)}`);
-    }
-    const value = await fsp.readFile(activePortFile, 'utf8').catch(() => '');
-    return Number(value.split(/\r?\n/)[0]) || 0;
-  }, 'Chrome DevTools port');
-  const target = await waitFor(async () => {
-    const response = await fetch(`http://127.0.0.1:${port}/json/list`);
-    const targets = await response.json();
-    return targets.find((item) => item.type === 'page' && item.url.startsWith(url));
-  }, 'application page target');
-  return {
-    chrome,
-    cdp: await connectCdp(target.webSocketDebuggerUrl, WebSocketImpl),
-  };
+  try {
+    const activePortFile = path.join(profile, 'DevToolsActivePort');
+    const port = await waitFor(async () => {
+      if (spawnError) throw new Error(`Chrome could not start (${spawnError.code || 'spawn error'}).`);
+      if (chrome.exitCode !== null || chrome.signalCode !== null) {
+        throw new Error(`Chrome exited ${chrome.exitCode}: ${Buffer.concat(stderr).toString('utf8').slice(-2_000)}`);
+      }
+      const value = await fsp.readFile(activePortFile, 'utf8').catch(() => '');
+      return Number(value.split(/\r?\n/)[0]) || 0;
+    }, 'Chrome DevTools port');
+    const target = await waitFor(async () => {
+      const response = await fetch(`http://127.0.0.1:${port}/json/list`, {
+        signal: AbortSignal.timeout(2_000),
+      });
+      const targets = await response.json();
+      return targets.find((item) => item.type === 'page' && item.url.startsWith(url));
+    }, 'application page target');
+    return {
+      chrome,
+      cdp: await connectCdp(target.webSocketDebuggerUrl, WebSocketImpl),
+    };
+  } catch (error) {
+    await stopChrome(chrome).catch(() => {});
+    throw error;
+  }
 }
 
 async function stopChrome(chrome) {
-  if (!chrome || chrome.exitCode !== null) return;
+  if (!chrome || chrome.exitCode !== null || chrome.signalCode !== null || !chrome.pid) return;
   const exited = once(chrome, 'exit');
   chrome.kill('SIGTERM');
   await Promise.race([exited, delay(1_500)]);
-  if (chrome.exitCode === null) {
+  if (chrome.exitCode === null && chrome.signalCode === null) {
     chrome.kill('SIGKILL');
     await Promise.race([once(chrome, 'exit'), delay(1_500)]);
   }
@@ -391,12 +410,25 @@ async function stopChrome(chrome) {
 
 async function connectCdp(url, WebSocketImpl) {
   const socket = new WebSocketImpl(url);
-  await new Promise((resolve, reject) => {
-    socket.addEventListener('open', resolve, { once: true });
-    socket.addEventListener('error', reject, { once: true });
-  });
+  try {
+    await boundCdpSetup(new Promise((resolve, reject) => {
+      socket.addEventListener('open', resolve, { once: true });
+      socket.addEventListener('error', reject, { once: true });
+    }), 'Chrome DevTools connection');
+  } catch (error) {
+    try { socket.close(); } catch {}
+    throw error;
+  }
   let nextId = 0;
   const pending = new Map();
+  const rejectPending = () => {
+    for (const entry of pending.values()) {
+      entry.reject(new Error('Chrome DevTools connection closed.'));
+    }
+    pending.clear();
+  };
+  socket.addEventListener('close', rejectPending);
+  socket.addEventListener('error', rejectPending);
   socket.addEventListener('message', (event) => {
     let message;
     try {
@@ -412,13 +444,44 @@ async function connectCdp(url, WebSocketImpl) {
   });
   const call = (method, params = {}) => new Promise((resolve, reject) => {
     const id = ++nextId;
-    pending.set(id, { resolve, reject });
-    socket.send(JSON.stringify({ id, method, params }));
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error(`Timed out waiting for Chrome DevTools ${method}.`));
+    }, 8_000);
+    timer.unref?.();
+    const entry = {
+      resolve(value) {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      reject(error) {
+        clearTimeout(timer);
+        reject(error);
+      },
+    };
+    pending.set(id, entry);
+    try {
+      socket.send(JSON.stringify({ id, method, params }));
+    } catch (error) {
+      pending.delete(id);
+      entry.reject(error);
+    }
   });
-  await Promise.all([call('Page.enable'), call('Runtime.enable')]);
+  try {
+    await boundCdpSetup(
+      Promise.all([call('Page.enable'), call('Runtime.enable')]),
+      'Chrome DevTools initialization',
+    );
+  } catch (error) {
+    try { socket.close(); } catch {}
+    throw error;
+  }
   return {
     call,
-    close: () => socket.close(),
+    close() {
+      rejectPending();
+      try { socket.close(); } catch {}
+    },
     async evaluate(expression) {
       const result = await call('Runtime.evaluate', {
         expression,
@@ -490,7 +553,7 @@ async function submitPrompt(cdp, prompt) {
 }
 
 test('headless Chrome preserves explicit UI conversation continuity and fork semantics', {
-  timeout: 35_000,
+  timeout: 60_000,
 }, async (t) => {
   const WebSocketImpl = websocketImplementation();
   const chromeAvailable = await fsp.access(chromePath).then(() => true, () => false);

@@ -195,17 +195,30 @@ jobs:
           RUNTIME_GID: ${{ steps.fixture.outputs.runtime_gid }}
         shell: bash
         run: |
+          set -Eeuo pipefail
+          phase='initialize runtime volume'
+          report_failure() {
+            status=$?
+            trap - ERR
+            echo "::error title=Container release gate::${phase} failed."
+            exit "$status"
+          }
           compose=(docker compose --project-name second-mind-ci --env-file "$COMPOSE_ENV" -f compose.yaml -f compose.secrets.yaml)
-          cleanup() { "${compose[@]}" down --volumes --remove-orphans; }
+          cleanup() { "${compose[@]}" down --volumes --remove-orphans || true; }
+          trap report_failure ERR
           trap cleanup EXIT
           docker volume create \
             --label com.docker.compose.project=second-mind-ci \
             --label com.docker.compose.volume=vaultmind-data \
             second-mind-ci_vaultmind-data >/dev/null
           docker run --rm --user 0:0 \
+            --mount type=bind,source="$GITHUB_WORKSPACE",target=/workspace,readonly \
             --mount type=volume,source=second-mind-ci_vaultmind-data,target=/app/data \
-            second-mind:ci chown -R "${RUNTIME_UID}:${RUNTIME_GID}" /app/data
+            second-mind:ci node /workspace/scripts/install.mjs internal-own-tree \
+            --source /app/data --output-uid "$RUNTIME_UID" --output-gid "$RUNTIME_GID"
+          phase='start Compose application'
           "${compose[@]}" up -d --no-build
+          phase='wait for live and ready health endpoints'
           ready=false
           for _ in $(seq 1 60); do
             if curl --fail --silent --show-error --max-time 5 http://127.0.0.1:18786/health/live >/dev/null \
@@ -240,6 +253,7 @@ jobs:
             fi
             exit 1
           fi
+          phase='verify application and release metadata'
           curl --fail --silent --show-error --max-time 5 http://127.0.0.1:18786/ > /dev/null
           container_id=$("${compose[@]}" ps -q app)
           docker inspect "$container_id" > "$FIXTURE_ROOT/inspect.json"

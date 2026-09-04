@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -142,7 +142,7 @@
           <p class="boundary-note">Current limit: one task binds to one knowledge base. There is no cross-base federated search, and this is not an arbitrary file browser.</p>
         </div>
       </div>
-      <div class="shell kb-workbench" aria-label="Knowledge base isolation flow">
+      <div class="shell kb-workbench" role="group" aria-label="Knowledge base isolation flow">
         <div class="kb-rail">
           <p class="workbench-label">Allowed mount boundary</p>
           <code>/vaults</code>
@@ -277,7 +277,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre>
           </div>
         </div>
       </div>
-      <div class="shell operations-strip" aria-label="Post-install operations">
+      <div class="shell operations-strip" role="group" aria-label="Post-install operations">
         <span>Use the same entry point after setup:</span>
         <code>doctor</code><code>status</code><code>logs</code><code>update</code><code>backup</code>
       </div>

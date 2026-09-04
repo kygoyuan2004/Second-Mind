@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
@@ -142,7 +142,7 @@
           <p class="boundary-note">当前限制：一次任务只绑定一个知识库，不提供跨库联合检索，也不是任意文件浏览器。</p>
         </div>
       </div>
-      <div class="shell kb-workbench" aria-label="多知识库隔离流程">
+      <div class="shell kb-workbench" role="group" aria-label="多知识库隔离流程">
         <div class="kb-rail">
           <p class="workbench-label">允许的挂载边界</p>
           <code>/vaults</code>
@@ -277,7 +277,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre>
           </div>
         </div>
       </div>
-      <div class="shell operations-strip" aria-label="安装后运维命令">
+      <div class="shell operations-strip" role="group" aria-label="安装后运维命令">
         <span>安装后使用同一个入口：</span>
         <code>doctor</code><code>status</code><code>logs</code><code>update</code><code>backup</code>
       </div>

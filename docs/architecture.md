@@ -1,6 +1,6 @@
 # Second Mind architecture
 
-Second Mind is a single-process Node.js service with server-served static assets and JSON/SSE APIs. It runs one authenticated administrator experience over one or more filesystem knowledge bases. Docker Compose is the supported default deployment, but the application can also run directly under Node.js 22 when the operator provides equivalent filesystem and secret isolation.
+Second Mind is a single-process Node.js service with server-served static assets and JSON/SSE APIs. It runs one authenticated administrator experience over one or more filesystem knowledge bases. Docker Compose is the supported default deployment, but the application can also run directly under Node.js `^22.22.0` or `>=24.8.0` when the operator provides equivalent filesystem and secret isolation.
 
 ## Component map
 

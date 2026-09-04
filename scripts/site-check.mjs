@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { HtmlValidate } from 'html-validate';
 import {
   REQUIRED_SCREENSHOTS,
   REPOSITORY_ROOT,
@@ -9,10 +10,18 @@ import {
   SITE_SOURCE,
   buildSite,
 } from './site-build.mjs';
+import {
+  classifyExternalLink,
+  validateExternalLinks,
+} from './site-link-check.mjs';
 
 const allowMissingScreenshots = process.argv.includes('--allow-missing-screenshots');
 const failures = [];
 const warnings = [];
+const htmlValidator = new HtmlValidate({
+  root: true,
+  extends: ['html-validate:recommended'],
+});
 const SCREENSHOT_DIMENSIONS = new Map([
   ['second-mind-qa.png', [1440, 1050]],
   ['second-mind-execution.png', [1440, 1050]],
@@ -331,6 +340,16 @@ function validateClaims(html, htmlRelative, locale) {
   }
 }
 
+async function validateHtmlSyntax(html, htmlRelative) {
+  const report = await htmlValidator.validateString(html, `dist/${htmlRelative}`);
+  for (const result of report.results) {
+    for (const message of result.messages) {
+      const detail = message.message.replace(/\s+/g, ' ').trim();
+      fail(`${htmlRelative}:${message.line}:${message.column} [${message.ruleId}] ${detail}`);
+    }
+  }
+}
+
 function sectionSyncKeys(html) {
   return tags(html, 'section')
     .map((tag) => attribute(tag, 'data-sync-key'))
@@ -487,9 +506,11 @@ async function main() {
     ['index.html', await readFile(path.join(SITE_OUTPUT, 'index.html'), 'utf8')],
     ['en/index.html', await readFile(path.join(SITE_OUTPUT, 'en', 'index.html'), 'utf8')],
   ]);
+  const externalReferences = new Set();
 
   for (const [htmlRelative, html] of htmlByPath) {
     const locale = htmlRelative === 'index.html' ? 'zh-CN' : 'en';
+    await validateHtmlSyntax(html, htmlRelative);
     validateMetadata(html, htmlRelative, locale);
     validateAccessibility(html, htmlRelative);
     validateClaims(html, htmlRelative, locale);
@@ -518,8 +539,23 @@ async function main() {
         continue;
       }
       validateFragment(reference, html, htmlRelative);
-      await validateReference(reference, htmlRelative, htmlByPath, 'link');
+      if (isExternalReference(reference)) {
+        const target = classifyExternalLink(reference);
+        if (target.kind === 'site') {
+          await validateReference(target.reference, htmlRelative, htmlByPath, 'link');
+        } else if (target.kind === 'network') {
+          externalReferences.add(target.url);
+        } else {
+          fail(`${htmlRelative}: ${target.message}`);
+        }
+      } else {
+        await validateReference(reference, htmlRelative, htmlByPath, 'link');
+      }
     }
+  }
+
+  for (const issue of await validateExternalLinks(externalReferences)) {
+    fail(`external link check: ${issue}`);
   }
 
   const chineseKeys = sectionSyncKeys(htmlByPath.get('index.html'));

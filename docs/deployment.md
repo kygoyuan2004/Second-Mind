@@ -178,7 +178,7 @@ Use a unique `COMPOSE_PROJECT_NAME` for each manual instance and verify the proj
 
 ## Native Node.js and systemd
 
-Node.js 22 or newer is required. Native operation is an advanced manual path. It must reproduce authentication secret permissions, data/Vault separation, service-user ownership, loopback binding, process supervision, and backup behavior.
+Node.js `^22.22.0` or `>=24.8.0` is required. Native operation is an advanced manual path. It must reproduce authentication secret permissions, data/Vault separation, service-user ownership, loopback binding, process supervision, and backup behavior.
 
 The files under `deploy/systemd/` are legacy single-base templates, not installer output. They still start the compatibility entry point and require every placeholder to be reviewed. They do not create the Docker-first multi-instance layout, configure the managed Provider UI, or implement backup/update/restore. Use `src/bootstrap.mjs` for the unified managed bootstrap when designing a new native service.
 

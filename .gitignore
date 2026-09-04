@@ -17,8 +17,12 @@ vault/*
 # Dependencies and generated assets
 node_modules/
 public/vendor/
+dist/
 coverage/
 .nyc_output/
+# Locally generated benchmark/review exports may contain private paths.
+reports/
+.local/
 
 # Local sync/client state
 .obsidian/

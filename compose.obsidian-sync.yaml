@@ -14,7 +14,7 @@ services:
       dockerfile: docker/obsidian-sync.Dockerfile
       args:
         OBSIDIAN_HEADLESS_VERSION: "${OBSIDIAN_HEADLESS_VERSION:-0.0.14}"
-    image: vaultmind-obsidian-sync:local
+    image: second-mind-obsidian-sync:local
     pull_policy: never
     restart: unless-stopped
     init: true
@@ -32,7 +32,7 @@ services:
       - --continuous
     volumes:
       - type: bind
-        source: "${VAULT_HOST_PATH:-./vault}"
+        source: "${KNOWLEDGE_BASE_HOST_PATH:-./vault}"
         target: /vault
         bind:
           create_host_path: false
@@ -52,6 +52,4 @@ services:
 
 volumes:
   obsidian-sync-config:
-    name: vaultmind-obsidian-sync-config
   obsidian-sync-vault-state:
-    name: vaultmind-obsidian-sync-vault-state

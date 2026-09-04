@@ -3,19 +3,26 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  verify:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  node:
+    name: Node 22 · ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -26,10 +33,65 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm run verify
-      - run: npm audit --audit-level=high
-      - name: Evaluate the synthetic lexical baseline
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check source and public contracts
+        run: npm run check
+      - name: Run offline tests
+        run: npm test
+      - name: Parse POSIX installer
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash -n install.sh
+      - name: Parse PowerShell installer with PowerShell 7
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path ./install.ps1).Path,
+            [ref] $tokens,
+            [ref] $errors
+          ) | Out-Null
+          if ($errors.Count -ne 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+      - name: Parse PowerShell installer with Windows PowerShell 5.1
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path ./install.ps1).Path,
+            [ref] $tokens,
+            [ref] $errors
+          ) | Out-Null
+          if ($errors.Count -ne 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+      - name: Scan publishable worktree
+        if: runner.os == 'Linux'
+        run: npm run security:scan
+      - name: Check generated GitHub Pages site
+        if: runner.os == 'Linux'
+        run: npm run site:check
+      - name: Install screenshot OCR language data
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes \
+            tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim
+      - name: Scan canonical screenshots with OCR
+        if: runner.os == 'Linux'
+        run: npm run security:ocr
+      - name: Audit production dependencies
+        if: runner.os == 'Linux'
+        run: npm audit --omit=dev --audit-level=high
+      - name: Evaluate synthetic lexical retrieval
+        if: runner.os == 'Linux'
         run: >-
           npm run eval --
           --vault examples/demo-vault
@@ -37,13 +99,181 @@ jobs:
           --k 3
           --min-recall 1
 
-  container:
+  history:
+    name: Full-history secret scan
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Use Node.js 22
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+      - name: Scan every reachable ref with pinned Gitleaks
+        run: npm run security:history
+
+  container:
+    name: Compose build and isolated health smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: docker compose config --quiet
-      - run: docker build --tag second-mind:ci .
+      - name: Use Node.js 22
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+      - name: Prepare public synthetic fixture
+        id: fixture
+        shell: bash
+        run: |
+          fixture_root="${RUNNER_TEMP}/second-mind-container-smoke"
+          vault_root="${fixture_root}/vaults"
+          secret_root="${fixture_root}/secrets"
+          runtime_uid="$(id -u)"
+          runtime_gid="$(id -g)"
+          mkdir -p "${vault_root}/Demo Notes/.obsidian" "${secret_root}"
+          printf '# Offline demo\n\ncontainerhealthmarker is synthetic.\n' > "${vault_root}/Demo Notes/Welcome.md"
+          chmod -R u+rwX,go-rwx "${vault_root}"
+          SECRET_ROOT="${secret_root}" node --input-type=module -e "
+            import crypto from 'node:crypto';
+            import fs from 'node:fs';
+            const root = process.env.SECRET_ROOT;
+            for (const name of [
+              'admin_password',
+              'session_secret',
+              'llm_api_key',
+              'embedding_api_key',
+              'web_search_api_key',
+              'responses_api_key',
+            ]) {
+              fs.writeFileSync(root + '/' + name, 'ci-' + crypto.randomBytes(48).toString('hex'));
+            }
+          "
+          chmod 600 "${secret_root}"/*
+          env_file="${fixture_root}/compose.env"
+          {
+            printf 'SECOND_MIND_IMAGE=second-mind:ci\n'
+            printf 'KNOWLEDGE_BASE_HOST_PATH=%s\n' "${vault_root}"
+            printf 'VAULTMIND_BIND_IP=127.0.0.1\n'
+            printf 'VAULTMIND_PORT=18786\n'
+            printf 'VAULTMIND_UID=%s\n' "${runtime_uid}"
+            printf 'VAULTMIND_GID=%s\n' "${runtime_gid}"
+            printf 'ADMIN_PASSWORD_SECRET_PATH=%s/admin_password\n' "${secret_root}"
+            printf 'SESSION_SECRET_SECRET_PATH=%s/session_secret\n' "${secret_root}"
+            printf 'LLM_API_KEY_SECRET_PATH=%s/llm_api_key\n' "${secret_root}"
+            printf 'EMBEDDING_API_KEY_SECRET_PATH=%s/embedding_api_key\n' "${secret_root}"
+            printf 'WEB_SEARCH_API_KEY_SECRET_PATH=%s/web_search_api_key\n' "${secret_root}"
+            printf 'BAILIAN_RESPONSES_FALLBACK_API_KEY_SECRET_PATH=%s/responses_api_key\n' "${secret_root}"
+          } > "${env_file}"
+          chmod 600 "${env_file}"
+          {
+            echo "root=${fixture_root}"
+            echo "env_file=${env_file}"
+            echo "runtime_uid=${runtime_uid}"
+            echo "runtime_gid=${runtime_gid}"
+          } >> "$GITHUB_OUTPUT"
+      - name: Validate Compose and build allowlisted context
+        env:
+          COMPOSE_ENV: ${{ steps.fixture.outputs.env_file }}
+        run: |
+          docker compose --project-name second-mind-ci --env-file "$COMPOSE_ENV" \
+            -f compose.yaml -f compose.secrets.yaml config --quiet
+          docker compose --project-name second-mind-ci --env-file "$COMPOSE_ENV" \
+            -f compose.yaml -f compose.secrets.yaml build --pull app
+      - name: Start and verify live container
+        env:
+          COMPOSE_ENV: ${{ steps.fixture.outputs.env_file }}
+          FIXTURE_ROOT: ${{ steps.fixture.outputs.root }}
+          RUNTIME_UID: ${{ steps.fixture.outputs.runtime_uid }}
+          RUNTIME_GID: ${{ steps.fixture.outputs.runtime_gid }}
+        shell: bash
+        run: |
+          compose=(docker compose --project-name second-mind-ci --env-file "$COMPOSE_ENV" -f compose.yaml -f compose.secrets.yaml)
+          cleanup() { "${compose[@]}" down --volumes --remove-orphans; }
+          trap cleanup EXIT
+          docker volume create \
+            --label com.docker.compose.project=second-mind-ci \
+            --label com.docker.compose.volume=vaultmind-data \
+            second-mind-ci_vaultmind-data >/dev/null
+          docker run --rm --user 0:0 \
+            --mount type=volume,source=second-mind-ci_vaultmind-data,target=/app/data \
+            second-mind:ci chown -R "${RUNTIME_UID}:${RUNTIME_GID}" /app/data
+          "${compose[@]}" up -d --no-build
+          ready=false
+          for _ in $(seq 1 60); do
+            if curl --fail --silent --show-error --max-time 5 http://127.0.0.1:18786/health/live >/dev/null \
+              && curl --fail --silent --show-error --max-time 5 http://127.0.0.1:18786/health/ready >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          if [[ $ready != true ]]; then
+            "${compose[@]}" ps
+            "${compose[@]}" logs --no-color --tail 200 app > "$FIXTURE_ROOT/app.log" 2>&1 || true
+            if FIXTURE_ROOT="$FIXTURE_ROOT" node --input-type=module -e "
+              import fs from 'node:fs';
+              const root = process.env.FIXTURE_ROOT;
+              const logs = fs.readFileSync(root + '/app.log', 'utf8');
+              for (const name of [
+                'admin_password',
+                'session_secret',
+                'llm_api_key',
+                'embedding_api_key',
+                'web_search_api_key',
+                'responses_api_key',
+              ]) {
+                const secret = fs.readFileSync(root + '/secrets/' + name, 'utf8');
+                if (secret && logs.includes(secret)) process.exit(1);
+              }
+            " 2>/dev/null; then
+              cat "$FIXTURE_ROOT/app.log"
+            else
+              echo 'Container logs contained a synthetic secret and were withheld.'
+            fi
+            exit 1
+          fi
+          curl --fail --silent --show-error --max-time 5 http://127.0.0.1:18786/ > /dev/null
+          container_id=$("${compose[@]}" ps -q app)
+          docker inspect "$container_id" > "$FIXTURE_ROOT/inspect.json"
+          docker history --no-trunc second-mind:ci > "$FIXTURE_ROOT/history.txt"
+          "${compose[@]}" logs --no-color app > "$FIXTURE_ROOT/app.log" 2>&1
+          FIXTURE_ROOT="$FIXTURE_ROOT" node --input-type=module -e "
+            import fs from 'node:fs';
+            const root = process.env.FIXTURE_ROOT;
+            const inspect = fs.readFileSync(root + '/inspect.json', 'utf8');
+            const history = fs.readFileSync(root + '/history.txt', 'utf8');
+            const logs = fs.readFileSync(root + '/app.log', 'utf8');
+            for (const name of [
+              'admin_password',
+              'session_secret',
+              'llm_api_key',
+              'embedding_api_key',
+              'web_search_api_key',
+              'responses_api_key',
+            ]) {
+              const secret = fs.readFileSync(root + '/secrets/' + name, 'utf8');
+              if (!secret) {
+                throw new Error('A synthetic file-backed secret was unexpectedly empty.');
+              }
+              if (inspect.includes(secret) || history.includes(secret) || logs.includes(secret)) {
+                throw new Error('A file-backed secret reached release diagnostics or container metadata.');
+              }
+            }
+          "
+
+  publish:
+    name: Publish verified multi-architecture image
+    if: github.event_name == 'push'
+    needs: [node, history, container]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/container.yml

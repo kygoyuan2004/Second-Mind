@@ -5,7 +5,7 @@
 # marked UNLICENSED. This Dockerfile is an installation recipe, not permission
 # to redistribute the resulting image or the upstream package.
 
-ARG NODE_IMAGE=node:22-bookworm-slim
+ARG NODE_IMAGE=node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
 FROM ${NODE_IMAGE}
 
 ARG OBSIDIAN_HEADLESS_VERSION=0.0.14

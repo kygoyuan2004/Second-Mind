@@ -1,0 +1,4 @@
+# These two findings are immutable historical test fixtures from commit 36381b4.
+# Current fixtures use an explicit non-secret marker; do not broaden this allowlist.
+36381b4a0bef10c1606d1ff86fef9f65ea30e2e6:test/auth.test.mjs:generic-api-key:8
+36381b4a0bef10c1606d1ff86fef9f65ea30e2e6:test/server.test.mjs:generic-api-key:40

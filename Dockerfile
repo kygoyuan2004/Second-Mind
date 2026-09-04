@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-ARG NODE_IMAGE=node:22-bookworm-slim
+ARG NODE_IMAGE=node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
 
 FROM ${NODE_IMAGE} AS dependencies
 WORKDIR /app
@@ -17,18 +17,21 @@ RUN --mount=type=cache,target=/root/.npm \
 FROM ${NODE_IMAGE} AS runtime
 
 LABEL org.opencontainers.image.title="Second-Mind" \
-      org.opencontainers.image.description="Self-hosted, source-grounded Obsidian knowledge assistant"
+      org.opencontainers.image.description="Self-hosted, source-grounded Obsidian knowledge assistant" \
+      org.opencontainers.image.source="https://github.com/kygoyuan2004/Second-Mind" \
+      org.opencontainers.image.licenses="MIT"
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=8787 \
     DATA_DIR=/app/data \
     PUBLIC_DIR=/app/public \
-    VAULT_PATH=/vault
+    VAULT_PATH=/vaults \
+    KNOWLEDGE_BASE_ALLOWED_ROOTS=/vaults
 
 WORKDIR /app
 
-RUN mkdir -p /app/data /vault && chown -R node:node /app /vault
+RUN mkdir -p /app/data /vaults && chown -R node:node /app /vaults
 
 COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
 # Copy only runtime code and browser assets. In particular, the optional
@@ -49,4 +52,4 @@ STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=30s --timeout=5s --start-period=2m --retries=10 \
   CMD ["node", "-e", "fetch(`http://127.0.0.1:${process.env.PORT || 8787}/health/ready`).then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));"]
 
-CMD ["node", "src/server.mjs"]
+CMD ["node", "src/bootstrap.mjs"]

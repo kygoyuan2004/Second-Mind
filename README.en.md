@@ -189,6 +189,15 @@ npm run site:check
 npm run verify
 ```
 
+Release screenshots use Chrome for Testing `134.0.6998.88` as the reproducible capture baseline, not as a general browser-compatibility limit. CI verifies the official Linux archive with SHA-256 `99f05b875209cdbf7490dc431a525fd373788521fb9e8aca68c761fc5fc400e5`:
+
+```bash
+npm run docs:screenshots -- --chrome /path/to/chrome
+npm run security:ocr
+```
+
+The capture tool connects only to its own isolated loopback service, uses a synthetic Vault and mock LLM, and rejects remote requests. It emits three `1440x1050`, two `1280x960`, and one `360x800` PNG at fixed viewports, strips `tEXt`, `zTXt`, `iTXt`, `tIME`, `eXIf`, and `pHYs` metadata, and requires the OCR check before publication.
+
 Linux release gates also cover Compose configuration, image build, isolated container liveness and readiness, browser E2E, KaTeX regressions, image history and environment inspection, and screenshot OCR and metadata checks.
 
 ## Documentation

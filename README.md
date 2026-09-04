@@ -189,6 +189,15 @@ npm run site:check
 npm run verify
 ```
 
+发布截图使用 Chrome for Testing `134.0.6998.88` 作为可复现的采集基线（不是一般浏览器兼容性限制）；CI 使用的官方 Linux archive SHA-256 是 `99f05b875209cdbf7490dc431a525fd373788521fb9e8aca68c761fc5fc400e5`：
+
+```bash
+npm run docs:screenshots -- --chrome /path/to/chrome
+npm run security:ocr
+```
+
+截图器只连接它启动的隔离回环服务，使用合成 Vault 与 mock LLM，并拒绝远程请求。它固定生成三张 `1440x1050`、两张 `1280x960` 和一张 `360x800` PNG，移除 `tEXt`、`zTXt`、`iTXt`、`tIME`、`eXIf`、`pHYs` metadata；提交前须再运行 OCR 检查。
+
 Linux 发布门禁还执行 Compose config、镜像 build、隔离容器的 `health/live` 与 `health/ready`、浏览器 E2E、KaTeX 回归、镜像 history/inspect，以及截图 OCR/metadata 检查。
 
 ## 文档

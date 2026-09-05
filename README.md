@@ -1,4 +1,10 @@
-# Second Mind
+<p align="center">
+  <a href="docs/assets/second-mind-hero.png">
+    <img src="docs/assets/second-mind-hero.png" alt="Second-Mind — self-hosted AI knowledge workspace for an Obsidian Vault" width="100%">
+  </a>
+</p>
+
+<h1 align="center">Second-Mind</h1>
 
 [English](README.en.md) · [在线网站](https://kygoyuan2004.github.io/Second-Mind/) · [Windows](docs/quickstart-windows.md) · [macOS](docs/quickstart-macos.md) · [Linux](docs/quickstart-linux.md) · [安全边界](docs/security.md)
 

@@ -232,6 +232,10 @@ async function createKnowledgeApplication() {
           });
           return;
         }
+        if (request.method === 'GET' && url.pathname === '/api/knowledge/resolve') {
+          json(response, 200, { path: url.searchParams.get('path'), knowledgeBaseId });
+          return;
+        }
         if (request.method === 'GET' && url.pathname === '/api/knowledge/file') {
           const expectedPath = `${knowledgeBaseId}-note.md`;
           if (url.searchParams.get('path') !== expectedPath) {

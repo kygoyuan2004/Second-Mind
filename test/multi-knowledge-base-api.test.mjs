@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { KnowledgeBaseRegistry } from '../src/knowledge-base-registry.mjs';
 import { createApp } from '../src/server.mjs';
 import { temporaryProject } from './helpers.mjs';
+import { VaultPathPolicy } from '../src/path-policy.mjs';
+import { resolveSource } from '../src/source-resolver.mjs';
 
 const projectRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const ADMIN_PASSWORD = 'correct horse battery staple';
@@ -31,6 +33,8 @@ function createContextFactory() {
   let taskSequence = 0;
 
   const factory = async (entry) => {
+    const sourcePolicy = new VaultPathPolicy(entry.rootPath, ['.obsidian']);
+    await sourcePolicy.initialize();
     const noteNames = (await fsp.readdir(entry.rootPath)).filter((name) => name.endsWith('.md'));
     const notes = await Promise.all(noteNames.map(async (name) => ({
       path: name,
@@ -88,6 +92,10 @@ function createContextFactory() {
     };
     const store = {
       ready: Promise.resolve(),
+      resolveSource: (reference) => resolveSource(reference, {
+        existingFile: (filename) => sourcePolicy.existingFile(filename),
+        walk: () => sourcePolicy.walk(),
+      }),
       async getDraft(userId, id) {
         const draft = drafts.get(String(id));
         if (!draft || userId !== 'admin') {
@@ -418,6 +426,14 @@ test('authenticated HTTP routing isolates searches and identifiers across two kn
   assert.equal(bases.body.defaultKnowledgeBaseId, 'alpha');
   assert.deepEqual(bases.body.knowledgeBases.map((entry) => entry.knowledgeBaseId), ['alpha', 'beta']);
   assertNoAbsolutePaths(bases.body, value);
+
+  const alphaSource = await requestJson(value.base, '/api/knowledge/resolve?path=Alpha-only&knowledgeBaseId=alpha', { headers: readHeaders });
+  assert.equal(alphaSource.response.status, 200);
+  assert.equal(alphaSource.body.path, 'Alpha-only.md');
+  assert.equal(alphaSource.body.knowledgeBaseId, 'alpha');
+  const wrongSourceBase = await requestJson(value.base, '/api/knowledge/resolve?path=Alpha-only&knowledgeBaseId=beta', { headers: readHeaders });
+  assert.equal(wrongSourceBase.response.status, 404);
+  assertNoAbsolutePaths(alphaSource.body, value);
 
   const defaultStatus = await requestJson(value.base, '/api/knowledge/status', { headers: readHeaders });
   assert.equal(defaultStatus.body.knowledgeBaseId, 'alpha');

@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { sourceBrowser } from './source-browser-helper.mjs';
 
 const require = createRequire(import.meta.url);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -119,7 +120,7 @@ async function requestBody(request) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-async function createMockApplication() {
+async function createMockApplication(options = {}) {
   const state = {
     authenticated: false,
     taskBodies: [],
@@ -154,6 +155,10 @@ async function createMockApplication() {
         return;
       }
       if (request.method === 'GET' && url.pathname === '/api/knowledge/bases') {
+        if (options.missingBases) {
+          json(response, 404, { error: 'NOT_FOUND', message: 'API route not found.' });
+          return;
+        }
         json(response, 200, {
           revision: 'browser-registry-1',
           defaultKnowledgeBaseId: 'default',
@@ -310,6 +315,18 @@ function delay(milliseconds) {
     timer.unref?.();
   });
 }
+
+test('new frontend explains a missing legacy backend route and offers reconnection', { timeout: 20_000 }, async (t) => {
+  const application = await createMockApplication({ missingBases: true });
+  application.state.authenticated = true;
+  t.after(() => application.close());
+  const browser = await sourceBrowser(t, application.url);
+  if (!browser) return;
+  await browser.waitFor("document.querySelector('#knowledge-gate-message')?.textContent.includes('重启知识库服务')");
+  assert.equal(await browser.evaluate("document.querySelector('#knowledge-app').hidden"), true);
+  assert.equal(await browser.evaluate("document.querySelector('#knowledge-gate').textContent.includes('API route not found.')"), false);
+  assert.equal(await browser.evaluate("[...document.querySelectorAll('#knowledge-gate button')].some(b=>!b.hidden && b.textContent.includes('重新连接'))"), true);
+});
 
 async function waitFor(check, description, timeoutMs = 8_000) {
   const deadline = Date.now() + timeoutMs;

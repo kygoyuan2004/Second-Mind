@@ -1309,6 +1309,16 @@ export async function createApp(configInput, dependencies = {}) {
           results: result.results.map(({ content, vector, tokens, ...item }) => item),
         });
       }
+      if (pathname === '/api/knowledge/resolve' && req.method === 'GET') {
+        const context = resolveKnowledgeContext(requestKnowledgeBaseId(url));
+        const result = await context.store.resolveSource(url.searchParams.get('path') || '');
+        return json(res, result.candidates ? 409 : 200, {
+          ...result,
+          ...(result.candidates ? { error: 'SOURCE_AMBIGUOUS', message: '找到多个同名来源，请选择完整路径。' } : {}),
+          ...contextIdentity(context),
+        });
+      }
+
       if (pathname === '/api/knowledge/file' && ['GET', 'HEAD'].includes(req.method)) {
         const context = resolveKnowledgeContext(requestKnowledgeBaseId(url));
         const file = await context.store.existingFile(url.searchParams.get('path') || '');

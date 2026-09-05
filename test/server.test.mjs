@@ -138,6 +138,31 @@ test('authenticated API supports grounded Q&A and review-before-write diary flow
   const cookie = login.response.headers.get('set-cookie');
   const authHeaders = { cookie, 'x-vaultmind-request': '1', 'content-type': 'application/json' };
 
+  const bases = await requestJson(base, '/api/knowledge/bases', { headers: authHeaders });
+  assert.equal(bases.response.status, 200);
+  assert.equal(bases.body.defaultKnowledgeBaseId, 'default');
+  assert.equal(bases.body.knowledgeBases[0].status, 'ready');
+  const anonymousSource = await requestJson(base, '/api/knowledge/resolve?path=RAG.md');
+  assert.equal(anonymousSource.response.status, 401);
+  const resolved = await requestJson(base, '/api/knowledge/resolve?path=RAG.md&knowledgeBaseId=default', { headers: authHeaders });
+  assert.equal(resolved.response.status, 200);
+  assert.equal(resolved.body.path, 'Learning/RAG.md');
+  assert.equal(resolved.body.knowledgeBaseId, 'default');
+  const otherBase = await requestJson(base, '/api/knowledge/resolve?path=RAG.md&knowledgeBaseId=other', { headers: authHeaders });
+  assert.equal(otherBase.response.status, 404);
+  const invalidSource = await requestJson(base, '/api/knowledge/resolve?path=../RAG.md', { headers: authHeaders });
+  assert.equal(invalidSource.response.status, 400);
+  const missingSource = await requestJson(base, '/api/knowledge/resolve?path=Missing.md', { headers: authHeaders });
+  assert.equal(missingSource.response.status, 404);
+  const privateSource = await requestJson(base, '/api/knowledge/resolve?path=.obsidian/private.json', { headers: authHeaders });
+  assert.equal(privateSource.response.status, 403);
+  await fsp.mkdir(path.join(project.vaultPath, 'Other'), { recursive: true });
+  await fsp.writeFile(path.join(project.vaultPath, 'Other/RAG.md'), '# Another note');
+  const ambiguous = await requestJson(base, '/api/knowledge/resolve?path=RAG.md', { headers: authHeaders });
+  assert.equal(ambiguous.response.status, 409);
+  assert.equal(ambiguous.body.error, 'SOURCE_AMBIGUOUS');
+  assert.deepEqual(ambiguous.body.candidates, ['Learning/RAG.md', 'Other/RAG.md']);
+
   const search = await requestJson(base, '/api/knowledge/search?q=RRF&mode=keyword', {
     headers: { cookie },
   });

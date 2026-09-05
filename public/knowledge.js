@@ -1,3 +1,4 @@
+import { enhanceSourceLinks, createSourcePreview } from './knowledge-sources.js?v=1';
 import { filesFromClipboard } from './knowledge-clipboard.js?v=1.0.0';
 
 const CONVERSATION_SELECTION_PREFIX = 'vaultmind:selected-conversation:v2:';
@@ -49,7 +50,6 @@ const state = {
   processUsageCalls: new Map(),
   processUsageEventIds: new Set(),
   source: null,
-  sourceObjectUrl: '',
   draft: null,
   recognition: null,
   voiceMode: 'none',
@@ -621,6 +621,7 @@ function api(path, options = {}) {
       const error = new Error(payload.message || `请求失败（${response.status}）`);
       error.status = response.status;
       error.code = payload.error || payload.code || '';
+      error.path = path;
       throw error;
     }
     return payload;
@@ -1025,52 +1026,8 @@ function setBusy(value) {
   syncTaskModeVisualState();
 }
 
-function normalizeInternalPath(basePath, reference) {
-  const raw = String(reference || '').split('|')[0].split('#')[0].trim().replaceAll('\\', '/');
-  if (!raw || raw.startsWith('/') || raw.includes('..')) return '';
-  if (raw.includes('/') && !raw.startsWith('./')) return raw;
-  const base = String(basePath || '').split('/').slice(0, -1);
-  return [...base, ...raw.replace(/^\.\//, '').split('/')].filter(Boolean).join('/');
-}
-
 function knowledgeFileLink(relativePath) {
   return knowledgeApiPath(`/api/knowledge/file?path=${encodeURIComponent(relativePath)}`);
-}
-
-function preprocessMarkdown(source, basePath = '') {
-  let text = String(source || '');
-  text = text.replace(/〔来源：([^〕#]+?)(?:#([^〕]+))?〕/g, (_match, file, heading) => {
-    const clean = file.trim();
-    const label = `〔来源：${clean}${heading ? `#${heading}` : ''}〕`;
-    return `[${label}](${knowledgeFileLink(clean)})`;
-  });
-  text = text.replace(/!\[\[([^\]]+)\]\]/g, (_match, reference) => {
-    const resolved = normalizeInternalPath(basePath, reference);
-    if (!resolved) return _match;
-    const label = reference.split('|').pop().trim();
-    if (/\.(?:png|jpe?g|gif|webp)$/i.test(resolved)) {
-      return `![${label}](${knowledgeFileLink(resolved)})`;
-    }
-    return `[附件：${label}](${knowledgeFileLink(resolved)})`;
-  });
-  text = text.replace(/(?<!!)\[\[([^\]]+)\]\]/g, (_match, reference) => {
-    const resolved = normalizeInternalPath(basePath, reference);
-    if (!resolved) return _match;
-    const label = reference.includes('|') ? reference.split('|').pop().trim() : reference;
-    return `[${label}](${knowledgeFileLink(resolved)})`;
-  });
-  return text;
-}
-
-function bindKnowledgeLinks(target) {
-  target.querySelectorAll('a[href*="/api/knowledge/file?path="]').forEach((link) => {
-    link.target = '';
-    link.addEventListener('click', (event) => {
-      event.preventDefault();
-      const url = new URL(link.href, window.location.origin);
-      openSource(url.searchParams.get('path') || '');
-    });
-  });
 }
 
 function renderMarkdown(target, source, basePath = '') {
@@ -1078,8 +1035,9 @@ function renderMarkdown(target, source, basePath = '') {
     target.textContent = source;
     return;
   }
-  window.VaultMindRenderer.render(target, preprocessMarkdown(source, basePath));
-  bindKnowledgeLinks(target);
+  if (window.VaultMindRenderer.render(target, source)) {
+    enhanceSourceLinks(target, { basePath, fileUrl: knowledgeFileLink, onOpen: openSource });
+  }
 }
 
 const PROCESS_PHASES = [
@@ -2378,60 +2336,19 @@ async function runSearch(mode = 'keyword', requestedQuery = '') {
   }
 }
 
-async function openSource(relativePath) {
-  if (!relativePath) return;
-  const knowledgeBaseId = state.knowledgeBaseId;
-  const epoch = state.knowledgeBaseEpoch;
-  if (state.sourceObjectUrl) URL.revokeObjectURL(state.sourceObjectUrl);
-  state.sourceObjectUrl = '';
-  elements.sourceTitle.textContent = relativePath.split('/').pop() || '来源预览';
-  elements.sourcePath.textContent = relativePath;
-  elements.sourceContent.innerHTML = '<p>正在读取来源……</p>';
-  elements.sourceDialog.showModal();
-  try {
-    const response = await fetch(knowledgeApiPath(
-      `/api/knowledge/file?path=${encodeURIComponent(relativePath)}`,
-      knowledgeBaseId,
-    ), { credentials: 'same-origin' });
-    if (state.knowledgeBaseId !== knowledgeBaseId || state.knowledgeBaseEpoch !== epoch) return;
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      throw new Error(payload.message || '无法读取来源文件。');
-    }
-    const type = response.headers.get('content-type') || '';
-    elements.sourceContent.replaceChildren();
-    if (type.startsWith('text/') || type.includes('json')) {
-      const text = await response.text();
-      if (type.includes('markdown')) renderMarkdown(elements.sourceContent, text, relativePath);
-      else {
-        const pre = document.createElement('pre');
-        pre.textContent = text;
-        elements.sourceContent.append(pre);
-      }
-    } else {
-      const blob = await response.blob();
-      state.sourceObjectUrl = URL.createObjectURL(blob);
-      if (type.startsWith('image/')) {
-        const image = document.createElement('img');
-        image.src = state.sourceObjectUrl;
-        image.alt = relativePath;
-        elements.sourceContent.append(image);
-      } else if (type === 'application/pdf') {
-        const frame = document.createElement('iframe');
-        frame.src = state.sourceObjectUrl;
-        frame.title = relativePath;
-        elements.sourceContent.append(frame);
-      } else {
-        const link = document.createElement('a');
-        link.href = state.sourceObjectUrl;
-        link.download = relativePath.split('/').pop();
-        link.textContent = '下载这个文件';
-        elements.sourceContent.append(link);
-      }
-    }
-  } catch (error) {
-    elements.sourceContent.textContent = error.message;
-  }
+const sourcePreview = createSourcePreview({
+  dialog: elements.sourceDialog,
+  title: elements.sourceTitle,
+  pathLabel: elements.sourcePath,
+  content: elements.sourceContent,
+  fileUrl: knowledgeFileLink,
+  resolveUrl: (relativePath) => knowledgeApiPath(`/api/knowledge/resolve?path=${encodeURIComponent(relativePath)}`),
+  render: renderMarkdown,
+  contextKey: () => `${state.knowledgeBaseId}:${state.knowledgeBaseEpoch}`,
+});
+
+function openSource(relativePath, heading = '') {
+  return sourcePreview.open(relativePath, heading);
 }
 
 function openDraft(draft) {
@@ -2851,7 +2768,11 @@ async function initialize(options = {}) {
     }
   } catch (error) {
     if (!current()) return;
-    setGate('知识库暂时不可用', error.message, { retry: true });
+    if (error.path === '/api/knowledge/bases' && error.status === 404 && error.code === 'NOT_FOUND') {
+      setGate('知识库服务需要更新', '页面已更新，请重启知识库服务后重新连接。', { retry: true });
+    } else {
+      setGate('知识库暂时不可用', error.message, { retry: true });
+    }
   }
 }
 
@@ -2867,8 +2788,7 @@ async function switchKnowledgeBase(id) {
   state.taskId = null;
   abortSearch();
   clearProcessTimer();
-  state.sourceObjectUrl && URL.revokeObjectURL(state.sourceObjectUrl);
-  state.sourceObjectUrl = '';
+  sourcePreview.cancel();
   if (elements.sourceDialog.open) elements.sourceDialog.close();
   if (elements.draftDialog.open) elements.draftDialog.close();
   state.draft = null;
@@ -3227,10 +3147,6 @@ elements.draftForm.addEventListener('submit', (event) => { event.preventDefault(
 elements.draftClose.addEventListener('click', () => elements.draftDialog.close());
 elements.discardDraft.addEventListener('click', discardCurrentDraft);
 elements.sourceClose.addEventListener('click', () => elements.sourceDialog.close());
-elements.sourceDialog.addEventListener('close', () => {
-  if (state.sourceObjectUrl) URL.revokeObjectURL(state.sourceObjectUrl);
-  state.sourceObjectUrl = '';
-});
 
 const MOBILE_KEYBOARD_MIN_DELTA = 120;
 let mobileViewportBaseline = Math.round(window.visualViewport?.height || window.innerHeight);

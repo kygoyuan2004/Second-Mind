@@ -1,3 +1,4 @@
+import { resolveSource } from './source-resolver.mjs';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -190,6 +191,13 @@ export class VaultStore {
       ? await fsp.readFile((await this.policy.existingFile(configured, { maxBytes: 128 * 1024 })).target, 'utf8')
       : DEFAULT_TEMPLATES[kind];
     return String(raw).replaceAll('YYYY-MM-DD', date);
+  }
+
+  async resolveSource(reference) {
+    return resolveSource(reference, {
+      existingFile: (relative) => this.existingFile(relative),
+      walk: () => this.policy.walk(),
+    });
   }
 
   async existingFile(relative) {

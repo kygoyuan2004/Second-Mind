@@ -54,7 +54,7 @@ The current registered model providers are:
 | Kimi | OpenAI Chat Completions |
 | Custom | OpenAI Chat Completions or Anthropic Messages |
 
-Managed API Bases must use public HTTPS DNS names without embedded credentials, query strings, fragments, or nonstandard ports. Registered adapters own their protocol, authentication, output, and reasoning-field policies. The Custom adapter emits protocol-common fields and does not infer vendor-specific behavior from a model name.
+Managed API Bases must use public HTTPS DNS names without embedded credentials, query strings, fragments, or nonstandard ports. Registered adapters own their protocol, authentication, output, and reasoning-field policies. For Pi Agent, Anthropic Messages maps to `anthropic-messages` and OpenAI Chat Completions maps to `openai-completions`. The Custom adapter emits protocol-common fields and does not infer vendor-specific behavior or tool support from a model name.
 
 The workbench exposes five stable effort choices: `low`, `medium`, `high`, `xhigh`, and `max`. Each adapter maps them to supported provider-native behavior. When a target has no compatible reasoning control, the selected tier remains visible in conversation state but no invented vendor field is sent.
 
@@ -68,9 +68,13 @@ The browser submits a key only for an explicit replace action. It does not persi
 
 Every supported legacy environment secret also accepts a `_FILE` variant. A direct value takes precedence only when it is non-empty. Secret files must be regular files. Direct POSIX files must not be writable by group or other users. Docker Desktop can synthesize broad mode bits for host files; the runtime permits that narrow case only for an exact safe filename directly under `/run/secrets` when `/proc/self/mountinfo` proves that exact mount is read-only. The host ACL still remains the installer's or manual operator's responsibility.
 
+The embedded Pi runtime is locked to the published `0.85.1` SDK packages and receives only the credential saved through Second Mind's managed configuration or legacy `_FILE` boundary. It uses an in-memory credential store and does not read or mount host `~/.pi`, `~/.claude`, Pi OAuth, Claude Code login files, global model catalogs, extensions, skills, or prompt files. No Pi CLI installation is required.
+
 ## Validation and paid operations
 
-Provider edits are checked before commit. The simplified model/WebSearch flow validates a candidate, stores it briefly on the server, and returns a one-use receipt. Saving claims that receipt against the same administrator and revision. A restart or concurrent update invalidates it.
+Provider edits are checked before commit. Model validation requires a real Pi model → tool → result → model round trip: the model must call a nonce tool, receive an unpredictable result, and reproduce it in a later assistant turn. The probe allows exactly one tool execution, at most two assistant turns, no automatic retry, and at most 120 seconds; a duplicate call or third turn aborts it. A text-only response or a tool call that ignores its result fails. The simplified model/WebSearch flow stores a validated candidate briefly on the server and returns a one-use receipt. Saving claims that receipt against the same administrator and revision. A restart or concurrent update invalidates it.
+
+Successful save validation is cached only in the current model-router process. On the first Q&A after a service restart—or for a legacy/direct binding without a current proof—the runtime repeats the full tool round trip before exposing knowledge tools. Failure stops the task with a bounded capability error; it does not fall back to the former fixed retrieval/text-generation path. Provider name, model name, and a generic “compatible” label are never sufficient proof of tool support.
 
 Connection validation contacts the selected remote service and may incur cost. Embedding `validate-and-build` can send every indexable text chunk in the selected knowledge base. The UI requires password reauthentication and an explicit confirmation before these operations.
 
@@ -90,30 +94,30 @@ The desired embedding configuration is global, but the built vector index is act
 
 A newly added base starts with a lexical route even when a remote embedding target was saved. Startup does not make the first remote build automatically. `semantic` search fails explicitly when no matching active vector slot exists; `hybrid` can report a lexical fallback.
 
-Core retrieval environment defaults:
+Index and task environment defaults retained by the application are:
 
 | Variable | Default | Meaning |
 |---|---:|---|
-| `RAG_TOP_K` | `8` | Normal retrieval result bound |
-| `RAG_DEEP_TOP_K` | `16` | Deep retrieval result bound |
-| `RAG_MAX_CONTEXT_CHARS` | `30000` | Vault context character cap |
+| `RAG_TOP_K` | `8` | Compatibility/auxiliary retrieval bound; it does not prescribe Pi's reading sequence |
+| `RAG_DEEP_TOP_K` | `16` | Compatibility/auxiliary Deep bound; Pi uses its own bounded tool arguments |
+| `RAG_MAX_CONTEXT_CHARS` | `30000` | Compatibility/auxiliary context ceiling; `read_note` separately enforces page limits |
 | `INDEX_WATCH` | `true` | Watch for filesystem changes |
 | `INDEX_RECONCILE_SECONDS` | `300` | Full reconciliation interval |
-| `DEEP_TASKS_ENABLED` | `true` | Make Deep Q&A available |
+| `DEEP_TASKS_ENABLED` | `true` | Make the larger bounded Deep Agent budget available |
 
 ## WebSearch and page reading
 
-WebSearch is disabled by default and can be enabled only for Q&A conversations. Current managed providers are Alibaba Model Studio WebSearch MCP and Tavily REST. Each stores its own credential status; only the currently selected provider is used by a new task.
+WebSearch is disabled by default and can be enabled only for eligible Q&A conversations. Current managed providers are Alibaba Model Studio WebSearch MCP and Tavily REST. Each stores its own credential status; only the currently selected provider is used by a new task. Personal learning reviews never receive web tools.
 
-The optional safe page reader operates only on search-selected public HTTPS URLs. It validates DNS and connected IPs, redirects, content type, byte size, character size, timeouts, and concurrency. It is not a general browser. Lower bounds can be configured through the `WEB_READER_*` variables in `.env.example`; application hard caps cannot be raised through environment input.
+When networking is explicitly enabled, Pi may first call bounded `web_search`. The optional `web_read` tool accepts only an exact public HTTPS URL returned by that same task's search. The safe reader validates DNS and connected IPs, redirects, content type, byte size, character size, timeouts, and concurrency. It is not a general browser. Lower bounds can be configured through the `WEB_READER_*` variables in `.env.example`; application hard caps cannot be raised through environment input.
 
 `PDF_ENABLED=true` also requires `WEB_READER_ENABLED=true` and a working sandboxed PDF parser. The standard image intentionally omits `bwrap` and `pdftotext`, so PDF reading remains unavailable there. The service does not silently run an unsandboxed parser.
 
 `WEB_SEARCH_OFFICIAL_DOMAINS` accepts comma-separated public hostnames without schemes, ports, paths, credentials, IP addresses, or wildcards. It is an evidence preference, not permission to bypass URL safety checks.
 
-## Conversation-aware research
+## Pi Agent research and conversations
 
-`QA_CONTEXTUALIZER_ENABLED` enables bounded conversation contextualization. `QA_RESEARCH_LOOP_ENABLED` enables bounded feedback rounds and requires both contextualization and Deep mode. Generic deployments leave both off.
+Production Q&A is not orchestrated by `QA_CONTEXTUALIZER_ENABLED` or `QA_RESEARCH_LOOP_ENABLED`; those settings remain parsed only for compatibility with older deployments. The embedded Pi Agent reads each bounded tool result and decides whether to search, open original text, continue a long note, resolve a reference, inspect date records, request `get_reading_coverage`, or answer. Normal and Deep select bounded task budgets, not separate fixed retrieval engines.
 
 A running task captures its model, WebSearch, index, and configuration revisions at creation. A later admin save affects only new tasks. Changing a conversation's model, requested effort, or WebSearch setting requires a child conversation. Normal and Deep can switch within one Q&A conversation without forking.
 
@@ -125,13 +129,14 @@ Important direct-Node path settings are:
 |---|---|---|
 | `VAULT_PATH` | `./vault` | Legacy single Vault root |
 | `DATA_DIR` | `./data` | Private runtime state, always outside Vaults |
+| Pi session directory | `${DATA_DIR}/pi-sessions` | Private transactional Agent JSONL branches/checkpoints; no public environment override |
 | `DIARY_DIR` | `Second-Mind/Diary` | Allowed diary destination inside each Vault |
 | `PLAN_DIR` | `Second-Mind/Plans` | Allowed plan destination inside each Vault |
 | `SCRATCH_DIR` | `Second-Mind/Inbox` | Allowed scratch destination inside each Vault |
 | `VAULT_EXCLUDED_PATHS` | `.obsidian,.trash,.git,.sync,.livesync,node_modules` | Paths excluded from indexing and direct access |
 | `RECOVERY_RETENTION_DAYS` | `30` | Recovery-copy retention |
 
-Write destinations and optional templates must be normalized relative paths. Do not put `DATA_DIR`, credentials, installer state, or backups inside a Vault or an allowed Vault parent.
+Write destinations and optional templates must be normalized relative paths. Do not put `DATA_DIR`, credentials, installer state, or backups inside a Vault or an allowed Vault parent. On POSIX, the Pi session directory is restricted to `0700` and session files to `0600`; product conversations store only a validated basename, never an absolute or caller-selected session path.
 
 ## Authentication, transport, and limits
 

@@ -180,7 +180,7 @@ Use a unique `COMPOSE_PROJECT_NAME` for each manual instance and verify the proj
 
 Node.js `^22.22.0` or `>=24.8.0` is required. Native operation is an advanced manual path. It must reproduce authentication secret permissions, data/Vault separation, service-user ownership, loopback binding, process supervision, and backup behavior.
 
-The files under `deploy/systemd/` are legacy single-base templates, not installer output. They still start the compatibility entry point and require every placeholder to be reviewed. They do not create the Docker-first multi-instance layout, configure the managed Provider UI, or implement backup/update/restore. Use `src/bootstrap.mjs` for the unified managed bootstrap when designing a new native service.
+The files under `deploy/systemd/` are advanced single-mount templates, not installer output. They use the same `src/bootstrap.mjs` managed runtime entry point as npm and Docker, but every placeholder still requires review. They do not create the Docker-first multi-instance layout or implement backup/update/restore. To expose multiple Vaults through one native service, set `KNOWLEDGE_BASE_ALLOWED_ROOTS` to startup-authorized parent mounts and extend the unit's `RequiresMountsFor` and read-only path policy for those same mounts.
 
 Do not run as root to bypass a permission problem. Validate the rendered unit with the target systemd release because supported sandbox directives differ.
 

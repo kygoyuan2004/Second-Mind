@@ -1,6 +1,6 @@
 # Second Mind architecture
 
-Second Mind is a single-process Node.js service with server-served static assets and JSON/SSE APIs. It runs one authenticated administrator experience over one or more filesystem knowledge bases. Docker Compose is the supported default deployment, but the application can also run directly under Node.js `^22.22.0` or `>=24.8.0` when the operator provides equivalent filesystem and secret isolation.
+Second Mind is a single-process Node.js service with server-served static assets and JSON/SSE APIs. It runs one authenticated administrator experience over one or more filesystem knowledge bases. Q&A uses an embedded Pi Agent `0.85.1` tool loop rather than a fixed server-orchestrated reading pipeline. Docker Compose is the supported default deployment, but the application can also run directly under Node.js `^22.22.0` or `>=24.8.0` when the operator provides equivalent filesystem and secret isolation.
 
 ## Component map
 
@@ -19,10 +19,16 @@ flowchart TB
   RC --> WR[Task-scoped WebSearch router]
   IA --> TA[Task manager A]
   IB --> TB[Task manager B]
-  TA --> MR
-  TB --> MR
-  TA --> WR
-  TB --> WR
+  TA --> PA[Scoped Pi Agent session A]
+  TB --> PB[Scoped Pi Agent session B]
+  PA --> MR
+  PB --> MR
+  PA --> IA
+  PB --> IB
+  PA --> WR
+  PB --> WR
+  PA --> PSA[Private Pi JSONL A]
+  PB --> PSB[Private Pi JSONL B]
   WR --> RD[Safe optional page reader]
   TA --> VA[Vault store and write policy A]
   TB --> VB[Vault store and write policy B]
@@ -71,6 +77,7 @@ Every enabled base receives its own:
 - private drafts and temporary attachments;
 - recovery copies;
 - audit log;
+- Pi session associations and a private transactional JSONL namespace;
 - `TaskManager` and active-task namespace.
 
 New managed bases store these under an ID-and-canonical-root-bound directory in the private data volume. A migrated legacy default base retains its earlier state locations. Opaque task, conversation, and draft IDs are resolved only inside the selected context, so using an ID with another `knowledgeBaseId` returns not found instead of crossing boundaries.
@@ -81,25 +88,31 @@ Each knowledge response carries `knowledgeBaseId`, `knowledgeBaseRevision`, and 
 
 The managed Provider registry is global to the application instance. It defines model connections, enabled model bindings, the default model, independent WebSearch providers, an embedding target, and branding. Provider credentials are private server state and are represented to clients only by boolean configured fields.
 
-At most three models may be enabled. A model binding selects a registered provider adapter and protocol. Alibaba Model Studio, DeepSeek, GLM, Kimi, and Custom adapters constrain endpoints, authentication, output limits, and reasoning mappings. Custom services receive only protocol-common fields unless the administrator explicitly selects a supported adapter.
+At most three models may be enabled. A model binding selects a registered provider adapter and protocol. Alibaba Model Studio, DeepSeek, GLM, Kimi, and Custom adapters constrain endpoints, authentication, output limits, and reasoning mappings. Anthropic Messages maps to Pi's `anthropic-messages` API and OpenAI Chat Completions maps to `openai-completions`. Custom services receive only protocol-common fields unless the administrator explicitly selects a supported adapter.
 
-A task acquires immutable model and WebSearch leases when it is created. Saving a new configuration changes later tasks, not a running task. Provider validation occurs before a secret-bearing candidate can be committed. Configuration files use restrictive permissions, atomic replacement, revision checks, and last-known-good recovery.
+A task acquires immutable model and WebSearch leases when it is created. Saving a new configuration changes later tasks, not a running task. Before a secret-bearing model candidate can be committed, production validation requires an unpredictable nonce tool call followed by a later assistant turn that consumes the exact tool result. The first Q&A also runs this full probe when the exact binding has not been verified in the current service process; failure stops the task rather than selecting an old text-only engine. Configuration files use restrictive permissions, atomic replacement, revision checks, and last-known-good recovery.
 
 Embedding configuration is globally selected, but vector activation is per knowledge base. An administrator explicitly validates and rebuilds the selected base into a new slot. Activation happens only after the new index succeeds. Startup never creates the first remote vector index and never silently replaces an active usable slot.
 
 ## Retrieval and generation
 
-All bases have a lexical BM25 path. When an activated embedding slot is available, semantic and hybrid reciprocal-rank-fusion routes become available. A failed semantic dependency is reported explicitly; Normal and Deep question answering can use lexical evidence without a vector service.
+All bases have a lexical BM25 route. When an activated embedding slot is available, semantic and hybrid reciprocal-rank-fusion routes become available. A failed semantic dependency is reported explicitly; the Agent can still choose lexical discovery without a vector service.
 
-Normal mode follows one bounded retrieval path. Deep mode produces a bounded query set, fuses evidence, tracks conflicts and gaps, and can run bounded feedback rounds. Optional WebSearch and selected-page reading are server-controlled. The model receives delimited text, not a shell, filesystem API, browser, MCP client, or arbitrary fetch capability.
+Normal and Deep use the same embedded Pi Agent execution engine with different bounded research budgets. After every result, the model chooses its next call from `list_vault`, exact-text `search_text`, keyword/semantic/hybrid `search_knowledge`, hash-checked and paginated `read_note`, `resolve_note_reference`, paginated `list_date_records`, and `get_reading_coverage`. Search results only discover candidates; material claims require non-empty original text successfully returned by `read_note`, and the coverage ledger distinguishes complete reads, partial line ranges, unread discoveries, incomplete inventory/list pagination, truncation, and tool failures. Exhaustive requests have a server-enforced coverage-check completion gate.
 
-Only Vault source IDs and paths that actually entered model context are allowed to become Vault citations. The server rejects invented source identifiers during answer normalization.
+When a user explicitly enables networking, the toolset may add `web_search` and `web_read`. Both Web tools close permanently after the first Vault tool result, so private note content cannot influence a later query, URL choice, request count, or order. Before that boundary, `web_read` accepts only exact HTTPS URLs returned by the same task's search and retains the safe-reader network controls. Learning reviews receive neither tool. The Pi session is created with all built-in tools disabled and an empty resource loader: no shell, mutation tool, general filesystem API, arbitrary fetch, host extension, skill, prompt, `AGENTS.md`, `~/.pi`, or `~/.claude` configuration is loaded.
+
+Only hash-verified Vault paths actually returned by `read_note` are eligible as Vault sources. The server rejects invented or merely search-discovered citations during answer normalization.
 
 ## Conversations and task state
 
-Conversations persist complete user and assistant messages, model selection, requested and effective effort, task mode, WebSearch selection, and immutable Provider binding identities. Normal and Deep may change within the same Q&A conversation. Changing the model, effort, or WebSearch setting creates an explicit child conversation; at most five complete prior turns are copied.
+Conversations persist complete user and assistant messages, model selection, requested and effective effort, task mode, WebSearch selection, immutable Provider binding identities, and a validated Pi session filename. Normal and Deep may change within the same Q&A conversation. Changing the model, effort, or WebSearch setting creates an explicit child conversation; at most five complete prior turns are copied.
 
-Task status and progress are exposed through JSON and SSE. Active task state is in memory, while the conversation checkpoint is durable. A task failure or cancellation does not commit a partial assistant turn. Raw search payloads, fetched pages, and hidden model reasoning are not conversation messages.
+Pi writes each in-flight turn eagerly, so every task runs in a disposable JSONL branch under `DATA_DIR/pi-sessions`; POSIX deployments constrain the directory to `0700` and files to `0600`. After citation normalization, the application builds a canonical checkpoint containing only committed product user/assistant turns plus a history digest. Product conversation history remains authoritative and atomically stores only that safe basename, never a caller-supplied path. Failed/cancelled branches are removed, superseded and deleted-conversation checkpoints are reclaimed, and startup prunes unreferenced safe JSONL files. An unsafe, missing, unreadable, or history-mismatched checkpoint is rebuilt from committed product history.
+
+A Web-enabled Pi turn is deliberately different: it starts a fresh working session containing only the current request. It does not resume a checkpoint or bootstrap earlier product messages, because a prior assistant turn may contain private Vault text that must never become a later `web_search` query before the per-task Web-to-Vault latch closes. The full product conversation remains visible and durable, but context-dependent Web questions must restate the necessary public context in the current request.
+
+Task status, Pi lifecycle/tool progress, coverage, usage, and completion are exposed through JSON and SSE. Pi answer deltas are measured but buffered until citation and link finalization; the client receives only terminal validated answer Markdown, while lifecycle/tool/usage/heartbeat events continue during generation. External anchors are created from successfully read source IDs by server code, and the assistant renderer unwraps any other anchor. Active task state is in memory, while the product conversation checkpoint and completed Pi entries are durable. A task failure or cancellation does not commit a partial assistant turn, and an in-flight task does not automatically continue across a service-process restart. Raw search payloads, fetched pages, and hidden model reasoning are not product conversation messages.
 
 ## Confirmed write path
 

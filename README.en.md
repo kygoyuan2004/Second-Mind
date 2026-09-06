@@ -1,15 +1,15 @@
 # Second Mind
 
-[简体中文](README.md) · [Website](https://kygoyuan2004.github.io/Second-Mind/) · [Windows](docs/quickstart-windows.md) · [macOS](docs/quickstart-macos.md) · [Linux](docs/quickstart-linux.md) · [Security](docs/security.md)
+[简体中文](README.md) · [Website](https://kygoyuan2004.github.io/Second-Mind/) · [Windows](docs/quickstart-windows.md) · [macOS](docs/quickstart-macos.md) · [Linux](docs/quickstart-linux.md) · [Pi Agent migration and operations](docs/pi-agent-migration.md) · [Claude Code assisted installation](docs/claude-code-install.md) · [Security](docs/security.md)
 
 [![CI](https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml/badge.svg)](https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml)
 [![Pages](https://github.com/kygoyuan2004/Second-Mind/actions/workflows/pages.yml/badge.svg)](https://github.com/kygoyuan2004/Second-Mind/actions/workflows/pages.yml)
 
-Second Mind is a single-administrator, self-hosted knowledge workbench for local Obsidian Vaults. It combines keyword and optional vector retrieval, cited answers, feedback-driven research, conversation continuity, and review-before-write diary, plan, and scratch-note workflows. The administrator brings the model, search, and embedding services. With no LLM configured, the app can still start, authenticate, manage knowledge bases, and perform BM25 keyword search.
+Second Mind is a single-administrator, self-hosted knowledge workbench for local Obsidian Vaults. It combines keyword and optional vector retrieval, cited answers, feedback-driven research, date-bounded learning reviews, conversation continuity, and review-before-write diary, plan, and scratch-note workflows. The administrator brings the model, search, and embedding services. With no LLM configured, the app can still start, authenticate, manage knowledge bases, and perform BM25 keyword search.
 
-![Second Mind showing a cited answer from an isolated synthetic knowledge base](docs/assets/second-mind-qa.png)
+![Second Mind showing a cited answer from deterministic synthetic fixture data](docs/assets/second-mind-qa.png)
 
-> Every product image in this README is generated from the current application by the repository screenshot script. It uses an isolated port, a public synthetic Vault, and a mock LLM. It does not connect to a private deployment or a paid service.
+> The six UI images in this README load the current production front end on an isolated loopback service and connect it to a deterministic synthetic fixture API supplied by the capture script. They do not come from a complete production service instance, read a real Vault, or call a real or paid provider.
 
 ## Open the sign-in page in three steps
 
@@ -46,7 +46,8 @@ Platform details and troubleshooting:
 | Multiple knowledge bases | Stable IDs, names, enabled/default state, bounded mounts, a workbench selector, and an administrator registry |
 | Isolation | Separate indexes, conversations, drafts, recovery copies, and audit records for each base; cross-base task, conversation, and draft IDs fail |
 | Retrieval | Chinese-aware BM25; optional OpenAI-compatible or DashScope embeddings; hybrid RRF; explicit fallback when semantic retrieval is unavailable |
-| Answers | A Normal retrieval path and bounded Deep multi-path retrieval; server-controlled tools; citations to concrete Vault-relative paths |
+| Answers | Embedded Pi Agent `0.85.1` chooses bounded search and original-note reads from scoped tool results; citations use concrete Vault-relative paths |
+| Learning reviews | [A fixed date range, paginated date-record inventory, and batched verification](docs/learning-review.md); plans and completed work remain distinct, with actual coverage gaps reported |
 | Web supplement | Explicitly enabled per conversation; Alibaba Model Studio WebSearch MCP or Tavily REST; safe page reading with Vault-only fallback |
 | Conversations | Refresh recovery; child conversations when model, effort, or web settings change; Normal and Deep may switch inside one conversation |
 | Writes | Diary, plan, and scratch-note generation; editable Markdown preview; explicit confirmation; path and conflict checks; recovery copies |
@@ -54,18 +55,18 @@ Platform details and troubleshooting:
 | Providers | Alibaba Model Studio, DeepSeek, GLM, Kimi, and Custom; at most three enabled models; keys are never returned |
 | Operations | Docker Compose, health checks, `doctor`, `status`, `logs`, `update`, `backup`, and a multi-architecture GHCR workflow |
 
-This is not a multi-tenant SaaS product, and it does not give a model shell or arbitrary filesystem access. Application code selects and delimits all model context and controls web search, page reading, indexing, and writes.
+This is not a multi-tenant SaaS product or a general host agent. The embedded Pi Agent receives only user-, knowledge-base-, and snapshot-scoped knowledge tools. It has no shell or arbitrary filesystem/write access, loads no host Pi/Claude configuration or Vault extension, and receives optional web tools only after the user explicitly enables networking. The SDK ships in the npm dependency lock and Docker image; users do not install a Pi CLI.
 
 ## Current interface
 
 | Execution trace | Provider configuration |
 |---|---|
 | ![Observable retrieval, verification, and generation stages](docs/assets/second-mind-execution.png) | ![Administrator page showing fictional providers, models, and configured status](docs/assets/second-mind-provider-config.png) |
-| **Retrieval and generation over a public synthetic Vault** | **Fictional providers; no screenshot key is displayed or stored** |
+| **Retrieval and generation over deterministic fixture Q&A** | **Fictional providers; no screenshot key is displayed or stored** |
 
 | Diary preview | Plan preview |
 |---|---|
-| ![A diary draft rendered in the isolated demo](docs/assets/second-mind-diary.png) | ![A plan draft rendered in the isolated demo](docs/assets/second-mind-plan.png) |
+| ![A diary draft supplied by the synthetic fixture API and rendered by the production front end](docs/assets/second-mind-diary.png) | ![A plan draft supplied by the synthetic fixture API and rendered by the production front end](docs/assets/second-mind-plan.png) |
 | **Still outside the Vault and not yet confirmed** | **Still outside the Vault and not yet confirmed** |
 
 ![Second Mind knowledge workbench at a 360 pixel viewport](docs/assets/second-mind-mobile.png)
@@ -95,15 +96,17 @@ After signing in, the administrator page configures these independently:
 
 LLM, WebSearch, and embedding credentials never fall back to one another. APIs return a `configured` boolean, not the key. The browser does not put keys in localStorage, sessionStorage, URLs, or cookies. Changing a provider destination requires supplying the credential for that destination again.
 
-Connection checks and embedding builds may cost money, so they run only after explicit administrator confirmation. Startup, sign-in, configuration refresh, and BM25 retrieval do not call a paid provider. A running task keeps the model, search, and index snapshot it acquired at creation; later saves affect new tasks.
+Model validation and embedding builds may cost money, so they run only after explicit administrator confirmation. Saving a model must prove a real model → tool → result → model round trip; a model that only returns text is not Pi-compatible. The first Q&A after a restart also verifies a binding that has not yet been proven in that process. Startup, sign-in, configuration refresh, and BM25 retrieval do not call a paid provider. A running task keeps the model, search, and index snapshot it acquired at creation; later saves affect new tasks.
 
-## RAG, research, and conversations
+## Pi Agent, retrieval, and conversations
 
-Normal mode follows one controlled retrieval path. Deep mode creates a bounded set of complementary queries, combines evidence, checks conflicts and gaps, and can run bounded feedback rounds when the research loop is enabled. Both modes allow only the Vault-relative paths actually supplied to the model to become Vault citations. Unsupported conclusions should say that evidence is insufficient.
+Normal and Deep both run the embedded Pi tool loop. The model chooses among bounded `list_vault`, `search_text`, `search_knowledge`, `read_note`, `resolve_note_reference`, `list_date_records`, and `get_reading_coverage` calls after seeing each result; Deep provides a larger bounded research budget. Search results are discovery hints. Material Vault claims require `read_note` verification against the pinned snapshot and content hash, long notes can be continued by line/column, and `get_reading_coverage` exposes exact covered ranges and remaining gaps. Unsupported conclusions must identify insufficient or uncovered evidence.
 
-Web search is off by default and is available only to Q&A. When enabled, results pass URL and domain checks. Optional page reading also enforces DNS/IP, redirect, media type, size, timeout, and concurrency limits. The model itself does not receive an MCP client, browser, or fetch tool.
+Web search is off by default and is available only to eligible Q&A. When explicitly enabled, the Agent must finish any necessary Web search and page reading before reading private Vault content. After any Vault tool returns a result, every Web search/read exit closes permanently for that task. To stop text from an earlier private turn becoming a later search query, every Web-enabled Pi turn loads only the current request into the Agent and neither resumes nor bootstraps earlier conversation text; restate any necessary public context in the current request. `web_read` accepts only an exact HTTPS URL returned by that same task's search and retains the existing DNS/IP, redirect, media type, size, timeout, and concurrency checks. Learning reviews receive no web tools. The model never receives a general MCP client, browser, or fetch tool.
 
-The browser persists only an opaque conversation ID for the current user and knowledge base. Changing the fixed model, reasoning effort, or web option makes the next message a child conversation and copies at most five complete question-and-answer turns. Raw pages, search snippets, and hidden reasoning are not stored as conversation messages.
+Pi answer text remains buffered until the server has verified original-note citations and external links. SSE still carries session, tool, usage, and heartbeat progress, but the browser renders only terminal validated Markdown. External evidence is cited with opaque IDs; only the server mints clickable HTTPS anchors, and the assistant renderer unwraps every other generated Markdown, HTML, GFM autolink, or mail link.
+
+The browser persists only an opaque conversation ID for the current user and knowledge base. Changing the selected model, reasoning effort, or web option makes the next message a child conversation and copies at most five complete question-and-answer turns. Product history remains authoritative. Each request uses a disposable Pi JSONL branch under `DATA_DIR/pi-sessions`; only a sanitized, product-history-matched checkpoint is attached on successful commit, while failed branches are removed. Raw pages, search snippets, and hidden reasoning are not stored as product conversation messages.
 
 ## Review before write
 
@@ -120,7 +123,7 @@ flowchart LR
   R --> C[Base B context]
   A --> IA[Independent index and history]
   C --> IC[Independent index and history]
-  IA --> Q[Controlled RAG and optional WebSearch]
+  IA --> Q[Pi Agent scoped tool loop and optional WebSearch]
   IC --> Q
   Q --> L[Task-pinned LLM lease]
   L --> O[Streamed answer or private draft]
@@ -135,10 +138,10 @@ flowchart LR
 
 | Destination | Contacted only when | Data that can be sent |
 |---|---|---|
-| LLM | A user starts generation and a model is configured | Question, recent complete turns, selected note excerpts, and text attachment excerpts |
+| LLM | A user starts generation and a model is configured | The question, recent complete turns, and bounded tool definitions and results; tool results may include selected original-note and text-attachment excerpts |
 | Embedding | An administrator confirms a build, or semantic retrieval uses an active vector index | Indexable text chunks or a search query |
-| WebSearch | The current Q&A conversation explicitly enables it | A bounded set of server-generated search terms |
-| Safe page reader | WebSearch is enabled and research selects a source | A validated public HTTPS URL; extracted text may then enter delimited model context |
+| WebSearch | The current Q&A conversation explicitly enables it and no Vault tool has returned a result | A bounded query generated by the Agent for that task |
+| Safe page reader | The same task's WebSearch returned the exact HTTPS URL | That validated URL; extracted text may then enter delimited model context |
 
 Vaults, conversations, indexes, drafts, recovery copies, audits, and credentials stay in local storage by default. If you choose a remote provider, shared data is governed by that provider's retention, region, account, and contractual terms. Use separate, least-privilege, replaceable keys and bounded spending limits.
 
@@ -173,7 +176,7 @@ There is no automatic restore or permanent uninstall command. For ordinary remov
 - The Linux quick installer targets a conventional rootful Docker Engine. Rootless Docker and SELinux-enforcing hosts need an administrator-designed UID mapping, volume ownership, and bind-mount relabeling; the installer does not silently alter those boundaries.
 - `update` preserves data and configuration but has no automatic image rollback. Critical deployments should pin an immutable tag/digest, retain the previous image, and validate upgrades against a backup copy.
 - A `knowledgeBaseId` is bound to its canonical path. If a host operator replaces that exact path with different Vault contents, use a new ID so retained private state from the former Vault cannot reopen.
-- Model compatibility depends on the target API actually implementing the selected protocol. A compatible label does not mean all model features are identical.
+- Model compatibility depends on the exact endpoint and model completing the Pi tool round-trip probe. A compatible protocol label alone is not sufficient.
 
 ## Development and tests
 
@@ -196,12 +199,14 @@ npm run docs:screenshots -- --chrome /path/to/chrome
 npm run security:ocr
 ```
 
-The capture tool connects only to its own isolated loopback service, uses a synthetic Vault and mock LLM, and rejects remote requests. It emits three `1440x1050`, two `1280x960`, and one `360x800` PNG at fixed viewports, strips `tEXt`, `zTXt`, `iTXt`, `tIME`, `eXIf`, and `pHYs` metadata, and requires the OCR check before publication.
+The capture tool connects only to its own isolated loopback service. It loads the production front end in a browser while an in-script deterministic synthetic fixture API supplies session, knowledge-base, task, draft, and provider state. It does not start the complete Second Mind service, read a real Vault, or call a real provider. It rejects remote requests, emits three `1440x1050`, two `1280x960`, and one `360x800` PNG at fixed viewports, strips `tEXt`, `zTXt`, `iTXt`, `tIME`, `eXIf`, and `pHYs` metadata, and requires the OCR check before publication.
 
 Linux release gates also cover Compose configuration, image build, isolated container liveness and readiness, browser E2E, KaTeX regressions, image history and environment inspection, and screenshot OCR and metadata checks.
 
 ## Documentation
 
+- [Pi Agent migration, deployment, and rollback](docs/pi-agent-migration.md)
+- [Claude Code assisted installation](docs/claude-code-install.md)
 - [Configuration and providers](docs/configuration.md)
 - [HTTP API](docs/api.md)
 - [Architecture](docs/architecture.md)

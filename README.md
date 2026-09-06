@@ -1,21 +1,23 @@
 <p align="center">
   <a href="docs/assets/second-mind-hero.png">
-    <img src="docs/assets/second-mind-hero.png" alt="Second-Mind — self-hosted AI knowledge workspace for an Obsidian Vault" width="100%">
+    <img src="docs/assets/second-mind-hero.png" alt="Second Mind 自托管知识工作台项目插画" width="100%">
   </a>
 </p>
 
+<p align="center"><em>项目插画，不是产品界面截图。</em></p>
+
 <h1 align="center">Second-Mind</h1>
 
-[English](README.en.md) · [在线网站](https://kygoyuan2004.github.io/Second-Mind/) · [Windows](docs/quickstart-windows.md) · [macOS](docs/quickstart-macos.md) · [Linux](docs/quickstart-linux.md) · [安全边界](docs/security.md)
+[English](README.en.md) · [在线网站](https://kygoyuan2004.github.io/Second-Mind/) · [Windows](docs/quickstart-windows.md) · [macOS](docs/quickstart-macos.md) · [Linux](docs/quickstart-linux.md) · [Pi Agent 迁移与运维](docs/pi-agent-migration.md) · [Claude Code 辅助安装](docs/claude-code-install.md) · [安全边界](docs/security.md)
 
 [![CI](https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml/badge.svg)](https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml)
 [![Pages](https://github.com/kygoyuan2004/Second-Mind/actions/workflows/pages.yml/badge.svg)](https://github.com/kygoyuan2004/Second-Mind/actions/workflows/pages.yml)
 
-Second Mind 是一个面向本地 Obsidian Vault 的单管理员、自托管知识工作台。它把关键词与可选向量检索、带引用的问答、反馈式研究、会话连续性，以及日记、计划、随心记的确认后写入放在同一个网页中。模型、搜索和 Embedding 由管理员自带；未配置 LLM 时仍可登录、管理知识库并使用 BM25 关键词检索。
+Second Mind 是一个面向本地 Obsidian Vault 的单管理员、自托管知识工作台。它把关键词与可选向量检索、带引用的问答、反馈式研究、限定日期范围的学习回顾、会话连续性，以及日记、计划、随心记的确认后写入放在同一个网页中。模型、搜索和 Embedding 由管理员自带；未配置 LLM 时仍可登录、管理知识库并使用 BM25 关键词检索。
 
-![Second Mind 在隔离合成知识库中显示带引用的回答](docs/assets/second-mind-qa.png)
+![Second Mind 使用确定性合成 fixture 数据显示带引用的回答](docs/assets/second-mind-qa.png)
 
-> 以上及下方产品图均由仓库的截图脚本从当前真实网页生成，使用隔离端口、公开合成 Vault 和 mock LLM。没有连接私人实例，也没有调用付费服务。
+> 顶部 hero 是项目插画，不是产品界面。其余六张 UI 图由仓库截图脚本在隔离回环服务中加载当前生产前端，并连接脚本提供的确定性合成 fixture API；它们不来自完整生产服务实例，不读取真实 Vault，也不调用真实或付费 Provider。
 
 ## 三步打开登录页
 
@@ -52,7 +54,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 | 多知识库 | 稳定 ID、显示名、启用/默认状态、受限挂载点；工作台选择器与管理员注册表 |
 | 隔离 | 每库独立索引、会话、草稿、恢复副本和审计；跨库任务、会话、草稿 ID 会失败 |
 | 检索 | 中文感知 BM25；可选 OpenAI-compatible 或 DashScope Embedding；混合 RRF；语义失效时明确降级 |
-| 问答 | Normal 单轮检索与 Deep 反馈式多路径检索；服务器控制工具；答案引用具体 Vault 相对路径 |
+| 问答 | 嵌入式 Pi Agent `0.85.1` 根据受限工具结果继续检索和读取；答案引用具体 Vault 相对路径 |
 | 学习回顾 | [固定日期范围、日期记录清单与分批核验](docs/learning-review.md)；区分计划与完成，显示实际覆盖缺口 |
 | 联网补充 | 每个会话显式选择；Alibaba Model Studio WebSearch MCP 或 Tavily REST；安全网页读取与 Vault-only 降级 |
 | 会话 | 刷新恢复；模型、思考强度或联网设置变化时派生子会话；Normal 与 Deep 可在原会话切换 |
@@ -61,18 +63,18 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 | Provider | Alibaba Model Studio、DeepSeek、GLM、Kimi 与 Custom；最多启用三个模型；Key 永不回显 |
 | 运维 | Docker Compose、健康检查、`doctor`、`status`、`logs`、`update`、`backup`、GHCR 多架构工作流 |
 
-这不是多租户 SaaS，也不是让模型获得 shell 或任意文件系统权限的自主 Agent。模型只接收服务端选定和定界的文本；WebSearch、网页读取、索引与写入都由应用代码控制。
+这不是多租户 SaaS，也不是拥有 shell 或任意文件系统权限的通用 Agent。Pi Agent 只获得当前用户、知识库和快照范围内的只读知识工具；联网仍需用户明确选择，知识库写入仍须草稿预览和用户确认。SDK 随 npm 依赖和 Docker 镜像交付，不读取宿主机的 `~/.pi` 或 `~/.claude`。
 
-## 真实界面
+## 界面截图
 
 | 执行过程 | Provider 配置 |
 |---|---|
 | ![检索、核验与生成的可观察执行过程](docs/assets/second-mind-execution.png) | ![只显示虚构 Provider、模型和已配置状态的管理员页](docs/assets/second-mind-provider-config.png) |
-| **公开合成问答的检索与生成阶段** | **虚构 Provider；没有显示或保存截图用 Key** |
+| **确定性 fixture 问答的检索与生成阶段** | **虚构 Provider；没有显示或保存截图用 Key** |
 
 | 日记预览 | 计划预览 |
 |---|---|
-| ![隔离 demo 中生成并渲染的日记草稿](docs/assets/second-mind-diary.png) | ![隔离 demo 中生成并渲染的计划草稿](docs/assets/second-mind-plan.png) |
+| ![合成 fixture API 提供并由生产前端渲染的日记草稿](docs/assets/second-mind-diary.png) | ![合成 fixture API 提供并由生产前端渲染的计划草稿](docs/assets/second-mind-plan.png) |
 | **仍在 Vault 外，尚未确认写入** | **仍在 Vault 外，尚未确认写入** |
 
 ![Second Mind 知识库工作台的 360 像素窄屏布局](docs/assets/second-mind-mobile.png)
@@ -102,13 +104,15 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 
 LLM、WebSearch 与 Embedding 凭据不互相回退。API 只返回 `configured` 布尔状态，不返回 Key。浏览器不把 Key 写入 localStorage、sessionStorage、URL 或 Cookie。变更 Provider 地址时必须重新提供该目标的凭据。
 
-连接检查与 Embedding 构建可能产生费用，因此只在管理员明确确认后执行；启动、登录、刷新配置和 BM25 检索不会主动调用付费 Provider。运行中的任务固定使用创建时的模型、搜索和索引快照，新任务才使用保存后的版本。
+模型连接检查与 Embedding 构建可能产生费用，因此只在管理员明确确认后执行。模型检查会实测一次“模型 → 工具 → 结果 → 模型”往返；只会文本生成、不能读取工具结果的兼容端点不会保存为 Pi-ready。启动、登录、刷新配置和 BM25 检索不会主动调用付费 Provider。运行中的任务固定使用创建时的模型、搜索和索引快照，新任务才使用保存后的版本。
 
-## RAG、研究与会话
+## Pi Agent、研究与会话
 
-Normal 使用一个受控检索路径。Deep 会生成有限数量的互补查询、合并证据、检查冲突和缺口，并在启用研究循环时进行有限反馈轮次。两种模式都只把实际进入模型上下文的 Vault 相对路径作为可引用来源；无法支持的结论应明确说明证据不足。
+Normal 与 Deep 均由嵌入式 Pi Agent 运行受限工具循环：模型可根据结果继续列目录、搜索、调用混合检索、按行读取原文、解析引用并核对实际覆盖；Deep 给予更高的有界研究预算。搜索只用于发现，重要结论须读取原文核验。两种模式都只把实际读取且进入模型上下文的 Vault 相对路径作为可引用来源；无法支持的结论应明确说明证据不足。
 
-联网搜索默认关闭，且只能用于问答。启用后，搜索结果先经过 URL 与域名检查；可选页面读取还会执行 DNS/IP、重定向、类型、大小、超时和并发限制。模型本身不拥有 MCP、浏览器或抓取工具。
+联网搜索默认关闭，且只能用于问答。启用后，Agent 必须先完成必要的联网搜索和页面读取，再读取私库；任何 Vault 工具结果返回后，本任务的所有 Web 搜索与读取出口永久关闭。为防止上一轮私库文本成为新的搜索词，每个启用联网的 Pi 回合都只向 Agent 加载当前请求，不恢复或注入之前的对话正文；上下文依赖的联网问题应在当前请求中重述必要的公开上下文。搜索结果先经过 URL 与域名检查；可选页面读取还会执行 DNS/IP、重定向、类型、大小、超时和并发限制。Agent 不拥有任意浏览器、抓取器或未注册的 MCP 工具。
+
+Pi 回答在服务端完成原文引用与外链核验前保持缓冲；SSE 依然持续发送会话、工具、用量和心跳进度，但浏览器只渲染终态核验后的 Markdown。外部来源以不透明 ID 引用，只有服务端能生成可点击的 HTTPS 链接；模型生成的其他 Markdown、HTML、自动链接和邮箱链接会被拆除。
 
 浏览器只持久化当前用户和知识库对应的不透明会话 ID。更换固定模型、思考强度或联网选项时，下一条消息会派生子会话，并最多复制五轮完整问答；不会把原始网页、搜索片段或隐藏推理保存为会话内容。
 
@@ -127,10 +131,10 @@ flowchart LR
   R --> C[知识库 B 上下文]
   A --> IA[独立索引与历史]
   C --> IC[独立索引与历史]
-  IA --> Q[受控 RAG 与可选 WebSearch]
+  IA --> Q[Pi Agent 受限工具循环与可选 WebSearch]
   IC --> Q
   Q --> L[任务固定的 LLM 租约]
-  L --> O[流式回答或私有草稿]
+  L --> O[核验后回答或私有草稿]
   O --> W{用户确认写入?}
   W -->|否| P[继续预览]
   W -->|是| V[路径、冲突与原子写入检查]
@@ -142,10 +146,10 @@ flowchart LR
 
 | 目的地 | 只有在何时访问 | 可能发送的数据 |
 |---|---|---|
-| LLM | 用户发起生成，且已配置模型 | 问题、近期完整会话、选定笔记片段、文本附件片段 |
+| LLM | 用户发起生成，且已配置模型 | 问题、近期完整会话，以及受限工具定义与结果；工具结果可包含所选原文片段和文本附件片段 |
 | Embedding | 管理员确认构建或用户进行语义查询 | 可索引文本块或搜索查询 |
-| WebSearch | 当前问答会话显式启用 | 服务端生成的有限搜索词 |
-| 安全网页读取 | WebSearch 已启用且研究流程选择来源 | 经过验证的公开 HTTPS URL；读取结果随后作为定界文本交给模型 |
+| WebSearch | 当前问答会话显式启用，且尚未返回任何 Vault 工具结果 | Agent 在该任务内生成的有限查询 |
+| 安全网页读取 | 同一任务的 WebSearch 已返回精确 HTTPS URL | 经过验证的该 URL；读取结果随后作为定界文本交给模型 |
 
 Vault、会话、索引、草稿、恢复副本、审计和凭据默认留在本机卷。若选择远程 Provider，与其共享的数据受该 Provider 的条款、保留策略、区域和账号权限约束。请使用最小权限、独立额度与可轮换的 Key。
 
@@ -203,12 +207,14 @@ npm run docs:screenshots -- --chrome /path/to/chrome
 npm run security:ocr
 ```
 
-截图器只连接它启动的隔离回环服务，使用合成 Vault 与 mock LLM，并拒绝远程请求。它固定生成三张 `1440x1050`、两张 `1280x960` 和一张 `360x800` PNG，移除 `tEXt`、`zTXt`、`iTXt`、`tIME`、`eXIf`、`pHYs` metadata；提交前须再运行 OCR 检查。
+截图器只连接它启动的隔离回环服务，在浏览器中加载生产前端，并由脚本内的确定性合成 fixture API 提供会话、知识库、任务、草稿和 Provider 状态。它不会启动完整 Second Mind 服务、读取真实 Vault 或调用真实 Provider。截图器拒绝远程请求，固定生成三张 `1440x1050`、两张 `1280x960` 和一张 `360x800` PNG，移除 `tEXt`、`zTXt`、`iTXt`、`tIME`、`eXIf`、`pHYs` metadata；提交前须再运行 OCR 检查。
 
 Linux 发布门禁还执行 Compose config、镜像 build、隔离容器的 `health/live` 与 `health/ready`、浏览器 E2E、KaTeX 回归、镜像 history/inspect，以及截图 OCR/metadata 检查。
 
 ## 文档
 
+- [Pi Agent 迁移、部署与回滚](docs/pi-agent-migration.md)
+- [Claude Code 辅助安装](docs/claude-code-install.md)
 - [配置与 Provider](docs/configuration.md)
 - [HTTP API](docs/api.md)
 - [架构](docs/architecture.md)

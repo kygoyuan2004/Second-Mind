@@ -8,8 +8,9 @@ import {
   parsePrivateTerms,
 } from '../scripts/scan-screenshot-ocr.mjs';
 
-test('OCR scanner is restricted to the six canonical release screenshots', () => {
+test('OCR scanner covers the illustration and six canonical release screenshots', () => {
   assert.deepEqual(SCREENSHOT_PATHS, [
+    'docs/assets/second-mind-hero.png',
     'docs/assets/second-mind-qa.png',
     'docs/assets/second-mind-execution.png',
     'docs/assets/second-mind-provider-config.png',
@@ -17,7 +18,7 @@ test('OCR scanner is restricted to the six canonical release screenshots', () =>
     'docs/assets/second-mind-plan.png',
     'docs/assets/second-mind-mobile.png',
   ]);
-  assert.equal(new Set(SCREENSHOT_PATHS).size, 6);
+  assert.equal(new Set(SCREENSHOT_PATHS).size, 7);
 });
 
 test('OCR scanner identifies credential, address, private path, and denylist categories', () => {

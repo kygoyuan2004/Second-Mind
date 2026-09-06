@@ -7,6 +7,7 @@ const execFileAsync = promisify(execFile);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export const SCREENSHOT_PATHS = Object.freeze([
+  'docs/assets/second-mind-hero.png',
   'docs/assets/second-mind-qa.png',
   'docs/assets/second-mind-execution.png',
   'docs/assets/second-mind-provider-config.png',

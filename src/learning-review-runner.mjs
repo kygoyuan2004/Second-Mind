@@ -397,9 +397,9 @@ export async function runLearningReview({ task, review, index, maxContextChars, 
   }
   if (!facts.length) output.push('本次未获得可核验的期内学习事件；这不表示没有学习或没有完成。');
   const incomplete = coverage.partialRecords + coverage.failedRecords + coverage.budgetUncoveredRecords + coverage.discoveryFailures +
-    coverage.supplementalPartial + coverage.supplementalUncovered + coverage.rejectedFacts;
+    coverage.supplementalPartial + coverage.supplementalUncovered + coverage.rejectedFacts + coverage.inferredYearSegments;
   output.push(`> 覆盖情况：扫描 ${coverage.scannedFiles} 篇笔记；期内记录 ${coverage.candidateRecords} 篇，其中完整处理 ${coverage.completeRecords} 篇、部分处理 ${coverage.partialRecords} 篇、处理失败 ${coverage.failedRecords} 篇、预算未覆盖 ${coverage.budgetUncoveredRecords} 篇；扫描失败 ${coverage.discoveryFailures} 篇。补充原文完整处理 ${coverage.supplementalComplete} 篇、部分处理 ${coverage.supplementalPartial} 篇、未覆盖 ${coverage.supplementalUncovered} 篇。事实校验未通过 ${coverage.rejectedFacts} 条，其中时间归属未确认 ${coverage.temporalUncertainCount} 条。完整处理指该文件的全部期内片段。${incomplete ? ' 存在覆盖缺口，不能视为完整月度清单。' : ''}`);
-  if (coverage.inferredYearSegments) output.push(`> ${coverage.inferredYearSegments} 个日期记录片段未写年份，按本次时间范围中唯一适用的年份解释；普通无日期笔记不作此推定。`);
+  if (coverage.inferredYearSegments) output.push(`> ${coverage.inferredYearSegments} 个日期记录片段未写年份，已保留在候选清单；缺少明确年份的活动依据时，不计入本期学习。`);
   const sources = [...new Set(facts.flatMap((fact) => [
     ...fact.evidence, ...(fact.supplements || []).flatMap((supplement) => supplement.evidence),
   ].map((item) => item.path)))].map((path) => ({

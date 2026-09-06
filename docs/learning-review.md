@@ -8,7 +8,7 @@ The configured timezone defines calendar boundaries. “最近一个月” start
 
 The server enumerates the current knowledge-base snapshot rather than taking the first topK search hits. It identifies dated diary entries, plans, weekly date headings and date-table rows. Long records are split into continuous pieces. Explicit event dates override enclosing record dates. A weekly range straddling a boundary cannot prove that an undated event happened inside the requested period.
 
-Month/day records require an explicit year or, for date-record locations only, a unique year in the requested window. The answer reports use of this latter inference. Ordinary undated learning notes do not acquire a date from the query or from their file modification time.
+Month/day records require an explicit year to establish a personal event. A unique year in the requested window may locate candidate date-record fragments, but cannot prove their year: those fragments need a fully dated activity anchor or an explicit full event date in their cited text. The answer reports fragments with unresolved years as coverage gaps. Ordinary undated learning notes do not acquire a date from the query or from their file modification time.
 
 Ordinary reference notes cannot independently establish personal activity, even when their filename or title contains a date. Diary and plan records, or explicitly identified learning/revision/practice/reading logs, provide the primary event anchor. A copied author’s experience or a definition remains reference material.
 

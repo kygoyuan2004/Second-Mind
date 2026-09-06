@@ -408,6 +408,7 @@ export function validateLearningReviewFacts(output, batch, review) {
     const statement = short(item?.statement, 1_000);
     const evidence = [];
     const primary = [];
+    let unresolvedYear = false;
     for (const proposed of Array.isArray(item?.evidence) ? item.evidence.slice(0, 12) : []) {
       const segment = segments.find((candidate) => proposed.segmentId
         ? candidate.id === proposed.segmentId
@@ -424,10 +425,17 @@ export function validateLearningReviewFacts(output, batch, review) {
       // Keep it as supporting evidence only when a real activity record anchors
       // the same fact; explicit learning-log sections qualify independently.
       if (segment.dateBasis !== 'related' && ['plan', 'diary', 'activity'].includes(segment.recordType) && overlaps(segment.dateRange, window)) {
-        primary.push({ segment, quote, excerpt: citedContext(segment, start, end) });
+        const excerpt = citedContext(segment, start, end);
+        if (segment.yearBasis === 'request_window' && !evidenceDateRange(excerpt, [])) {
+          unresolvedYear = true;
+        } else primary.push({ segment, quote, excerpt });
       }
     }
-    if (!topic || !statement || !primary.length) { rejectedCount += 1; continue; }
+    if (!topic || !statement || !primary.length) {
+      rejectedCount += 1;
+      if (unresolvedYear) temporalUncertainCount += 1;
+      continue;
+    }
     const crossesWindow = primary.some((entry) => {
       const recorded = entry.segment.recordDateRange || entry.segment.dateRange;
       if (recorded.start >= window.start && recorded.end <= window.end) return false;

@@ -300,7 +300,7 @@ test('all explicit event dates are checked, while page ranges and linked-note da
 });
 
 test('overlapping week ranges retain original bounds and cannot date undated work inside the window', () => {
-  const segments = learningReviewSegments('weekly.md', '# 08-03–08-09\n已完成论文阅读。', review);
+  const segments = learningReviewSegments('weekly.md', '# 2026-08-03–08-09\n已完成论文阅读。', review);
   assert.deepEqual(segments[0].recordDateRange, { start: '2026-08-03', end: '2026-08-09' });
   const fact = proposedFact(segments[0]);
   fact.evidence[0].lineStart = 2;
@@ -308,7 +308,7 @@ test('overlapping week ranges retain original bounds and cannot date undated wor
   const result = validateLearningReviewFacts({ facts: [fact] }, segments, review);
   assert.equal(result.facts.length, 0);
   assert.equal(result.temporalUncertainCount, 1);
-  const explicit = learningReviewSegments('weekly.md', '# 08-03–08-09\n08-07 已完成论文阅读。', review);
+  const explicit = learningReviewSegments('weekly.md', '# 2026-08-03–08-09\n08-07 已完成论文阅读。', review);
   const datedFact = proposedFact(explicit[0]);
   datedFact.evidence[0].lineStart = 2;
   datedFact.evidence[0].quote = '已完成论文阅读。';
@@ -326,4 +326,21 @@ test('fact overflow is reported as rejected evidence instead of silently claimin
   const result = validateLearningReviewFacts({ facts }, { segments }, review);
   assert.equal(result.facts.length, 100);
   assert.equal(result.rejectedCount, 6);
+});
+
+
+test('a year inferred only from the request can discover candidates but cannot establish an event', () => {
+  const segments = learningReviewSegments('weekly/计划.md', '# 09-05\n已完成 CUDA 练习。', review);
+  const segment = segments[0];
+  const proposal = { topic: 'CUDA', statement: '已完成 CUDA 练习。', status: 'completed',
+    evidence: [{ segmentId: segment.id, path: segment.path, lineStart: 2, lineEnd: 2, quote: '已完成 CUDA 练习。' }] };
+  const unresolved = validateLearningReviewFacts({ facts: [proposal] }, { segments }, review);
+  assert.equal(unresolved.facts.length, 0);
+  assert.equal(unresolved.temporalUncertainCount, 1);
+  const dated = learningReviewSegments('weekly/计划.md', '# 09-05\n2026-09-05 已完成 CUDA 练习。', review);
+  const verified = validateLearningReviewFacts({ facts: [{ ...proposal,
+    evidence: [{ ...proposal.evidence[0], segmentId: dated[0].id, quote: '2026-09-05 已完成 CUDA 练习。' }],
+  }] }, { segments: dated }, review);
+  assert.equal(verified.facts.length, 1);
+  assert.equal(verified.facts[0].eventDate, '2026-09-05');
 });

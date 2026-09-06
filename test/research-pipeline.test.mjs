@@ -1245,14 +1245,15 @@ test('citation finalization strips model appendices and unknown links, then emit
 
   assert.equal((finalized.answer.match(/^### 联网来源$/gmu) || []).length, 1);
   assert.deepEqual(finalized.referencedSources.map((source) => source.id), ['W1']);
-  assert.match(finalized.body, /\[甲州组织部任前公示\]\(https:\/\/www\.city-a\.gov\.cn\/notice\)/u);
+  assert.match(finalized.body, /<a href="https:\/\/www\.city-a\.gov\.cn\/notice" data-second-mind-verified-external="true">甲州组织部任前公示<\/a>/u);
   assert.match(finalized.body, /\[未核验来源\]/u);
   assert.equal(finalized.answer.includes('evil.example'), false);
   assert.equal(finalized.answer.includes('javascript:'), false);
   assert.equal(finalized.answer.includes('data:'), false);
   assert.equal(finalized.answer.includes('file:'), false);
   assert.equal(finalized.answer.includes('ftp:'), false);
-  assert.equal(finalized.answer.includes('<a '), false);
+  assert.equal((finalized.answer.match(/data-second-mind-verified-external="true"/gu) || []).length, 2);
+  assert.equal(finalized.answer.includes('<a href="https://evil.example'), false);
   assert.equal(finalized.answer.includes('unsafe.example'), false);
   assert.equal(finalized.answer.includes('unused.example'), false);
   assert.equal(finalized.answer.includes('[W404]'), false);
@@ -1286,7 +1287,7 @@ test('citation finalization strips H1-H6 model source appendices with optional c
     );
     assert.equal((finalized.answer.match(/^### 联网来源$/gmu) || []).length, 1, heading);
     assert.equal(finalized.answer.includes('evil.example'), false, heading);
-    assert.equal(finalized.body, '核心事实[甲州组织部任前公示](https://www.city-a.gov.cn/notice)。', heading);
+    assert.equal(finalized.body, '核心事实<a href="https://www.city-a.gov.cn/notice" data-second-mind-verified-external="true">甲州组织部任前公示</a>。', heading);
   }
 });
 
@@ -1298,8 +1299,129 @@ test('citation finalization removes bare and concatenated internal Web source ID
 
   assert.doesNotMatch(finalized.answer, /W\d+/u);
   assert.match(finalized.body, /未核验来源标记已移除/u);
-  assert.match(finalized.body, /\[核验来源\]\(https:\/\/example\.com\/verified\)/u);
+  assert.match(finalized.body, /<a href="https:\/\/example\.com\/verified" data-second-mind-verified-external="true">核验来源<\/a>/u);
   assert.equal(finalized.referencedSources.length, 1);
+});
+
+test('citation finalization never scrubs source-like text inside server-minted anchors', () => {
+  const finalized = finalizeWebCitations(
+    '版本事实 [W1]。裸标记 W9 必须移除。',
+    [{
+      id: 'W1',
+      title: 'W3 Release Notes',
+      url: 'https://example.test/W3?channel=W4',
+    }],
+  );
+
+  assert.match(finalized.body, /href="https:\/\/example\.test\/W3\?channel=W4"/u);
+  assert.match(finalized.body, />W3 Release Notes<\/a>/u);
+  assert.match(finalized.body, /裸标记 \[未核验来源标记已移除\]/u);
+  assert.deepEqual(finalized.referencedSources.map((source) => source.id), ['W1']);
+});
+
+test('citation finalization preserves Markdown structure and code literals without citing code examples', () => {
+  const finalized = finalizeWebCitations([
+    '> 保留引用块 A&B。',
+    '',
+    '行内代码 `<tag>A&B [W1]</tag>` 不算引用。',
+    '',
+    '```html',
+    '<tag>A&B [W1]</tag>',
+    '### Sources',
+    '```',
+    '',
+    '正文事实 [W1]。',
+  ].join('\n'), [{
+    id: 'W1', title: '核验来源', url: 'https://example.test/source',
+  }]);
+
+  assert.match(finalized.body, /^> 保留引用块 A&amp;B。/u);
+  assert.match(finalized.body, /<code class="knowledge-model-code">&#60;tag&#62;A&#38;B &#91;W1&#93;&#60;&#47;tag&#62;<\/code>/u);
+  assert.match(finalized.body, /<pre><code class="knowledge-model-code">&#60;tag&#62;A&#38;B &#91;W1&#93;&#60;&#47;tag&#62;\n&#35;&#35;&#35; Sources\n<\/code><\/pre>/u);
+  assert.equal((finalized.body.match(/data-second-mind-verified-external/gu) || []).length, 1);
+  assert.deepEqual(finalized.referencedSources.map((source) => source.id), ['W1']);
+});
+
+test('code protection follows CommonMark fence and maximal inline delimiter rules', () => {
+  const source = { id: 'W2', title: '正文来源', url: 'https://example.test/body' };
+  const longerClosingFence = finalizeWebCitations([
+    '```html',
+    '<span>[W1]</span>',
+    '````',
+    '<img title="[W1]" src="https://evil.test/image">',
+    '正文 [W2]。',
+  ].join('\n'), [source]);
+  assert.match(longerClosingFence.body, /<pre><code class="knowledge-model-code">&#60;span&#62;&#91;W1&#93;&#60;&#47;span&#62;\n<\/code><\/pre>/u);
+  assert.doesNotMatch(longerClosingFence.body, /<img|evil\.test/u);
+  assert.equal((longerClosingFence.body.match(/&#91;W1&#93;/gu) || []).length, 1);
+  assert.deepEqual(longerClosingFence.referencedSources.map((item) => item.id), ['W2']);
+
+  const invalidFence = finalizeWebCitations([
+    '```bad`info',
+    '<img title="[W1]" src="https://evil.test/fence">',
+    '正文 [W2]。',
+  ].join('\n'), [source]);
+  assert.doesNotMatch(invalidFence.body, /<img|evil\.test|W1/u);
+  assert.deepEqual(invalidFence.referencedSources.map((item) => item.id), ['W2']);
+
+  const mismatchedInline = finalizeWebCitations([
+    '`<img title="[W1]" src="https://evil.test/inline">``',
+    '正文 [W2]。',
+  ].join('\n'), [source]);
+  assert.doesNotMatch(mismatchedInline.body, /<img|evil\.test|W1/u);
+  assert.deepEqual(mismatchedInline.referencedSources.map((item) => item.id), ['W2']);
+
+  const escapedInline = finalizeWebCitations([
+    '\\`<img title="[W1]" src="https://evil.test/escaped">`',
+    '正文 [W2]。',
+  ].join('\n'), [source]);
+  assert.doesNotMatch(escapedInline.body, /<img|evil\.test|W1/u);
+  assert.deepEqual(escapedInline.referencedSources.map((item) => item.id), ['W2']);
+
+  const nestedContainers = finalizeWebCitations([
+    '> ```bad`info',
+    '> <img title="[W1]" src="https://evil.test/quote">',
+    '',
+    '- 项目',
+    '  <img title="[W1]" src="https://evil.test/list">',
+    '',
+    '正文 [W2]。',
+  ].join('\n'), [source]);
+  assert.doesNotMatch(nestedContainers.body, /<img|evil\.test|W1/u);
+  assert.deepEqual(nestedContainers.referencedSources.map((item) => item.id), ['W2']);
+
+  const indented = finalizeWebCitations([
+    '代码：',
+    '',
+    '    <tag>A&B [W1]</tag>',
+    '',
+    '正文没有引用。',
+  ].join('\n'), [{ id: 'W1', title: '代码示例', url: 'https://example.test/code' }]);
+  assert.match(indented.body, /<pre><code class="knowledge-model-code">&#60;tag&#62;A&#38;B &#91;W1&#93;&#60;&#47;tag&#62;\n<\/code><\/pre>/u);
+  assert.equal(indented.body.includes('data-second-mind-verified-external'), false);
+  assert.deepEqual(indented.referencedSources, []);
+
+  const mergedTagBoundary = finalizeWebCitations(
+    '`<img src="/x">`<x>`',
+    [],
+  );
+  assert.match(mergedTagBoundary.body, /<code class="knowledge-model-code">&#60;img src&#61;&#34;&#47;x&#34;&#62;<\/code>/u);
+  assert.doesNotMatch(mergedTagBoundary.body, /<img/u);
+
+  const mergedLinkBoundary = finalizeWebCitations(
+    '`<img src="/x">`[](https://evil.test)`',
+    [],
+  );
+  assert.match(mergedLinkBoundary.body, /<code class="knowledge-model-code">&#60;img src&#61;&#34;&#47;x&#34;&#62;<\/code>/u);
+  assert.doesNotMatch(mergedLinkBoundary.body, /<img|evil\.test/u);
+
+  const mergedBlockContext = finalizeWebCitations([
+    'p<div',
+    '>',
+    '    <img src="/x">',
+  ].join('\n'), []);
+  assert.match(mergedBlockContext.body, /<pre><code class="knowledge-model-code">&#60;img src&#61;&#34;&#47;x&#34;&#62;\n<\/code><\/pre>/u);
+  assert.doesNotMatch(mergedBlockContext.body, /<img/u);
 });
 
 test('only claims backed by actually cited sources can persist', () => {

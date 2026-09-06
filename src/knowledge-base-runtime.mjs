@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { ConversationStore } from './conversation-store.mjs';
 import { EmbeddingClient } from './embedding-client.mjs';
 import {
@@ -138,61 +140,89 @@ export async function createKnowledgeBaseContext(baseConfig, entry, dependencies
     vaultLabel: entry.name,
     vaultPath: entry.rootPath,
     ...entry.state,
+    pi: {
+      ...(baseConfig.pi || {}),
+      sessionDir: entry.state.piSessionDir || path.join(entry.state.dataDir, 'pi-sessions'),
+    },
   };
   let index;
   let embedding;
   let embeddingRuntime = null;
-  if (dependencies.indexFactoryByKnowledgeBase) {
-    const supplied = await dependencies.indexFactoryByKnowledgeBase(entry, config);
-    index = supplied.index || supplied;
-    embedding = supplied.embedding || dependencies.embedding;
-    embeddingRuntime = supplied.embeddingRuntime || null;
-  } else if (dependencies.runtimeConfig) {
-    ({ index, embedding, embeddingRuntime } = await dynamicIndex(
+  let store;
+  let conversations;
+  let manager;
+  try {
+    if (dependencies.indexFactoryByKnowledgeBase) {
+      const supplied = await dependencies.indexFactoryByKnowledgeBase(entry, config);
+      index = supplied.index || supplied;
+      embedding = supplied.embedding || dependencies.embedding;
+      embeddingRuntime = supplied.embeddingRuntime || null;
+    } else if (dependencies.runtimeConfig) {
+      ({ index, embedding, embeddingRuntime } = await dynamicIndex(
+        config,
+        entry,
+        dependencies.runtimeConfig,
+        dependencies.embeddingRuntimeOptions || {},
+      ));
+    } else {
+      embedding = dependencies.embedding || new EmbeddingClient(config.embedding);
+      index = dependencies.index || new KnowledgeIndex(config, { client: embedding });
+    }
+    store = dependencies.storeFactory
+      ? await dependencies.storeFactory(entry, config, index)
+      : new VaultStore(config, { policy: index.policy, index });
+    conversations = dependencies.conversationFactory
+      ? await dependencies.conversationFactory(entry, config)
+      : new ConversationStore(config.conversationFile);
+    manager = dependencies.managerFactory
+      ? await dependencies.managerFactory(entry, config, { index, store, conversations })
+      : new TaskManager(config, {
+          index,
+          store,
+          conversations,
+          llm: dependencies.llm,
+          llmRouter: dependencies.llmRouter,
+          webSearch: dependencies.webSearch,
+          webReader: dependencies.webReader,
+          responsesExtractor: dependencies.responsesExtractor,
+          runtimeConfig: dependencies.runtimeConfig,
+          allowLegacyTestEngine: dependencies.allowLegacyTestEngine === true,
+        });
+    const ready = manager.ready;
+    await ready;
+    return Object.freeze({
+      knowledgeBaseId: entry.knowledgeBaseId,
+      knowledgeBaseRevision: entry.revision,
+      name: entry.name,
       config,
-      entry,
-      dependencies.runtimeConfig,
-      dependencies.embeddingRuntimeOptions || {},
-    ));
-  } else {
-    embedding = dependencies.embedding || new EmbeddingClient(config.embedding);
-    index = dependencies.index || new KnowledgeIndex(config, { client: embedding });
+      index,
+      embedding,
+      embeddingRuntime,
+      store,
+      conversations,
+      manager,
+      ready,
+      async close() {
+        let failure = null;
+        try {
+          await manager.close();
+        } catch (error) {
+          failure = error;
+        }
+        try {
+          await embeddingRuntime?.waitForMaintenance?.();
+        } catch (error) {
+          failure ||= error;
+        }
+        if (failure) throw failure;
+      },
+    });
+  } catch (error) {
+    if (manager?.close) await manager.close().catch(() => {});
+    else await index?.close?.().catch(() => {});
+    await embeddingRuntime?.waitForMaintenance?.().catch(() => {});
+    throw error;
   }
-  const store = dependencies.storeFactory
-    ? await dependencies.storeFactory(entry, config, index)
-    : new VaultStore(config, { policy: index.policy, index });
-  const conversations = dependencies.conversationFactory
-    ? await dependencies.conversationFactory(entry, config)
-    : new ConversationStore(config.conversationFile);
-  const manager = dependencies.managerFactory
-    ? await dependencies.managerFactory(entry, config, { index, store, conversations })
-    : new TaskManager(config, {
-        index,
-        store,
-        conversations,
-        llm: dependencies.llm,
-        llmRouter: dependencies.llmRouter,
-        webSearch: dependencies.webSearch,
-        webReader: dependencies.webReader,
-        responsesExtractor: dependencies.responsesExtractor,
-        runtimeConfig: dependencies.runtimeConfig,
-      });
-  const ready = manager.ready;
-  await ready;
-  return Object.freeze({
-    knowledgeBaseId: entry.knowledgeBaseId,
-    knowledgeBaseRevision: entry.revision,
-    name: entry.name,
-    config,
-    index,
-    embedding,
-    embeddingRuntime,
-    store,
-    conversations,
-    manager,
-    ready,
-    close: () => manager.close(),
-  });
 }
 
 export const knowledgeBaseRuntimeInternals = Object.freeze({ disabledEmbedding, usable, openIndex });

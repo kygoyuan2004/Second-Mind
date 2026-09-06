@@ -137,6 +137,7 @@ async function fixture(t, options = {}) {
   };
   const manager = new TaskManager(config, {
     index, store, llm, webSearch, webReader, responsesExtractor, conversations,
+    allowLegacyTestEngine: true,
   });
   t.after(() => manager.close());
   await manager.ready;

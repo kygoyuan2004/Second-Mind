@@ -57,7 +57,7 @@ async function fixture(t, { broken = false, maxContextChars = 24_000, webAvailab
     embedding: { provider: 'disabled' }, retrieval: { topK: 12, maxContextChars },
     research: { contextualizerEnabled: true },
     webSearch: { enabled: true }, sync: { provider: 'filesystem', displayName: 'Fixture' },
-  }, { now: () => NOW, index, llm, conversations,
+  }, { now: () => NOW, index, llm, conversations, allowLegacyTestEngine: true,
     store: { ready: Promise.resolve(), cleanupDrafts: async () => {}, auditBestEffort: async () => [] },
     webSearch: { publicStatus: () => ({ enabled: webAvailable, configured: webAvailable, provider: 'fixture' }),
       searchMany: async () => { calls.web += 1; throw new Error('Personal review must skip web'); } },

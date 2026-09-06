@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { ChatModelClient, createPinnedModelFetch } from './llm-client.mjs';
+import { probePiToolCalling } from './pi-model-adapter.mjs';
 import {
   effectiveReasoningEffort,
   identifyModelProvider,
@@ -54,6 +55,20 @@ function normalizedBase(value) {
 
 function digest(value) {
   return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+function piCapabilityKey(binding) {
+  return digest({
+    protocol: binding.protocol,
+    providerId: binding.providerId,
+    requestProfile: binding.requestProfile,
+    authMode: binding.authMode,
+    apiBase: binding.apiBase,
+    actualModel: binding.actualModel || binding.model,
+    requiresCompleteAssistantReplay: binding.requiresCompleteAssistantReplay === true,
+    assistantReasoningField: String(binding.assistantReasoningField || ''),
+    apiKey: binding.apiKey,
+  });
 }
 
 /**
@@ -117,6 +132,7 @@ function resolveBinding(snapshot, modelId) {
   const apiBase = normalizedBase(connection.apiBase);
   const apiKey = String(connection.apiKey || '');
   const configuredActualModel = String(model.actualModel || '').trim();
+  const providerId = String(connection.providerId || identifyModelProvider(connection)).trim().toLowerCase();
   if (!PROTOCOLS.has(protocol) || !AUTH_MODES.has(authMode) || !REQUEST_PROFILES.has(requestProfile)) {
     fail('The selected model binding is invalid.', 'MODEL_BINDING_INVALID', 500);
   }
@@ -141,7 +157,7 @@ function resolveBinding(snapshot, modelId) {
   });
   try {
     const provider = resolveModelProvider({
-      providerId: String(connection.providerId || identifyModelProvider(connection)),
+      providerId,
       apiBase,
       protocol,
       authMode,
@@ -187,6 +203,7 @@ function resolveBinding(snapshot, modelId) {
     privateConfig: Object.freeze({
       protocol,
       provider: protocol === 'anthropic-messages' ? 'anthropic' : 'openai-compatible',
+      providerId,
       authMode,
       requestProfile,
       apiBase,
@@ -217,6 +234,13 @@ function safeValidationError(error, apiKey = '') {
     LLM_BAD_REQUEST: 'The provider rejected the validation request. Check API compatibility and model settings.',
     LLM_RATE_LIMITED: 'The provider rate limit or quota was exceeded.',
     LLM_EMPTY_RESPONSE: 'The provider returned an empty validation response.',
+    PI_TOOL_CALL_REQUIRED: 'The model returned text but did not call the required Pi tool.',
+    PI_TOOL_RESULT_NOT_OBSERVED: 'The model called a tool but did not consume its result in a later turn.',
+    PI_TOOL_ROUND_TRIP_INCOMPLETE: 'The model did not complete the required Pi tool round trip.',
+    PI_TOOL_PROBE_TIMEOUT: 'The Pi tool capability check timed out.',
+    PI_TOOL_PROBE_ABORTED: 'The Pi tool capability check was cancelled.',
+    PI_TOOL_PROBE_BINDING_INVALID: 'The provider binding cannot be adapted to Pi tool calling.',
+    PI_TOOL_PROBE_REQUEST_FAILED: 'The provider failed the Pi tool capability request.',
   })[code] || 'Model connection validation failed. Review the provider settings and try again.';
   // Provider text is intentionally discarded rather than redacted because it
   // may contain a private Base URL or account metadata unrelated to the key.
@@ -308,6 +332,14 @@ export class RuntimeChatModelRouter {
     this.clientFactory = options.clientFactory || ((config, clientOptions) => (
       new ChatModelClient(config, clientOptions)
     ));
+    // Production validation proves a complete model -> tool -> result -> model
+    // round trip. Custom client factories are retained only for the existing
+    // isolated transport unit tests, whose doubles implement text generation
+    // but not Pi's provider event protocol.
+    this.toolProbe = Object.hasOwn(options, 'toolProbe')
+      ? options.toolProbe
+      : options.clientFactory ? null : probePiToolCalling;
+    this.verifiedPiBindings = new Set();
     this.fetch = options.fetch || createPinnedModelFetch({
       lookup: options.lookup,
       httpsRequest: options.httpsRequest || options.request,
@@ -367,9 +399,41 @@ export class RuntimeChatModelRouter {
       requiresCompleteAssistantReplay: binding.model.requiresCompleteAssistantReplay,
       assistantReasoningField: binding.model.assistantReasoningField,
     };
+    const piBinding = () => {
+      const capabilityKey = piCapabilityKey(binding.privateConfig);
+      const value = {
+        protocol: binding.privateConfig.protocol,
+        providerId: binding.privateConfig.providerId,
+        requestProfile: binding.privateConfig.requestProfile,
+        authMode: binding.privateConfig.authMode,
+        apiBase: binding.privateConfig.apiBase,
+        actualModel: binding.model.actualModel,
+        maxOutputTokens: maximumOutputTokens,
+        // The managed catalog currently does not claim a verified context
+        // window. A conservative 64K budget prevents Pi from postponing
+        // compaction based on an assumed 128K deployment capability.
+        contextWindow: finiteInteger(binding.model.contextWindow, 64_000, 4_096, 2_000_000),
+        temperature: binding.privateConfig.requestProfile === 'kimi-openai'
+          ? null
+          : this.baseConfig.temperature,
+        requiresCompleteAssistantReplay:
+          binding.model.requiresCompleteAssistantReplay === true,
+        assistantReasoningField: binding.model.assistantReasoningField || '',
+      };
+      Object.defineProperties(value, {
+        apiKey: { value: binding.privateConfig.apiKey, enumerable: false },
+        fetch: { value: this.fetch, enumerable: false },
+        toolCapabilityVerified: {
+          value: this.verifiedPiBindings.has(capabilityKey),
+          enumerable: false,
+        },
+      });
+      return Object.freeze(value);
+    };
     Object.defineProperties(lease, {
       client: { value: client, enumerable: false, writable: false, configurable: false },
       generate: { value: generate, enumerable: false, writable: false, configurable: false },
+      piBinding: { value: piBinding, enumerable: false, writable: false, configurable: false },
     });
     return Object.freeze(lease);
   }
@@ -422,8 +486,24 @@ export class RuntimeChatModelRouter {
       let lease;
       try {
         lease = this.createLease(snapshot, modelId);
-        await runConnectionProbe(lease, { signal: options.signal });
-        const result = Object.freeze({ modelId, ok: true, code: '', message: '' });
+        if (this.toolProbe) {
+          const piBinding = lease.piBinding();
+          await this.toolProbe(piBinding, {
+            fetch: this.fetch,
+            signal: options.signal,
+            timeoutMs: this.baseConfig.timeoutMs,
+          });
+          this.verifiedPiBindings.add(piCapabilityKey(piBinding));
+        } else {
+          await runConnectionProbe(lease, { signal: options.signal });
+        }
+        const result = Object.freeze({
+          modelId,
+          ok: true,
+          code: this.toolProbe ? 'PI_TOOL_CALL_VERIFIED' : '',
+          message: '',
+          capability: this.toolProbe ? 'pi-tool-calling' : 'legacy-test-probe',
+        });
         await options.onResult?.(result);
         return result;
       } catch (error) {
@@ -467,6 +547,7 @@ export const runtimeChatModelInternals = {
   VALIDATION_MESSAGES, VALIDATION_OUTPUT_TOKENS,
   mapWithConcurrency,
   normalizedBase,
+  piCapabilityKey,
   resolveBinding,
   runConnectionProbe,
   safeValidationError,

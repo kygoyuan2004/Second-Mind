@@ -116,6 +116,9 @@ test('two Vaults receive independent private namespaces and a CAS revision', asy
     const alpha = registry.resolve('alpha');
     const beta = registry.resolve('beta');
     assert.notEqual(alpha.state.dataDir, beta.state.dataDir);
+    assert.notEqual(alpha.state.piSessionDir, beta.state.piSessionDir);
+    assert.equal(alpha.state.piSessionDir, path.join(alpha.state.dataDir, 'pi-sessions'));
+    assert.equal(beta.state.piSessionDir, path.join(beta.state.dataDir, 'pi-sessions'));
     assert.match(alpha.state.dataDir, new RegExp(`${path.sep}knowledge-bases${path.sep}alpha-[a-f0-9]{16}$`));
     assert.match(beta.state.dataDir, new RegExp(`${path.sep}knowledge-bases${path.sep}beta-[a-f0-9]{16}$`));
     assert.equal((await fsp.stat(value.options.managedFile)).mode & 0o777, 0o600);
@@ -177,6 +180,38 @@ test('duplicate, nested, disabled-default, and state-overlap registrations fail 
       legacy: { ...value.legacy, vaultPath: value.state },
     });
     await assert.rejects(unsafe.ready, (error) => error.code === 'KNOWLEDGE_BASE_STATE_OVERLAP');
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test('every legacy state path is rejected when it crosses any allowed Vault mount', async () => {
+  const value = await fixture();
+  try {
+    const unsafePaths = {
+      dataDir: path.join(value.beta, 'private-state'),
+      indexDir: path.join(value.beta, 'private-index'),
+      draftDir: path.join(value.beta, 'private-drafts'),
+      recoveryDir: path.join(value.beta, 'private-recovery'),
+      conversationFile: path.join(value.beta, 'private-conversations.json'),
+      auditFile: path.join(value.beta, 'private-audit.jsonl'),
+      piSessionDir: path.join(value.beta, 'private-pi-sessions'),
+      embeddingProfileFile: path.join(value.beta, 'private-embedding-active.json'),
+      embeddingSlotsRoot: path.join(value.beta, 'private-embedding-slots'),
+    };
+    for (const [field, unsafePath] of Object.entries(unsafePaths)) {
+      const registry = new KnowledgeBaseRegistry({
+        ...value.options,
+        managedFile: path.join(value.state, `knowledge-bases-${field}.json`),
+        legacy: { ...value.legacy, [field]: unsafePath },
+      });
+      await assert.rejects(
+        registry.ready,
+        (error) => error instanceof KnowledgeBaseRegistryError &&
+          error.code === 'KNOWLEDGE_BASE_STATE_OVERLAP' && error.status === 500,
+        field,
+      );
+    }
   } finally {
     await value.cleanup();
   }
@@ -323,6 +358,83 @@ test('an externally edited registry cannot rebind an ID during refresh', async (
     assert.equal(snapshot.stale, true);
     assert.equal(registry.resolve('beta').rootPath, value.beta);
     assert.equal(registry.runtimeSnapshot().revision !== 'external-rebind-attempt', true);
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test('an external edit cannot reuse a registry revision for different content', async () => {
+  const value = await fixture();
+  try {
+    const registry = new KnowledgeBaseRegistry(value.options);
+    const initial = await registry.ready;
+    const updated = await registry.update(twoBases(initial.revision));
+    const original = JSON.parse(await fsp.readFile(value.options.managedFile, 'utf8'));
+    const reused = {
+      ...original,
+      updatedAt: new Date(Date.parse(original.updatedAt) + 1_000).toISOString(),
+      knowledgeBases: original.knowledgeBases.map((entry) => (
+        entry.knowledgeBaseId === 'alpha' ? { ...entry, name: 'Reused Revision Alpha' } : entry
+      )),
+    };
+    await fsp.writeFile(
+      value.options.managedFile,
+      `${JSON.stringify(reused, null, 2)}\n`,
+      { mode: 0o600 },
+    );
+
+    const stale = await registry.refresh();
+    assert.equal(stale.stale, true);
+    assert.equal(stale.revision, updated.revision);
+    assert.equal(registry.runtimeSnapshot().staleCode, 'KNOWLEDGE_BASE_REVISION_REUSED');
+    assert.equal(registry.resolve('alpha').name, 'Example Alpha');
+
+    await fsp.writeFile(
+      value.options.managedFile,
+      `${JSON.stringify(original, null, 2)}\n`,
+      { mode: 0o600 },
+    );
+    const repaired = await registry.refresh();
+    assert.equal(repaired.stale, false);
+    assert.equal(registry.resolve('alpha').name, 'Example Alpha');
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test('an update refreshes the disk revision before CAS and does not overwrite external R2', async () => {
+  const value = await fixture();
+  try {
+    const registry = new KnowledgeBaseRegistry(value.options);
+    const initial = await registry.ready;
+    const updated = await registry.update(twoBases(initial.revision));
+    const external = JSON.parse(await fsp.readFile(value.options.managedFile, 'utf8'));
+    external.revision = 'external-r2';
+    external.updatedAt = new Date(Date.parse(external.updatedAt) + 1_000).toISOString();
+    external.knowledgeBases = external.knowledgeBases.map((entry) => (
+      entry.knowledgeBaseId === 'alpha' ? { ...entry, name: 'External R2 Alpha' } : entry
+    ));
+    await fsp.writeFile(
+      value.options.managedFile,
+      `${JSON.stringify(external, null, 2)}\n`,
+      { mode: 0o600 },
+    );
+
+    await assert.rejects(
+      registry.update(twoBases(updated.revision, {
+        alpha: { name: 'Stale Client Alpha' },
+      })),
+      (error) => error instanceof KnowledgeBaseRegistryError &&
+        error.code === 'KNOWLEDGE_BASE_REVISION_CONFLICT' && error.status === 409,
+    );
+    assert.equal(registry.publicSnapshot().revision, 'external-r2');
+    assert.equal(registry.resolve('alpha').name, 'External R2 Alpha');
+    const persisted = JSON.parse(await fsp.readFile(value.options.managedFile, 'utf8'));
+    assert.equal(persisted.revision, 'external-r2');
+    assert.equal(
+      persisted.knowledgeBases.find((entry) => entry.knowledgeBaseId === 'alpha').name,
+      'External R2 Alpha',
+    );
   } finally {
     await value.cleanup();
   }

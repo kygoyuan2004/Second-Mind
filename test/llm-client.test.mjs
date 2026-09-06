@@ -718,10 +718,12 @@ function fakeRequest(calls, responseFixture = {}) {
     const request = new EventEmitter();
     request.end = (body) => {
       let pinned;
-      options.lookup(target.hostname, { all: false }, (error, address, family) => {
-        if (error) throw error;
-        pinned = { address, family };
-      });
+      if (typeof options.lookup === 'function') {
+        options.lookup(target.hostname, { all: false }, (error, address, family) => {
+          if (error) throw error;
+          pinned = { address, family };
+        });
+      }
       calls.push({ target: target.href, options, pinned, body: Buffer.from(body).toString('utf8') });
       queueMicrotask(() => {
         const responseBody = Buffer.from(responseFixture.body || '{"choices":[{"message":{"content":"ok"}}]}');
@@ -798,6 +800,41 @@ test('pinned model transport denies redirects, IP literals, and non-443 public e
   );
 });
 
+test('pinned model transport preserves the configured local and trusted-private HTTP contract', async () => {
+  const loopbackCalls = [];
+  const loopbackFetch = createPinnedModelFetch({
+    allowInsecureHttp: false,
+    httpRequest: fakeRequest(loopbackCalls),
+  });
+  const loopbackResponse = await loopbackFetch('http://127.0.0.1:11434/v1/chat/completions', {
+    method: 'POST', body: '{}',
+  });
+  assert.equal((await loopbackResponse.json()).choices[0].message.content, 'ok');
+  assert.equal(loopbackCalls[0].options.agent, false);
+
+  const privateCalls = [];
+  const privateFetch = createPinnedModelFetch({
+    allowInsecureHttp: true,
+    httpRequest: fakeRequest(privateCalls),
+  });
+  const privateResponse = await privateFetch('http://model-gateway:8080/v1/chat/completions', {
+    method: 'POST', body: '{}',
+  });
+  assert.equal((await privateResponse.json()).choices[0].message.content, 'ok');
+  assert.equal(privateCalls.length, 1);
+
+  const deniedFetch = createPinnedModelFetch({
+    allowInsecureHttp: false,
+    httpRequest: () => assert.fail('a denied private HTTP endpoint must not connect'),
+  });
+  await assert.rejects(
+    () => deniedFetch('http://model-gateway:8080/v1/chat/completions', {
+      method: 'POST', body: '{}',
+    }),
+    { code: 'LLM_INSECURE_ENDPOINT' },
+  );
+});
+
 test('pinned model transport resolves every request and blocks a rebinding answer before connecting', async () => {
   let resolutions = 0;
   const calls = [];
@@ -838,4 +875,24 @@ test('pinned model transport cancellation interrupts DNS resolution without open
   controller.abort(new DOMException('cancelled', 'AbortError'));
   await assert.rejects(pending, { name: 'AbortError' });
   assert.equal(calls, 0);
+});
+
+test('direct Pi bindings are secret-safe, conservative, and suppress Kimi temperature', () => {
+  const fetchFn = async () => new Response('');
+  const client = new ChatModelClient(baseConfig({
+    provider: 'kimi',
+    requestProfile: 'kimi-openai',
+    apiBase: 'https://api.moonshot.example/v1',
+    apiKey: 'fixture-private-key',
+    model: 'kimi-k3',
+    temperature: 0.7,
+  }), { fetch: fetchFn });
+  const binding = client.piBinding();
+  assert.equal(binding.contextWindow, 64_000);
+  assert.equal(binding.temperature, null);
+  assert.equal(binding.apiKey, 'fixture-private-key');
+  assert.strictEqual(binding.fetch, fetchFn);
+  assert.equal(binding.requiresCompleteAssistantReplay, true);
+  assert.equal(binding.assistantReasoningField, 'reasoning_content');
+  assert.equal(JSON.stringify(binding).includes('fixture-private-key'), false);
 });

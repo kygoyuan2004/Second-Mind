@@ -4,12 +4,20 @@ import path from 'node:path';
 import { markPublicMessage } from './public-errors.mjs';
 import { normalizeLearningReview } from './learning-review.mjs';
 
-const STORE_VERSION = 2;
+const STORE_VERSION = 3;
 const MAX_FORK_TURNS = 5;
 const MAX_RESEARCH_ITEMS = 20;
+const MAX_SOURCE_RANGES = 100;
+const SHA256 = /^[a-f0-9]{64}$/iu;
 
 function boundedText(value, maxLength) {
   return String(value ?? '').trim().slice(0, maxLength);
+}
+
+function normalizePiSessionFile(value) {
+  const filename = boundedText(value, 255);
+  if (!filename || path.basename(filename) !== filename || !filename.endsWith('.jsonl')) return '';
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/u.test(filename) ? filename : '';
 }
 
 function boundedStringList(value, { maxItems = 20, maxLength = 240 } = {}) {
@@ -35,6 +43,22 @@ function normalizedHttpsUrl(value) {
   } catch {
     return '';
   }
+}
+
+function normalizeSourceRanges(value) {
+  if (!Array.isArray(value)) return [];
+  const ranges = [];
+  for (const item of value) {
+    const startLine = Array.isArray(item) ? item[0] : item?.startLine;
+    const endLine = Array.isArray(item) ? item[1] : item?.endLine;
+    if (
+      !Number.isSafeInteger(startLine) || startLine < 1 ||
+      !Number.isSafeInteger(endLine) || endLine < startLine
+    ) continue;
+    ranges.push([startLine, endLine]);
+    if (ranges.length >= MAX_SOURCE_RANGES) break;
+  }
+  return ranges;
 }
 
 function normalizeVerifiedClaim(value) {
@@ -86,6 +110,13 @@ function normalizeCitedSource(value) {
   if (provider) source.source = provider;
   if (publishedAt) source.publishedAt = publishedAt;
   if (effectiveAt) source.effectiveAt = effectiveAt;
+  const isVaultSource = Boolean(vaultPath) && (kind === 'vault' || (!kind && !url));
+  if (isVaultSource) {
+    const hash = typeof value.hash === 'string' ? value.hash.trim() : '';
+    if (SHA256.test(hash)) source.hash = hash.toLowerCase();
+    if (Array.isArray(value.ranges)) source.ranges = normalizeSourceRanges(value.ranges);
+    if (typeof value.complete === 'boolean') source.complete = value.complete;
+  }
   return source;
 }
 
@@ -226,10 +257,12 @@ function hydrateConversation(value) {
   const forkedAt = boundedText(value.forkedAt, 80);
   const researchContext = normalizeResearchContext(value.researchContext);
   const effectiveEffort = boundedText(value.effectiveEffort, 80);
+  const piSessionFile = normalizePiSessionFile(value.piSessionFile);
   if (parentConversationId) conversation.parentConversationId = parentConversationId;
   if (forkedAt) conversation.forkedAt = forkedAt;
   if (researchContext) conversation.researchContext = researchContext;
   if (effectiveEffort) conversation.effectiveEffort = effectiveEffort;
+  if (piSessionFile) conversation.piSessionFile = piSessionFile;
   if (knowledgeBaseId) conversation.knowledgeBaseId = knowledgeBaseId;
   if (knowledgeBaseRevision) conversation.knowledgeBaseRevision = knowledgeBaseRevision;
   return conversation;
@@ -348,6 +381,12 @@ export class ConversationStore {
     return conversation;
   }
 
+  referencedPiSessionFiles() {
+    return new Set([...this.conversations.values()]
+      .map((conversation) => normalizePiSessionFile(conversation?.piSessionFile))
+      .filter(Boolean));
+  }
+
   prepare(userId, kind, metadata = {}) {
     const now = new Date().toISOString();
     const conversation = {
@@ -377,8 +416,10 @@ export class ConversationStore {
     const knowledgeBaseRevision = boundedText(metadata.knowledgeBaseRevision, 120);
     const researchContext = normalizeResearchContext(metadata.researchContext);
     const effectiveEffort = boundedText(metadata.effectiveEffort, 80);
+    const piSessionFile = normalizePiSessionFile(metadata.piSessionFile);
     if (researchContext) conversation.researchContext = researchContext;
     if (effectiveEffort) conversation.effectiveEffort = effectiveEffort;
+    if (piSessionFile) conversation.piSessionFile = piSessionFile;
     if (knowledgeBaseId) conversation.knowledgeBaseId = knowledgeBaseId;
     if (knowledgeBaseRevision) conversation.knowledgeBaseRevision = knowledgeBaseRevision;
     return conversation;
@@ -548,6 +589,7 @@ export class ConversationStore {
 export const conversationStoreInternals = {
   atomicJson,
   normalizeResearchContext,
+  normalizeSourceRanges,
   recentCompleteTurns,
   serializedConversation,
 };

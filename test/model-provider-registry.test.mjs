@@ -8,6 +8,7 @@ import {
   modelProviderRegistryInternals,
   normalizeProviderModelId,
   providerAuthHeaders,
+  providerModelCapabilities,
   providerModelOutputLimit,
   providerModelReasoningPolicy,
   providerUniversalReasoningPolicy,
@@ -210,6 +211,21 @@ test('reasoning parameters are provider-controlled and unknown custom models sta
     assert.equal(Object.hasOwn(fields, 'output_config'), false);
     assert.equal(Object.hasOwn(fields, 'enable_thinking'), false);
   }
+});
+
+test('reasoning providers identify product histories that cannot replay visible assistant text alone', () => {
+  assert.deepEqual(
+    providerModelCapabilities(resolveModelProvider({ providerId: 'kimi' }), 'kimi-k3'),
+    { requiresCompleteAssistantReplay: true, assistantReasoningField: 'reasoning_content' },
+  );
+  assert.deepEqual(
+    providerModelCapabilities(resolveModelProvider({ providerId: 'deepseek' }), 'deepseek-reasoner'),
+    { requiresCompleteAssistantReplay: true, assistantReasoningField: 'reasoning_content' },
+  );
+  assert.deepEqual(
+    providerModelCapabilities(resolveModelProvider({ providerId: 'glm' }), 'glm-4.7'),
+    { requiresCompleteAssistantReplay: false, assistantReasoningField: '' },
+  );
 });
 
 test('registered model families derive their selectable reasoning policy server-side', () => {

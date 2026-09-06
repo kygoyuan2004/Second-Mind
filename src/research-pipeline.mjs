@@ -1,4 +1,5 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
+import { marked } from 'marked';
 import {
   classifyVaultTemporalRequest,
   isVaultTemporalInventoryQuestion,
@@ -1799,9 +1800,45 @@ export function verifiedClaimsXml(claims, assessment = null) {
 
 function markdownLabel(value) {
   return compact(value || 'External source', 240)
-    .replace(/[\[\]\r\n]/gu, ' ')
+    // Web titles are untrusted. In particular, raw tags or entities inside a
+    // Markdown link label can create a nested protocol-relative anchor after
+    // marked + DOMPurify. Keep the label plain before the server mints HTML.
+    .replace(/[\[\]<>\r\n&]/gu, ' ')
     .replace(/\s+/gu, ' ')
     .trim() || 'External source';
+}
+
+function htmlAttribute(value) {
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function htmlText(value) {
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+export function opaqueHtmlText(value) {
+  return [...String(value || '')].map((character) => {
+    const codePoint = character.codePointAt(0);
+    const asciiPunctuation =
+      (codePoint >= 0x21 && codePoint <= 0x2f) ||
+      (codePoint >= 0x3a && codePoint <= 0x40) ||
+      (codePoint >= 0x5b && codePoint <= 0x60) ||
+      (codePoint >= 0x7b && codePoint <= 0x7e);
+    return asciiPunctuation ? `&#${codePoint};` : character;
+  }).join('');
+}
+
+function verifiedExternalAnchor(source) {
+  const url = canonicalWebUrl(source?.url);
+  if (!url) return markdownLabel(source?.title);
+  return `<a href="${htmlAttribute(url)}" data-second-mind-verified-external="true">${opaqueHtmlText(markdownLabel(source?.title))}</a>`;
 }
 
 export function stripGeneratedAppendices(value) {
@@ -1813,23 +1850,126 @@ export function stripGeneratedAppendices(value) {
     .trimEnd();
 }
 
+function lexMarkdownTopLevel(source) {
+  const value = String(source || '');
+  try {
+    const tokens = marked.lexer(value, { gfm: true });
+    if (tokens.map((token) => token.raw).join('') === value) return tokens;
+  } catch {
+    // Fail safe: unprotected text is cleaned as untrusted model output below.
+  }
+  return [{ type: 'text', raw: value }];
+}
+
+function protectMarkedInlineTokens(raw, tokens, reserve) {
+  if (!Array.isArray(tokens)) return null;
+  let cursor = 0;
+  let output = '';
+  for (const token of tokens) {
+    const segment = String(token?.raw || '');
+    if (!segment) continue;
+    const index = raw.indexOf(segment, cursor);
+    if (index < 0) return null;
+    output += raw.slice(cursor, index);
+    if (token.type === 'codespan') {
+      output += reserve(
+        segment,
+        `<code class="knowledge-model-code">${opaqueHtmlText(token.text)}</code>`,
+      );
+    } else if (Array.isArray(token.tokens)) {
+      output += protectMarkedInlineTokens(segment, token.tokens, reserve) ?? segment;
+    } else {
+      output += segment;
+    }
+    cursor = index + segment.length;
+  }
+  return `${output}${raw.slice(cursor)}`;
+}
+
+export function protectMarkdownCodeSegments(value) {
+  const nonce = randomBytes(18).toString('hex');
+  const segments = [];
+  const reserve = (segment, safeHtml) => {
+    const token = `SMCODE${nonce}SEGMENT${segments.length}END`;
+    segments.push({ token, segment, safeHtml });
+    return token;
+  };
+  // Delegate syntax classification to the exact marked version used by the
+  // browser. Protect top-level fenced/indented blocks and explicit inline-code
+  // AST nodes in ordinary text-bearing blocks. Container blocks stay
+  // unprotected and therefore fail safe through HTML/link cleaning below.
+  const body = lexMarkdownTopLevel(value).map((token) => {
+    if (token.type === 'code') {
+      const code = String(token.text || '');
+      const trailingNewline = code && !code.endsWith('\n') ? '\n' : '';
+      return reserve(
+        token.raw,
+        `<pre><code class="knowledge-model-code">${opaqueHtmlText(code)}${trailingNewline}</code></pre>`,
+      );
+    }
+    if (!['paragraph', 'heading', 'text'].includes(token.type)) return token.raw;
+    return protectMarkedInlineTokens(token.raw, token.tokens, reserve) ?? token.raw;
+  }).join('');
+  return {
+    body,
+    restore(output) {
+      let restored = String(output || '');
+      for (const { token, segment } of segments) {
+        restored = restored.split(token).join(segment);
+      }
+      return restored;
+    },
+    restoreAsSafeHtml(output) {
+      let restored = String(output || '');
+      for (const { token, safeHtml } of segments) {
+        restored = restored.split(token).join(safeHtml);
+      }
+      return restored;
+    },
+  };
+}
+
+function stripModelHtml(value) {
+  let output = String(value || '');
+  // Removing one hostile tag can expose another one assembled from adjacent
+  // fragments (for example `<<x>a ...>`). Iterate to a fixed point, with a
+  // hard bound, then encode every remaining HTML delimiter/entity so model
+  // text cannot create a hidden DOM node after citation accounting.
+  for (let iteration = 0; iteration < 64; iteration += 1) {
+    const next = output
+      .replace(/<!--[\s\S]*?(?:-->|$)/gu, '')
+      .replace(/<\?[\s\S]*?(?:\?>|$)/gu, '')
+      .replace(/<!\[CDATA\[[\s\S]*?(?:\]\]>|$)/giu, '')
+      .replace(/<![A-Z][\s\S]*?(?:>|$)/giu, '')
+      .replace(/<\/?[A-Za-z][^>]*>/gu, '');
+    if (next === output) break;
+    output = next;
+  }
+  return output
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;');
+}
+
 export function finalizeWebCitations(value, sources) {
   const byId = new Map((Array.isArray(sources) ? sources : [])
     .filter((source) => /^W\d+$/u.test(String(source?.id || '')) && canonicalWebUrl(source?.url))
     .map((source) => [source.id, { ...source, url: canonicalWebUrl(source.url) }]));
   const referenced = [];
   const seen = new Set();
-  let body = stripGeneratedAppendices(value);
+  const protectedCode = protectMarkdownCodeSegments(value);
+  let body = stripGeneratedAppendices(protectedCode.body);
   // Models must cite opaque source IDs. Strip every other link syntax first,
   // including protocol-relative, non-HTTP, reference-style, autolink, and raw
   // HTML variants; the server alone is allowed to mint clickable Web links.
   body = body
     .replace(/^\s*\[[^\]\n]{1,200}\]:\s*\S[^\n]*$/gmu, '')
     .replace(/!?\[([^\]\n]{0,500})\]\[[^\]\n]{0,200}\]/gu, '$1')
-    .replace(/!?\[([^\]\n]{0,500})\]\((?:\\.|[^)\n]){0,2048}\)/gu, '$1')
-    .replace(/<\/?[A-Za-z][^>]*>/gu, '')
-    .replace(/(?:https?:)?\/\/[^\s<>\])}]+/giu, '[未核验外链已移除]')
+    .replace(/!?\[([^\]\n]{0,500})\]\((?:\\.|[^)\n]){0,2048}\)/gu, '$1');
+  body = stripModelHtml(body)
+    .replace(/(?:https?:)?\/\/[^\s<>\])}&]+/giu, '[未核验外链已移除]')
     .replace(/\b(?:javascript|data|file|ftp):[^\s<>\])}]*/giu, '[未核验外链已移除]');
+  const citationNonce = randomBytes(18).toString('hex');
+  const citationSlots = [];
   body = body.replace(/\[W(\d+)\]/gu, (match, digits) => {
     const source = byId.get(`W${digits}`);
     if (!source) return '[未核验来源]';
@@ -1837,7 +1977,9 @@ export function finalizeWebCitations(value, sources) {
       seen.add(source.id);
       referenced.push(source);
     }
-    return `[${markdownLabel(source.title)}](${source.url})`;
+    const token = `SMWEB${citationNonce}CITATION${citationSlots.length}END`;
+    citationSlots.push({ token, source });
+    return token;
   });
   // A model may occasionally concatenate opaque IDs without the required
   // citation brackets (for example, "W12W3"). They are implementation details,
@@ -1846,8 +1988,12 @@ export function finalizeWebCitations(value, sources) {
     /(?<![\p{L}\p{N}_])W\d+(?:[\s,，、;/|]*W\d+)*(?![\p{L}\p{N}_])/gu,
     '[未核验来源标记已移除]',
   );
+  for (const { token, source } of citationSlots) {
+    body = body.split(token).join(verifiedExternalAnchor(source));
+  }
+  body = protectedCode.restoreAsSafeHtml(body);
   const appendix = referenced.length
-    ? `\n\n### 联网来源\n${referenced.map((source) => `- [${markdownLabel(source.title)}](${source.url})`).join('\n')}`
+    ? `\n\n### 联网来源\n${referenced.map((source) => `- ${verifiedExternalAnchor(source)}`).join('\n')}`
     : '';
   return { body, appendix, answer: `${body}${appendix}`, referencedSources: referenced };
 }

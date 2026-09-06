@@ -553,9 +553,12 @@ export function providerModelCapabilities(adapterInput, modelInput = '') {
   const model = normalizeProviderModelId(adapter, modelInput).toLowerCase();
   const kimiK3OpenAi = adapter.id === 'kimi' &&
     adapter.protocol === 'openai-chat-completions' && /^kimi-k3(?:-|$)/u.test(model);
+  const deepseekOpenAi = adapter.id === 'deepseek' &&
+    adapter.protocol === 'openai-chat-completions';
+  const requiresCompleteAssistantReplay = kimiK3OpenAi || deepseekOpenAi;
   return deepFreeze({
-    requiresCompleteAssistantReplay: kimiK3OpenAi,
-    assistantReasoningField: kimiK3OpenAi ? 'reasoning_content' : '',
+    requiresCompleteAssistantReplay,
+    assistantReasoningField: requiresCompleteAssistantReplay ? 'reasoning_content' : '',
   });
 }
 

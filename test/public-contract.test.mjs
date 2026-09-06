@@ -225,7 +225,9 @@ test('execution UI separates stages, elapsed time, and verified provider usage',
     /listen\('text_replace',[\s\S]*?listen\('draft_ready'/,
   )?.[0] || '';
   assert.match(textReplacement, /state\.assistantText = String\(data\.text \|\| ''\)/);
-  assert.match(textReplacement, /renderMarkdown\(state\.assistantNode, state\.assistantText\)/);
+  assert.match(textReplacement, /renderMarkdown\(state\.assistantNode, state\.assistantText, '', \{/);
+  assert.match(textReplacement, /verifiedExternalOnly: true/);
+  assert.match(textReplacement, /verifiedExternalUrls: state\.assistantVerifiedExternalUrls/);
   assert.doesNotMatch(textReplacement, /state\.assistantText \+=/);
   assert.match(source, /data\?\.callId \|\| data\?\.requestId/);
   assert.match(source, /usage\.cacheReadInputTokens/);

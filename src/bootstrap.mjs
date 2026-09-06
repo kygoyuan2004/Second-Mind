@@ -158,28 +158,58 @@ function stableDiscoveredId(mountId, relativePath, name) {
   return `${slug}-${suffix}`;
 }
 
-async function discoverMountedVaults(allowedRoots) {
-  const discovered = [];
+async function discoverMountedVaults(allowedRoots, legacy = null) {
+  const legacyRoot = legacy?.vaultPath ? await fsp.realpath(legacy.vaultPath) : '';
+  const candidates = [];
   for (const mount of allowedRoots) {
     const root = await fsp.realpath(mount.path);
     const rootMarker = await fsp.lstat(path.join(root, '.obsidian')).catch(() => null);
-    if (rootMarker?.isDirectory()) continue;
+    if (rootMarker?.isDirectory()) {
+      const name = path.basename(root) || mount.label;
+      candidates.push({ rootPath: root, name, mountId: mount.id, relativePath: '.' });
+      continue;
+    }
     const children = await fsp.readdir(root, { withFileTypes: true });
     for (const child of children.sort((left, right) => left.name.localeCompare(right.name))) {
       if (!child.isDirectory() || child.isSymbolicLink?.()) continue;
-      const marker = await fsp.lstat(path.join(root, child.name, '.obsidian')).catch(() => null);
+      const rootPath = path.join(root, child.name);
+      const marker = await fsp.lstat(path.join(rootPath, '.obsidian')).catch(() => null);
       if (!marker?.isDirectory()) continue;
-      discovered.push({
-        knowledgeBaseId: stableDiscoveredId(mount.id, child.name, child.name),
-        name: child.name,
-        mountId: mount.id,
-        relativePath: child.name,
-        enabled: true,
-        default: discovered.length === 0,
-      });
+      candidates.push({ rootPath, name: child.name, mountId: mount.id, relativePath: child.name });
     }
   }
-  return discovered.slice(0, 32);
+
+  let legacyEntry = null;
+  const managedEntries = [];
+  for (const candidate of candidates) {
+    if (!legacyEntry && legacyRoot && candidate.rootPath === legacyRoot) {
+      legacyEntry = {
+        knowledgeBaseId: legacy.knowledgeBaseId || 'default',
+        name: legacy.name || legacy.vaultLabel || 'Default knowledge base',
+        mountId: candidate.mountId,
+        relativePath: candidate.relativePath,
+        enabled: legacy.enabled !== false,
+        default: true,
+        legacyState: true,
+      };
+      continue;
+    }
+    managedEntries.push({
+      knowledgeBaseId: stableDiscoveredId(
+        candidate.mountId,
+        candidate.relativePath,
+        candidate.name,
+      ),
+      name: candidate.name,
+      mountId: candidate.mountId,
+      relativePath: candidate.relativePath,
+      enabled: true,
+      default: false,
+    });
+  }
+  const discovered = (legacyEntry ? [legacyEntry, ...managedEntries] : managedEntries).slice(0, 32);
+  if (!legacyEntry && discovered.length) discovered[0].default = true;
+  return discovered;
 }
 
 export async function createRuntimeBootstrap(options = {}) {
@@ -217,33 +247,35 @@ export async function createRuntimeBootstrap(options = {}) {
   const privateSnapshot = runtimeConfig.runtimeSnapshot();
   const config = managedServerConfig(baseConfig, privateSnapshot);
   const allowedRoots = configuredAllowedRoots(baseConfig, options);
+  const legacyKnowledgeBase = {
+    knowledgeBaseId: 'default',
+    name: baseConfig.vaultLabel || 'Knowledge Base',
+    vaultPath: baseConfig.vaultPath,
+    dataDir: baseConfig.dataDir,
+    indexDir: baseConfig.indexDir,
+    draftDir: baseConfig.draftDir,
+    recoveryDir: baseConfig.recoveryDir,
+    conversationFile: baseConfig.conversationFile,
+    auditFile: baseConfig.auditFile,
+    piSessionDir: baseConfig.pi?.sessionDir,
+    embeddingProfileFile: paths.activeProfileFile,
+    embeddingSlotsRoot: paths.slotsRoot,
+  };
   const knowledgeBaseRegistry = options.knowledgeBaseRegistry || suppliedDependencies.knowledgeBaseRegistry ||
     new KnowledgeBaseRegistry({
       managedFile: paths.knowledgeBaseFile,
       stateDir: baseConfig.dataDir,
       allowedRoots,
       privateStatePaths: [baseConfig.dataDir, paths.runtimeRoot],
-      legacy: {
-        knowledgeBaseId: 'default',
-        name: baseConfig.vaultLabel || 'Knowledge Base',
-        vaultPath: baseConfig.vaultPath,
-        dataDir: baseConfig.dataDir,
-        indexDir: baseConfig.indexDir,
-        draftDir: baseConfig.draftDir,
-        recoveryDir: baseConfig.recoveryDir,
-        conversationFile: baseConfig.conversationFile,
-        auditFile: baseConfig.auditFile,
-        embeddingProfileFile: paths.activeProfileFile,
-        embeddingSlotsRoot: paths.slotsRoot,
-      },
+      legacy: legacyKnowledgeBase,
     });
   await knowledgeBaseRegistry.ready;
   if (
     knowledgeBaseRegistry.publicSnapshot().source === 'legacy'
     && options.autoDiscoverKnowledgeBases !== false
   ) {
-    const discovered = await discoverMountedVaults(allowedRoots);
-    if (discovered.length) {
+    const discovered = await discoverMountedVaults(allowedRoots, legacyKnowledgeBase);
+    if (discovered.some((entry) => entry.legacyState !== true)) {
       await knowledgeBaseRegistry.update({
         expectedRevision: knowledgeBaseRegistry.publicSnapshot().revision,
         knowledgeBases: discovered,

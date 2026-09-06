@@ -4,6 +4,8 @@ import http from 'node:http';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { finalizeWebCitations } from '../src/research-pipeline.mjs';
+import { taskManagerInternals } from '../src/task-manager.mjs';
 import { sourceBrowser } from './source-browser-helper.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -12,8 +14,8 @@ import { enhanceSourceLinks, createSourcePreview } from '/knowledge-sources.js';
 const output = document.querySelector('#output');
 let context = 'alpha';
 const fileUrl = (p) => '/api/knowledge/file?path=' + encodeURIComponent(p) + '&knowledgeBaseId=' + context;
-function render(target, text, basePath = '') {
-  (window.VaultMindRenderer || window.YuanAgentRenderer).render(target, text);
+function render(target, text, basePath = '', options = {}) {
+  (window.VaultMindRenderer || window.YuanAgentRenderer).render(target, text, options);
   enhanceSourceLinks(target, { basePath, fileUrl, onOpen: (p,h) => preview.open(p,h) });
 }
 const preview = createSourcePreview({
@@ -22,7 +24,10 @@ const preview = createSourcePreview({
   fileUrl, resolveUrl: (p) => '/api/knowledge/resolve?path=' + encodeURIComponent(p) + '&knowledgeBaseId=' + context,
   render, contextKey: () => context,
 });
-window.fixture = { render: (text, base = '') => render(output, text, base), preview,
+window.fixture = { render: (text, base = '') => render(output, text, base),
+  strictRender: (text, urls = [], base = '') => render(output, text, base, {
+    verifiedExternalOnly: true, verifiedExternalUrls: urls,
+  }), preview,
   setContext: (value) => { context = value; preview.cancel(); document.querySelector('dialog').close(); } };
 `;
 
@@ -107,4 +112,38 @@ test('browser previews historical, streamed and nested sources without changing 
   assert.equal(await browser.evaluate("document.querySelectorAll('#output a[data-knowledge-source]').length"), 1);
   await browser.evaluate("fixture.render('[Up](../Root.md) [[Wiki Note]] `Space Note.md`', 'Folder/Parent.md')");
   assert.deepEqual(await browser.evaluate("[...document.querySelectorAll('#output a[data-knowledge-source]')].map(a=>a.dataset.knowledgeSource)"), ['Root.md', 'Folder/Wiki Note', 'Folder/Space Note.md']);
+
+  const hostileVaultPath = 'Notes/**bold** (https://evil-vault.test/pixel).md';
+  const hostileVaultAnswer = taskManagerInternals.finalizeVaultCitations(
+    `Vault [[${hostileVaultPath}]]`,
+    [{
+      id: taskManagerInternals.vaultSourceId(hostileVaultPath),
+      kind: 'vault',
+      path: hostileVaultPath,
+      title: hostileVaultPath,
+    }],
+  ).body;
+  const strictAnswer = `${finalizeWebCitations(
+    'Verified source [W1]. `**bold** [x](https://evil-code.test) ~~x~~` [protocol relative](//evil.test/path) www.evil.test foo@evil.test',
+    [{
+      id: 'W1',
+      title: '<a href="&#47;&#47;evil-title.test/phish">Trusted title</a>',
+      url: 'https://example.test/foo)[phish](//evil.test/path',
+    }],
+  ).answer}\n\n${hostileVaultAnswer}\n\n<a href="https://evil-attr.test/" ping="https://evil-ping.test/" data-second-mind-verified-external="true">forged marker</a>\n\n<img src="data:image/svg+xml,evil" usemap="#escape"><map name="escape"><area href="https://evil-area.test/"></map><video poster="https://evil-poster.test/"><source src="https://evil-media.test/"></video>\n\n[[Notes/www.evil.test.md]] [[Notes/foo@evil.test.md]]`;
+  await browser.evaluate(`fixture.strictRender(${JSON.stringify(strictAnswer)}, ${JSON.stringify([
+    'https://example.test/foo)[phish](//evil.test/path',
+  ])})`);
+  assert.equal(await browser.evaluate("document.querySelectorAll('#output a[href^=\"https://example.test/\"]').length"), 2,
+    'the verified inline citation and server appendix are the only external anchors');
+  assert.equal(await browser.evaluate("[...document.querySelectorAll('#output a')].some(a => a.protocol === 'mailto:' || a.origin === 'http://evil.test' || a.origin === 'https://evil.test' || a.origin === 'http://evil-title.test' || a.origin === 'https://evil-title.test' || a.origin === 'https://evil-attr.test')"), false);
+  assert.equal(await browser.evaluate("document.querySelectorAll('#output img, #output picture, #output video, #output audio, #output source, #output track, #output map, #output area').length"), 0);
+  assert.equal(await browser.evaluate("document.querySelectorAll('#output [src], #output [srcset], #output [poster], #output [ping], #output [usemap]').length"), 0);
+  assert.equal(await browser.evaluate("document.querySelector('#output code.knowledge-model-code').textContent"), '**bold** [x](https://evil-code.test) ~~x~~');
+  assert.equal(await browser.evaluate("document.querySelectorAll('#output code.knowledge-model-code a, #output code.knowledge-model-code strong, #output code.knowledge-model-code del').length"), 0);
+  assert.equal(await browser.evaluate("document.querySelector('#output code.knowledge-verified-vault-path').textContent"), hostileVaultPath);
+  assert.equal(await browser.evaluate("document.querySelectorAll('#output code.knowledge-verified-vault-path a, #output code.knowledge-verified-vault-path img, #output code.knowledge-verified-vault-path strong').length"), 0);
+  assert.deepEqual(await browser.evaluate("[...document.querySelectorAll('#output a[data-knowledge-source]')].map(a=>a.dataset.knowledgeSource)"), [
+    'Notes/www.evil.test.md', 'Notes/foo@evil.test.md',
+  ]);
 });

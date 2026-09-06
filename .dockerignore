@@ -22,6 +22,9 @@
 !src/llm-client.mjs
 !src/model-provider-registry.mjs
 !src/path-policy.mjs
+!src/pi-agent-runtime.mjs
+!src/pi-agent-tools.mjs
+!src/pi-model-adapter.mjs
 !src/provider-config-dto.mjs
 !src/public-errors.mjs
 !src/research-pipeline.mjs

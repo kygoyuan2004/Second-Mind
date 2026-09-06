@@ -162,6 +162,60 @@ function anthropicSse(answer, requestNumber) {
   return `${events.map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join('')}`;
 }
 
+function anthropicToolSse(name, input, requestNumber) {
+  const events = [
+    {
+      type: 'message_start',
+      message: {
+        id: `fixture-message-${requestNumber}`,
+        type: 'message',
+        role: 'assistant',
+        content: [],
+        model: BENCHMARK_MODEL,
+        stop_reason: null,
+        usage: {
+          input_tokens: 40 + requestNumber,
+          output_tokens: 0,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+        },
+      },
+    },
+    {
+      type: 'content_block_start',
+      index: 0,
+      content_block: {
+        type: 'tool_use',
+        id: `fixture-tool-${requestNumber}`,
+        name,
+        input: {},
+      },
+    },
+    {
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'input_json_delta', partial_json: JSON.stringify(input) },
+    },
+    { type: 'content_block_stop', index: 0 },
+    {
+      type: 'message_delta',
+      delta: { stop_reason: 'tool_use', stop_sequence: null },
+      usage: { output_tokens: 8 },
+    },
+    { type: 'message_stop' },
+  ];
+  return `${events.map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join('')}`;
+}
+
+function requestToolState(body) {
+  const toolNames = new Set((body.tools || []).map((tool) => String(tool?.name || '')));
+  const blocks = (body.messages || []).flatMap((message) => (
+    Array.isArray(message?.content) ? message.content : []
+  ));
+  const toolResults = blocks.filter((block) => block?.type === 'tool_result');
+  return { toolNames, toolResults };
+}
+
 function fakeUpstream(fakeCredential, sanitizedRequests) {
   return async (input, init = {}) => {
     assert.equal(String(input), OFFICIAL_ANTHROPIC_MESSAGES_URL);
@@ -176,18 +230,62 @@ function fakeUpstream(fakeCredential, sanitizedRequests) {
     assert.ok(body.max_tokens > 0 && body.max_tokens <= BENCHMARK_MAX_OUTPUT_TOKENS);
     // Keep only non-sensitive protocol facts. The request prompts and headers
     // deliberately never enter the test audit object.
+    const { toolNames, toolResults } = requestToolState(body);
+    const publicProbe = JSON.stringify(body.messages || []).includes(
+      'Public synthetic connectivity check.',
+    );
+    const capabilityProbe = toolNames.has('second_mind_capability_nonce');
+    const piKnowledgeRun = toolNames.has('search_knowledge');
+    const requestKind = publicProbe
+      ? 'public-probe'
+      : capabilityProbe
+        ? 'pi-capability'
+        : piKnowledgeRun
+          ? 'pi-knowledge'
+          : 'original-agent';
     sanitizedRequests.push({
       url: String(input),
       model: body.model,
       maxTokens: body.max_tokens,
+      requestKind,
+      toolResultCount: toolResults.length,
     });
-    const publicProbe = JSON.stringify(body.messages || []).includes(
-      'Public synthetic connectivity check.',
-    );
-    const answer = publicProbe
-      ? 'OK'
-      : `${ANSWER_MARKER}: the public fixture launch date is 2026-09-05.`;
-    return new Response(anthropicSse(answer, sanitizedRequests.length), {
+
+    let stream;
+    if (capabilityProbe && toolResults.length === 0) {
+      const challenge = JSON.stringify(body.messages || [])
+        .match(/Invocation nonce: ([a-f0-9]+)/u)?.[1];
+      assert.ok(challenge, 'Pi capability request must contain its invocation nonce');
+      stream = anthropicToolSse(
+        'second_mind_capability_nonce',
+        { nonce: challenge },
+        sanitizedRequests.length,
+      );
+    } else if (capabilityProbe) {
+      const proof = JSON.stringify(body.messages || [])
+        .match(/capability-proof:[a-f0-9]+/u)?.[0];
+      assert.ok(proof, 'Pi capability result must be returned to the model');
+      stream = anthropicSse(`Verified ${proof}`, sanitizedRequests.length);
+    } else if (piKnowledgeRun && toolResults.length === 0) {
+      stream = anthropicToolSse('search_knowledge', {
+        query: 'Project Aurora launch date',
+        route: 'keyword',
+        limit: 2,
+      }, sanitizedRequests.length);
+    } else if (piKnowledgeRun && toolResults.length === 1) {
+      stream = anthropicToolSse('read_note', {
+        path: 'notes/aurora.md',
+        startLine: 1,
+        maxLines: 20,
+        maxChars: 4_000,
+      }, sanitizedRequests.length);
+    } else {
+      const answer = publicProbe
+        ? 'OK'
+        : `${ANSWER_MARKER}: the public fixture launch date is 2026-09-05. [[notes/aurora.md]]`;
+      stream = anthropicSse(answer, sanitizedRequests.length);
+    }
+    return new Response(stream, {
       status: 200,
       headers: { 'content-type': 'text/event-stream; charset=utf-8' },
     });
@@ -456,7 +554,19 @@ test('fake upstream integration runs public probe then four private paired calib
     assert.equal(result.integrity.production.unchanged, true);
     assert.equal(result.budget.openReservations, 0);
     assert.equal(result.budget.uncertainCny, 0);
-    assert.equal(sanitizedRequests.length, 9);
+    assert.equal(sanitizedRequests.length, 19);
+    assert.deepEqual(
+      Object.fromEntries(['public-probe', 'original-agent', 'pi-capability', 'pi-knowledge']
+        .map((kind) => [kind, sanitizedRequests.filter((request) => (
+          request.requestKind === kind
+        )).length])),
+      {
+        'public-probe': 1,
+        'original-agent': 4,
+        'pi-capability': 2,
+        'pi-knowledge': 12,
+      },
+    );
     assert.equal(progressEvents[0].event, 'preflight-complete');
     assert.equal(progressEvents[1].event, 'public-probe-complete');
     assert.equal(
@@ -483,15 +593,15 @@ test('fake upstream integration runs public probe then four private paired calib
       JSON.parse(await fsp.readFile(path.join(project.privateRunRoot, relative), 'utf8'))
     )));
     const telemetryWindows = rawPayloads.map((payload) => payload.rawResult.model.telemetry);
+    assert.equal(telemetryWindows[0].cursorStart, 1);
+    assert.equal(telemetryWindows.at(-1).cursorEnd, 19);
+    assert.ok(telemetryWindows.every((telemetry, index) => (
+      index === 0 || telemetry.cursorStart === telemetryWindows[index - 1].cursorEnd
+    )));
     assert.deepEqual(
-      telemetryWindows.map((telemetry) => telemetry.cursorStart),
-      [1, 2, 3, 4, 5, 6, 7, 8],
+      telemetryWindows.map((telemetry) => telemetry.recordCount).sort((left, right) => left - right),
+      [1, 1, 1, 1, 3, 3, 3, 5],
     );
-    assert.deepEqual(
-      telemetryWindows.map((telemetry) => telemetry.cursorEnd),
-      [2, 3, 4, 5, 6, 7, 8, 9],
-    );
-    assert.ok(telemetryWindows.every((telemetry) => telemetry.recordCount === 1));
     assert.ok(rawPayloads.every((payload) => payload.rawResult.model.telemetry.records
       .every((record) => record.anonymousId === payload.rawResult.anonymousId)));
     assert.ok(result.benchmark.records.every((record) => record.status === 'success'));

@@ -127,7 +127,9 @@ async function fixture(t, options = {}) {
     deep: { enabled: true, topK: 16 },
     sync: { provider: 'filesystem', displayName: 'Fixture' },
   };
-  const manager = new TaskManager(config, { index, store, llm, webSearch, conversations });
+  const manager = new TaskManager(config, {
+    index, store, llm, webSearch, conversations, allowLegacyTestEngine: true,
+  });
   t.after(() => manager.close());
   await manager.ready;
   return {

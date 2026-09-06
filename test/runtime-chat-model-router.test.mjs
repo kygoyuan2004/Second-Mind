@@ -84,6 +84,44 @@ test('task leases bind an immutable client snapshot and force the configured act
   assert.throws(() => { lease.model.actualModel = 'mutated'; }, TypeError);
 });
 
+test('Pi bindings use a conservative unknown context window and suppress Kimi temperature', () => {
+  const router = new RuntimeChatModelRouter({
+    baseConfig: { temperature: 0.65 },
+    fetch: async () => assert.fail('Binding inspection must not perform provider I/O.'),
+  });
+  const genericBinding = router.createLease(snapshot(), 'main').piBinding();
+  assert.equal(genericBinding.contextWindow, 64_000);
+  assert.equal(genericBinding.temperature, 0.65);
+
+  const kimiBinding = router.createLease(snapshot({
+    connections: [connection({
+      providerId: 'kimi',
+      apiBase: 'https://api.moonshot.cn/v1',
+    })],
+    models: [model({
+      actualModel: 'kimi-k3',
+      requestProfile: 'kimi-openai',
+    })],
+  }), 'main').piBinding();
+  assert.equal(kimiBinding.contextWindow, 64_000);
+  assert.equal(kimiBinding.temperature, null);
+  assert.equal(kimiBinding.requiresCompleteAssistantReplay, true);
+  assert.equal(kimiBinding.assistantReasoningField, 'reasoning_content');
+
+  const deepseekBinding = router.createLease(snapshot({
+    connections: [connection({
+      providerId: 'deepseek',
+      apiBase: 'https://api.deepseek.com',
+    })],
+    models: [model({
+      actualModel: 'deepseek-reasoner',
+      requestProfile: 'deepseek-openai',
+    })],
+  }), 'main').piBinding();
+  assert.equal(deepseekBinding.requiresCompleteAssistantReplay, true);
+  assert.equal(deepseekBinding.assistantReasoningField, 'reasoning_content');
+});
+
 test('model binding revision excludes credentials but changes with transport or model identity', () => {
   const first = connection({ apiKey: 'fixture-key-one' });
   const rotated = connection({ apiKey: 'fixture-key-two' });
@@ -267,6 +305,32 @@ test('a stale model catalog revision is rejected before a provider call', async 
   assert.equal(calls, 0);
 });
 
+test('production validation requires a Pi tool round trip and carries a process-local receipt', async () => {
+  const probes = [];
+  const router = new RuntimeChatModelRouter({
+    fetch: async () => assert.fail('The injected Pi probe owns provider I/O'),
+    async toolProbe(modelBinding, options) {
+      probes.push({ modelBinding, options });
+      return { ok: true, code: 'PI_TOOL_CALL_VERIFIED', toolCalls: 1, assistantTurns: 2 };
+    },
+  });
+  const before = router.createLease(snapshot(), 'main').piBinding();
+  assert.equal(before.toolCapabilityVerified, false);
+  assert.equal(Object.keys(before).includes('toolCapabilityVerified'), false);
+  assert.equal(JSON.stringify(before).includes('fixture-runtime-model-key'), false);
+
+  const result = await router.validateAllEnabled(snapshot());
+  assert.equal(result.results[0].code, 'PI_TOOL_CALL_VERIFIED');
+  assert.equal(result.results[0].capability, 'pi-tool-calling');
+  assert.equal(probes.length, 1);
+  assert.equal(probes[0].modelBinding.actualModel, 'provider-model-v1');
+  assert.equal(typeof probes[0].modelBinding.fetch, 'function');
+  assert.equal(Object.keys(probes[0].modelBinding).includes('apiKey'), false);
+
+  const after = router.createLease(snapshot(), 'main').piBinding();
+  assert.equal(after.toolCapabilityVerified, true);
+});
+
 test('validation tests every enabled model once with fixed non-private input and concurrency at most two', async () => {
   const runtime = snapshot({
     connections: [
@@ -290,6 +354,7 @@ test('validation tests every enabled model once with fixed non-private input and
   let maximumActive = 0;
   const calls = [];
   const result = await validateAllEnabled(runtime, {
+    toolProbe: null,
     fetch: async (url, init) => {
       active += 1;
       maximumActive = Math.max(maximumActive, active);
@@ -323,6 +388,7 @@ test('connection probe accepts non-empty token-limited output without retrying',
     let calls = 0;
     let requestBody;
     const router = new RuntimeChatModelRouter({
+      toolProbe: null,
       fetch: async (_url, init) => {
         calls += 1;
         requestBody = JSON.parse(init.body);
@@ -352,6 +418,7 @@ test('connection probe accepts non-empty token-limited output without retrying',
 test('connection probe accepts a structurally valid token-limited response when reasoning uses the visible-output budget', async () => {
   let calls = 0;
   const router = new RuntimeChatModelRouter({
+    toolProbe: null,
     fetch: async () => {
       calls += 1;
       return Response.json({
@@ -369,6 +436,7 @@ test('connection probe accepts a structurally valid token-limited response when 
 test('connection probe still rejects a completed response with no usable output', async () => {
   let calls = 0;
   const router = new RuntimeChatModelRouter({
+    toolProbe: null,
     fetch: async () => {
       calls += 1;
       return Response.json({
@@ -421,6 +489,7 @@ test('DeepSeek validation uses the canonical model, 64 tokens, and no thinking c
     })],
   });
   const result = await validateAllEnabled(runtime, {
+    toolProbe: null,
     fetch: async (_url, init) => {
       body = JSON.parse(init.body);
       return Response.json({ choices: [{ message: { content: 'OK' } }] });
@@ -449,6 +518,7 @@ test('validation returns actionable redacted DeepSeek billing, model, and auth f
     });
     await assert.rejects(
       () => validateAllEnabled(runtime, {
+        toolProbe: null,
         fetch: async () => Response.json(
           { error: { message: providerMessage } },
           { status },
@@ -477,6 +547,7 @@ test('validation reports all attempted models, never retries, and redacts creden
   });
   const counts = new Map();
   const router = new RuntimeChatModelRouter({
+    toolProbe: null,
     fetch: async (_url, init) => {
       const body = JSON.parse(init.body);
       counts.set(body.model, (counts.get(body.model) || 0) + 1);

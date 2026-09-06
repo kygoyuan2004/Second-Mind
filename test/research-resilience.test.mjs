@@ -224,6 +224,7 @@ async function fixture(t, {
     webReader: { enabled: false, normalMaxPages: 2, totalMaxChars: 40_000 },
     responsesFallback: { enabled: false, timeoutMs: 1_000 },
   }, {
+    allowLegacyTestEngine: true,
     index,
     store,
     llm,

@@ -29,6 +29,9 @@
     "postinstall": "node scripts/sync-vendor-assets.mjs"
   },
   "dependencies": {
+    "@earendil-works/pi-agent-core": "0.85.1",
+    "@earendil-works/pi-ai": "0.85.1",
+    "@earendil-works/pi-coding-agent": "0.85.1",
     "@modelcontextprotocol/sdk": "1.30.0",
     "dompurify": "3.4.14",
     "jsonrepair": "3.15.0",

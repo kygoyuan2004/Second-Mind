@@ -373,6 +373,7 @@ async function taskManagerFixture(t, snapshot, options = {}) {
     research: { contextualizerEnabled: false, loopEnabled: false },
   };
   const manager = new TaskManager(config, {
+    allowLegacyTestEngine: true,
     runtimeConfig: registry, conversations, index: stubIndex(), store: stubStore(),
     llm: { generate: async () => 'legacy client must not be used' }, llmRouter, webSearch,
     responsesExtractor: {

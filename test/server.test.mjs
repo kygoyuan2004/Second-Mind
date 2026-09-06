@@ -106,7 +106,9 @@ test('authenticated API supports grounded Q&A and review-before-write diary flow
   await fsp.mkdir(path.join(project.vaultPath, '.obsidian'), { recursive: true });
   await fsp.writeFile(path.join(project.vaultPath, '.obsidian', 'private.json'), '{"token":"fixture"}');
 
-  app = await createApp(appConfig(project), { llm: new FakeLlm() });
+  app = await createApp(appConfig(project), {
+    llm: new FakeLlm(), allowLegacyTestEngine: true,
+  });
   await app.ready;
   await new Promise((resolve) => app.server.listen(0, '127.0.0.1', resolve));
   const address = app.server.address();
@@ -280,7 +282,7 @@ test('authenticated HTTP API exposes and executes bounded Deep retrieval', async
     '# RAG\n\nRRF combines lexical and semantic ranked lists.\n',
   );
 
-  app = await createApp(appConfig(project), { llm });
+  app = await createApp(appConfig(project), { llm, allowLegacyTestEngine: true });
   await app.ready;
   const searches = [];
   const search = app.index.search.bind(app.index);

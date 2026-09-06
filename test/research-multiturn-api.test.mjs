@@ -331,6 +331,7 @@ test('authenticated API preserves a refreshed conversation and keeps a Deep foll
 
   app = await createApp(appConfig(project), {
     llm, index, store, webSearch, webReader, responsesExtractor, conversations,
+    allowLegacyTestEngine: true,
   });
   await app.ready;
   await new Promise((resolve) => app.server.listen(0, '127.0.0.1', resolve));

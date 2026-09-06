@@ -600,7 +600,12 @@ test('headless Chrome validates a simplified Provider candidate then commits onl
     cdp?.close();
     await stopChrome(chrome);
     await application.close();
-    await fsp.rm(profile, { recursive: true, force: true });
+    await fsp.rm(profile, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 50,
+    });
   });
 
   ({ chrome, cdp } = await launchChrome(application.url, profile, WebSocketImpl));

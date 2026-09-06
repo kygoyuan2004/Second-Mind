@@ -127,6 +127,7 @@ async function fixture(t, { temporalAvailable = true } = {}) {
     webReader: { enabled: false, normalMaxPages: 2, totalMaxChars: 40_000 },
     responsesFallback: { enabled: false, timeoutMs: 1_000 },
   }, {
+    allowLegacyTestEngine: true,
     now: () => FIXED_NOW,
     index,
     store: {

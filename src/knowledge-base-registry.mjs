@@ -139,6 +139,7 @@ function statePaths(stateRoot) {
     recoveryDir: path.join(stateRoot, 'recovery'),
     conversationFile: path.join(stateRoot, 'conversations.json'),
     auditFile: path.join(stateRoot, 'audit.jsonl'),
+    piSessionDir: path.join(stateRoot, 'pi-sessions'),
     embeddingProfileFile: path.join(stateRoot, 'embedding-active.json'),
     embeddingSlotsRoot: path.join(stateRoot, 'embedding-slots'),
   });
@@ -170,6 +171,9 @@ function legacyStatePaths(legacy, fallbackRoot) {
     recoveryDir: path.resolve(legacy.recoveryDir || path.join(fallbackRoot, 'recovery')),
     conversationFile: path.resolve(legacy.conversationFile || path.join(fallbackRoot, 'conversations.json')),
     auditFile: path.resolve(legacy.auditFile || path.join(fallbackRoot, 'audit.jsonl')),
+    piSessionDir: path.resolve(
+      legacy.piSessionDir || path.join(legacy.dataDir || fallbackRoot, 'pi-sessions'),
+    ),
     embeddingProfileFile: path.resolve(
       legacy.embeddingProfileFile || path.join(fallbackRoot, 'embedding-active.json'),
     ),
@@ -309,9 +313,19 @@ export class KnowledgeBaseRegistry {
     this.stateDir = path.resolve(options.stateDir);
     this.legacy = plainObject(options.legacy) ? { ...options.legacy } : null;
     this.mountInputs = Array.isArray(options.allowedRoots) ? options.allowedRoots.slice() : [];
-    this.privateStateInputs = Array.isArray(options.privateStatePaths)
-      ? options.privateStatePaths.slice()
-      : [this.stateDir, this.managedFile, this.previousFile, this.bindingFile];
+    const suppliedPrivateState = Array.isArray(options.privateStatePaths)
+      ? options.privateStatePaths
+      : [];
+    // Callers may add other private roots, but they cannot replace the
+    // registry's own state boundary. Otherwise an incomplete caller-provided
+    // list could make a managed Vault mount silently contain registry state.
+    this.privateStateInputs = [
+      this.stateDir,
+      this.managedFile,
+      this.previousFile,
+      this.bindingFile,
+      ...suppliedPrivateState,
+    ];
     this.mounts = [];
     this.privateStatePaths = [];
     this.current = null;
@@ -509,6 +523,18 @@ export class KnowledgeBaseRegistry {
       const paths = legacyState
         ? legacyStatePaths(this.legacy || {}, this.stateDir)
         : statePaths(managedStateRoot(this.stateDir, id, rootPath));
+      const canonicalStatePaths = await Promise.all(
+        Object.values(paths).map((statePath) => canonicalPotential(statePath)),
+      );
+      if (this.mounts.some((mount) => canonicalStatePaths.some((statePath) => (
+        overlaps(mount.rootPath, statePath)
+      )))) {
+        fail(
+          'Knowledge-base application state cannot overlap an allowed Vault mount.',
+          'KNOWLEDGE_BASE_STATE_OVERLAP',
+          500,
+        );
+      }
       entries.push(Object.freeze({
         knowledgeBaseId: id,
         name: boundedText(raw.name, 'knowledge-base name', 120),
@@ -552,6 +578,62 @@ export class KnowledgeBaseRegistry {
     };
   }
 
+  async #refreshOnce() {
+    try {
+      const candidate = await this.#candidate(this.managedFile, 'managed');
+      if (!candidate) return publicSnapshot(this.current);
+      if (candidate.digest !== this.lastDigest || this.current.source !== 'managed') {
+        if (
+          this.lastDigest &&
+          candidate.snapshot.revision === this.current.revision &&
+          candidate.digest !== this.lastDigest
+        ) {
+          fail(
+            'Knowledge-base registry content changed without a new revision.',
+            'KNOWLEDGE_BASE_REVISION_REUSED',
+            500,
+          );
+        }
+        await this.#bindSnapshot(candidate.snapshot);
+        this.current = candidate.snapshot;
+        this.lastDigest = candidate.digest;
+      } else if (this.current.stale === true) {
+        // Restoring the exact last-good file must clear a prior refresh error.
+        const { staleCode: _staleCode, ...repaired } = this.current;
+        this.current = Object.freeze({ ...repaired, stale: false });
+      }
+    } catch (error) {
+      if (!this.current) throw error;
+      this.current = Object.freeze({
+        ...this.current,
+        stale: true,
+        staleCode: String(error?.code || 'KNOWLEDGE_BASE_REGISTRY_REFRESH_FAILED'),
+      });
+    }
+    return publicSnapshot(this.current);
+  }
+
+  async #assertManagedFileUnchanged(expectedDigest, expectedRevision) {
+    const latest = await readPrivateJson(this.managedFile, { optional: true });
+    const latestDigest = latest?.digest || '';
+    if (latestDigest === expectedDigest) return;
+    if (
+      expectedDigest && latest &&
+      String(latest.value?.revision || '').trim() === expectedRevision
+    ) {
+      fail(
+        'Knowledge-base registry content changed without a new revision.',
+        'KNOWLEDGE_BASE_REVISION_REUSED',
+        500,
+      );
+    }
+    fail(
+      'Knowledge-base registry changed while the update was being prepared.',
+      'KNOWLEDGE_BASE_REVISION_CONFLICT',
+      409,
+    );
+  }
+
   async #loadInitial() {
     await this.#prepareBoundaries();
     await this.#loadBindings();
@@ -587,21 +669,7 @@ export class KnowledgeBaseRegistry {
   }
 
   async refresh() {
-    return this.#enqueue(async () => {
-      try {
-        const candidate = await this.#candidate(this.managedFile, 'managed');
-        if (!candidate) return publicSnapshot(this.current);
-        if (candidate.digest !== this.lastDigest || this.current.source !== 'managed') {
-          await this.#bindSnapshot(candidate.snapshot);
-          this.current = candidate.snapshot;
-          this.lastDigest = candidate.digest;
-        }
-      } catch (error) {
-        if (!this.current) throw error;
-        this.current = Object.freeze({ ...this.current, stale: true });
-      }
-      return publicSnapshot(this.current);
-    });
+    return this.#enqueue(() => this.#refreshOnce());
   }
 
   runtimeSnapshot() {
@@ -631,6 +699,7 @@ export class KnowledgeBaseRegistry {
   async update(input, { expectedRevision } = {}) {
     return this.#enqueue(async () => {
       if (!plainObject(input)) fail('Knowledge-base update is invalid.', 'INVALID_KNOWLEDGE_BASE_CONFIG');
+      await this.#refreshOnce();
       if (this.runtimeSnapshot().stale === true) {
         fail('Knowledge-base registry is using a previous valid copy; restore the primary file before saving.',
           'KNOWLEDGE_BASE_REGISTRY_STALE', 409);
@@ -644,8 +713,10 @@ export class KnowledgeBaseRegistry {
         fail('Knowledge-base registry changed; reload before saving.',
           'KNOWLEDGE_BASE_REVISION_CONFLICT', 409);
       }
+      const baselineDigest = this.lastDigest;
       const document = registryDocument(input.knowledgeBases || []);
       const candidate = await this.#normalizeDocument(document, 'managed');
+      await this.#assertManagedFileUnchanged(baselineDigest, suppliedRevision);
       await this.#bindSnapshot(candidate);
       await atomicPrivateJson(this.managedFile, document);
       this.current = candidate;

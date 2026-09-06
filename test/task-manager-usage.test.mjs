@@ -44,6 +44,7 @@ async function taskFixture(t, generate) {
     deep: { enabled: true, topK: 6 },
   };
   const manager = new TaskManager(config, {
+    allowLegacyTestEngine: true,
     index,
     store,
     conversations,

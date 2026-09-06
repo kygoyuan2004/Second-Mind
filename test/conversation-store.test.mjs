@@ -50,7 +50,7 @@ test('failed delete and clear persistence restore in-memory conversations', asyn
   );
 });
 
-test('loads legacy v1 conversations and writes the compatible v2 shape on the next save', async (t) => {
+test('loads legacy v1 conversations and writes the compatible v3 shape on the next save', async (t) => {
   const project = await temporaryProject('vaultmind-conversation-v1-');
   t.after(project.cleanup);
   const filename = path.join(project.dataDir, 'conversations.json');
@@ -93,10 +93,90 @@ test('loads legacy v1 conversations and writes the compatible v2 shape on the ne
 
   await store.save();
   const persisted = JSON.parse(await fsp.readFile(filename, 'utf8'));
-  assert.equal(persisted.version, 2);
-  assert.equal(persisted.conversations[0].version, 2);
+  assert.equal(persisted.version, 3);
+  assert.equal(persisted.conversations[0].version, 3);
   assert.equal(persisted.conversations[0].effort, 'default');
   assert.equal(persisted.conversations[0].webSearch, false);
+});
+
+test('Pi session persistence accepts only a private basename and forks rebuild from product history', async (t) => {
+  const project = await temporaryProject('vaultmind-conversation-pi-session-');
+  t.after(project.cleanup);
+  const filename = path.join(project.dataDir, 'conversations.json');
+  const store = new ConversationStore(filename);
+  await store.ready;
+  const valid = store.create('admin', 'qa', { piSessionFile: 'session-safe_1.jsonl' });
+  const invalid = store.create('admin', 'qa', { piSessionFile: '../outside.jsonl' });
+  const duplicate = store.create('second-user', 'qa', { piSessionFile: 'session-safe_1.jsonl' });
+  duplicate.piSessionFile = 'session-safe_1.jsonl';
+  invalid.piSessionFile = '/tmp/not-private.jsonl';
+  valid.messages.push(
+    { role: 'user', content: 'question', at: '2026-09-06T00:00:00.000Z' },
+    { role: 'assistant', content: 'answer', at: '2026-09-06T00:00:01.000Z' },
+  );
+  assert.deepEqual([...store.referencedPiSessionFiles()], ['session-safe_1.jsonl']);
+  await store.save();
+
+  const restored = new ConversationStore(filename);
+  await restored.ready;
+  assert.equal(restored.get('admin', valid.id).piSessionFile, 'session-safe_1.jsonl');
+  assert.equal(restored.get('admin', invalid.id).piSessionFile, undefined);
+  assert.deepEqual([...restored.referencedPiSessionFiles()], ['session-safe_1.jsonl']);
+  const fork = await restored.fork('admin', valid.id);
+  assert.equal(fork.piSessionFile, undefined);
+  assert.deepEqual(fork.messages.map((message) => message.content), ['question', 'answer']);
+});
+
+test('Vault cited sources retain only validated bounded read coverage metadata', async (t) => {
+  const project = await temporaryProject('vaultmind-vault-source-coverage-');
+  t.after(project.cleanup);
+  const filename = path.join(project.dataDir, 'conversations.json');
+  const store = new ConversationStore(filename);
+  await store.ready;
+  const conversation = store.create('admin', 'qa', { title: 'Vault source coverage' });
+  const hash = 'ab'.repeat(32);
+  const ranges = Array.from({ length: 110 }, (_, index) => [index + 10, index + 10]);
+  ranges.unshift(
+    [1, 4],
+    { startLine: 6, endLine: 8 },
+    [0, 2],
+    [9, 7],
+    [1.5, 3],
+    ['10', 12],
+    [13, Number.MAX_SAFE_INTEGER + 1],
+  );
+  store.setResearchContext('admin', conversation.id, {
+    citedSources: [
+      {
+        id: 'V1', kind: 'vault', path: 'Notes/Read.md', hash: hash.toUpperCase(),
+        ranges, complete: false, rawText: 'must not persist',
+      },
+      {
+        id: 'V2', kind: 'vault', path: 'Notes/Invalid.md', hash: `${hash}extra`,
+        ranges: [[0, 1], [4, 3]], complete: true,
+      },
+      {
+        id: 'W1', kind: 'web', url: 'https://example.com/source', hash,
+        ranges: [[1, 2]], complete: true,
+      },
+    ],
+  });
+  await store.save();
+
+  const restored = new ConversationStore(filename);
+  await restored.ready;
+  const sources = restored.getResearchContext('admin', conversation.id).citedSources;
+  assert.deepEqual(sources[0], {
+    id: 'V1', kind: 'vault', path: 'Notes/Read.md', hash,
+    ranges: [[1, 4], [6, 8], ...Array.from({ length: 98 }, (_, index) => [index + 10, index + 10])],
+    complete: false,
+  });
+  assert.deepEqual(sources[1], {
+    id: 'V2', kind: 'vault', path: 'Notes/Invalid.md', ranges: [], complete: true,
+  });
+  assert.deepEqual(sources[2], {
+    id: 'W1', kind: 'web', url: 'https://example.com/source',
+  });
 });
 
 test('fork copies only the five most recent complete turns and keeps parent state isolated', async (t) => {

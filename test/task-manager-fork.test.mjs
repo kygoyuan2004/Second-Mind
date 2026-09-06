@@ -47,6 +47,7 @@ async function forkFixture(t, { modelCatalog = MODELS } = {}) {
     deep: { enabled: true, topK: 12 },
     sync: { provider: 'filesystem', displayName: 'Fixture' },
   }, {
+    allowLegacyTestEngine: true,
     conversations,
     index: {
       ready: Promise.resolve(),

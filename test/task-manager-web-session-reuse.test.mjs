@@ -184,7 +184,7 @@ test('Deep feedback rounds reuse one task-scoped MCP session and deduplicate eve
     responsesFallback: { enabled: false, timeoutMs: 1_000 },
   };
   const manager = new TaskManager(config, {
-    index, store, llm, webSearch, conversations,
+    index, store, llm, webSearch, conversations, allowLegacyTestEngine: true,
   });
   t.after(() => manager.close());
   await manager.ready;

@@ -20,6 +20,41 @@ async function requestJson(base, pathname, options = {}) {
   return { response, body: await response.json() };
 }
 
+function discoveryConfig(project, { vaultPath = project.vaultPath, vaultLabel = 'Legacy Vault' } = {}) {
+  return createConfig({
+    ...project.config,
+    projectRoot,
+    publicDir: path.join(projectRoot, 'public'),
+    appName: 'Second Mind',
+    vaultLabel,
+    vaultPath,
+    pi: { sessionDir: path.join(project.dataDir, 'legacy-pi-sessions') },
+    retrieval: { ...project.config.retrieval, watch: false },
+    llm: { ...project.config.llm, model: '', apiKey: '' },
+    embedding: { ...project.config.embedding, provider: 'disabled', apiKey: '' },
+    webSearch: { ...project.config.webSearch, enabled: false, apiKey: '' },
+    responsesFallback: { ...project.config.responsesFallback, enabled: false, apiKey: '' },
+  });
+}
+
+function assertLegacyState(entry, config, paths) {
+  assert.equal(entry.knowledgeBaseId, 'default');
+  assert.equal(entry.name, config.vaultLabel);
+  assert.equal(entry.default, true);
+  assert.equal(entry.legacyState, true);
+  assert.deepEqual(entry.state, {
+    dataDir: config.dataDir,
+    indexDir: config.indexDir,
+    draftDir: config.draftDir,
+    recoveryDir: config.recoveryDir,
+    conversationFile: config.conversationFile,
+    auditFile: config.auditFile,
+    piSessionDir: config.pi.sessionDir,
+    embeddingProfileFile: paths.activeProfileFile,
+    embeddingSlotsRoot: paths.slotsRoot,
+  });
+}
+
 test('repository bootstrap remains offline and useful with an empty LLM catalog', async () => {
   const project = await temporaryProject('second-mind-runtime-bootstrap-');
   const originalFetch = globalThis.fetch;
@@ -252,6 +287,123 @@ test('explicit Vault mounts discover immediate Obsidian children with stable iso
       firstSnapshot.knowledgeBases.map((entry) => entry.knowledgeBaseId),
     );
     assert.equal(secondSnapshot.revision, firstSnapshot.revision);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test('a single direct legacy Vault keeps the legacy registry and state paths', async () => {
+  const project = await temporaryProject('second-mind-runtime-direct-legacy-');
+  try {
+    await fsp.mkdir(path.join(project.vaultPath, '.obsidian'), { recursive: true });
+    const config = discoveryConfig(project, { vaultLabel: 'Direct Legacy Vault' });
+    const bootstrap = await createRuntimeBootstrap({
+      config,
+      allowedRoots: [{ id: 'legacy-direct', label: 'Legacy direct mount', path: project.vaultPath }],
+    });
+
+    const snapshot = bootstrap.knowledgeBaseRegistry.administrativeSnapshot();
+    assert.equal(snapshot.source, 'legacy');
+    assert.equal(snapshot.defaultKnowledgeBaseId, 'default');
+    assert.equal(snapshot.knowledgeBases.length, 1);
+    assert.equal(snapshot.knowledgeBases[0].relativePath, '.');
+    assertLegacyState(
+      bootstrap.knowledgeBaseRegistry.runtimeSnapshot().knowledgeBases[0],
+      config,
+      bootstrap.paths,
+    );
+    await assert.rejects(fsp.stat(bootstrap.paths.knowledgeBaseFile), { code: 'ENOENT' });
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test('mixed direct and parent mounts retain the direct legacy Vault without moving its state', async () => {
+  const project = await temporaryProject('second-mind-runtime-mixed-mounts-');
+  try {
+    const betaParent = path.join(project.root, 'other-vaults');
+    const beta = path.join(betaParent, 'Beta');
+    await Promise.all([
+      fsp.mkdir(path.join(project.vaultPath, '.obsidian'), { recursive: true }),
+      fsp.mkdir(path.join(beta, '.obsidian'), { recursive: true }),
+    ]);
+    const config = discoveryConfig(project, { vaultLabel: 'Configured Legacy Name' });
+    const allowedRoots = [
+      { id: 'legacy-direct', label: 'Legacy direct mount', path: project.vaultPath },
+      { id: 'other-vaults', label: 'Other Vaults', path: betaParent },
+    ];
+    const first = await createRuntimeBootstrap({ config, allowedRoots });
+    const firstSnapshot = first.knowledgeBaseRegistry.administrativeSnapshot();
+    assert.equal(firstSnapshot.source, 'managed');
+    assert.equal(firstSnapshot.defaultKnowledgeBaseId, 'default');
+    assert.equal(firstSnapshot.knowledgeBases.length, 2);
+    assert.deepEqual(firstSnapshot.knowledgeBases.map((entry) => entry.name), [
+      'Configured Legacy Name',
+      'Beta',
+    ]);
+    assert.equal(firstSnapshot.knowledgeBases[0].relativePath, '.');
+
+    const runtimeEntries = first.knowledgeBaseRegistry.runtimeSnapshot().knowledgeBases;
+    assertLegacyState(runtimeEntries[0], config, first.paths);
+    assert.notEqual(runtimeEntries[1].knowledgeBaseId, 'default');
+    assert.equal(runtimeEntries[1].default, false);
+    assert.notEqual(runtimeEntries[1].state.dataDir, config.dataDir);
+    assert.ok(runtimeEntries[1].state.dataDir.startsWith(
+      `${path.join(project.dataDir, 'knowledge-bases')}${path.sep}`,
+    ));
+
+    const second = await createRuntimeBootstrap({ config, allowedRoots });
+    assert.deepEqual(
+      second.knowledgeBaseRegistry.runtimeSnapshot(),
+      first.knowledgeBaseRegistry.runtimeSnapshot(),
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test('a parent mount containing legacy A and B retains A identity, default, and state', async () => {
+  const project = await temporaryProject('second-mind-runtime-parent-legacy-');
+  try {
+    const parent = path.join(project.root, 'mounted-vaults');
+    const legacyVault = path.join(parent, 'Legacy A');
+    const beta = path.join(parent, 'B');
+    await Promise.all([
+      fsp.mkdir(path.join(legacyVault, '.obsidian'), { recursive: true }),
+      fsp.mkdir(path.join(beta, '.obsidian'), { recursive: true }),
+    ]);
+    const config = discoveryConfig(project, {
+      vaultPath: legacyVault,
+      vaultLabel: 'Configured A Name',
+    });
+    const allowedRoots = [{ id: 'shared-parent', label: 'Shared parent', path: parent }];
+    const first = await createRuntimeBootstrap({ config, allowedRoots });
+    const firstSnapshot = first.knowledgeBaseRegistry.administrativeSnapshot();
+    assert.equal(firstSnapshot.source, 'managed');
+    assert.equal(firstSnapshot.defaultKnowledgeBaseId, 'default');
+    assert.equal(firstSnapshot.knowledgeBases.length, 2);
+    assert.deepEqual(firstSnapshot.knowledgeBases.map((entry) => entry.name), [
+      'Configured A Name',
+      'B',
+    ]);
+    assert.equal(firstSnapshot.knowledgeBases[0].relativePath, 'Legacy A');
+    assert.equal(firstSnapshot.knowledgeBases[0].mountId, 'shared-parent');
+
+    const runtimeEntries = first.knowledgeBaseRegistry.runtimeSnapshot().knowledgeBases;
+    assertLegacyState(runtimeEntries[0], config, first.paths);
+    assert.notEqual(runtimeEntries[1].knowledgeBaseId, 'default');
+    assert.equal(runtimeEntries[1].relativePath, 'B');
+    assert.equal(runtimeEntries[1].default, false);
+    assert.notEqual(runtimeEntries[1].state.dataDir, config.dataDir);
+    assert.ok(runtimeEntries[1].state.dataDir.startsWith(
+      `${path.join(project.dataDir, 'knowledge-bases')}${path.sep}`,
+    ));
+
+    const second = await createRuntimeBootstrap({ config, allowedRoots });
+    assert.deepEqual(
+      second.knowledgeBaseRegistry.runtimeSnapshot(),
+      first.knowledgeBaseRegistry.runtimeSnapshot(),
+    );
   } finally {
     await project.cleanup();
   }

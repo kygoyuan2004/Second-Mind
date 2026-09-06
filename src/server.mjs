@@ -18,7 +18,7 @@ import {
 import { KnowledgeIndex } from './knowledge-index.mjs';
 import { KnowledgeBaseHub } from './knowledge-base-hub.mjs';
 import { createKnowledgeBaseContext } from './knowledge-base-runtime.mjs';
-import { ChatModelClient } from './llm-client.mjs';
+import { ChatModelClient, createPinnedModelFetch } from './llm-client.mjs';
 import {
   buildRegisteredProviderConfigPatch,
   ProviderValidationStageStore,
@@ -544,7 +544,11 @@ export async function createApp(configInput, dependencies = {}) {
   ];
   if (!knowledgeBaseRegistry) await assertStateOutsideVault(config, privateStatePaths);
   if (runtimeConfig?.ready) await runtimeConfig.ready;
-  const llm = dependencies.llm || new ChatModelClient(config.llm);
+  const llm = dependencies.llm || new ChatModelClient(config.llm, {
+    fetch: createPinnedModelFetch({
+      allowInsecureHttp: config.llm?.allowInsecureHttp === true,
+    }),
+  });
   const llmRouter = dependencies.llmRouter || (
     runtimeConfig
       ? new RuntimeChatModelRouter({
@@ -686,6 +690,7 @@ export async function createApp(configInput, dependencies = {}) {
     manager ||= new TaskManager(config, {
       index, store, llm, llmRouter, webSearch, webReader, responsesExtractor, conversations,
       runtimeConfig,
+      allowLegacyTestEngine: dependencies.allowLegacyTestEngine === true,
     });
   }
   const sessions = dependencies.sessions || new SessionManager(config.auth);

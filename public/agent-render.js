@@ -133,7 +133,7 @@
       .join('');
   }
 
-  function render(target, source) {
+  function render(target, source, options = {}) {
     if (!target) return false;
     if (!global.marked?.parse || !global.DOMPurify) {
       target.textContent = source;
@@ -144,18 +144,64 @@
         gfm: true,
         breaks: true,
       });
+      const strictExternal = options.verifiedExternalOnly === true;
       target.innerHTML = global.DOMPurify.sanitize(parsed, {
         USE_PROFILES: { html: true },
         FORBID_TAGS: [
           'style', 'iframe', 'object', 'embed', 'form', 'input', 'button',
           'textarea', 'select',
+          ...(strictExternal ? [
+            'img', 'picture', 'video', 'audio', 'source', 'track', 'map', 'area',
+            'link', 'meta', 'base',
+          ] : []),
         ],
-        FORBID_ATTR: ['style'],
+        FORBID_ATTR: [
+          'style',
+          ...(strictExternal ? [
+            'src', 'srcset', 'poster', 'background', 'ping', 'usemap',
+            'formaction', 'action', 'data', 'codebase', 'archive', 'manifest',
+            'xlink:href',
+          ] : []),
+        ],
       });
+      const verifiedExternalUrls = new Set((Array.isArray(options.verifiedExternalUrls)
+        ? options.verifiedExternalUrls : []).map((value) => {
+        try {
+          const url = new URL(String(value || ''), target.ownerDocument.baseURI);
+          if (url.protocol !== 'https:' || url.username || url.password) return '';
+          url.hash = '';
+          return url.href;
+        } catch {
+          return '';
+        }
+      }).filter(Boolean));
       target.querySelectorAll('a[href]').forEach((link) => {
+        if (strictExternal) {
+          const href = link.getAttribute('href') || '';
+          let canonicalHref = '';
+          try {
+            const url = new URL(href, target.ownerDocument.baseURI);
+            if (url.protocol === 'https:' && !url.username && !url.password) {
+              url.hash = '';
+              canonicalHref = url.href;
+            }
+          } catch {
+            canonicalHref = '';
+          }
+          const serverMinted = link.dataset.secondMindVerifiedExternal === 'true' &&
+            verifiedExternalUrls.has(canonicalHref);
+          if (!serverMinted) {
+            link.replaceWith(target.ownerDocument.createTextNode(link.textContent || ''));
+            return;
+          }
+        }
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
       });
+      // Unwrapping a GFM autolink can leave adjacent text nodes (for example
+      // the three pieces of [[Notes/www.example.test.md]]). Merge them before
+      // the product's verified local-source enhancer examines the text.
+      if (strictExternal) target.normalize();
       if (global.renderMathInElement) {
         global.renderMathInElement(target, {
           delimiters: [

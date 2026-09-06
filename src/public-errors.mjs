@@ -13,6 +13,23 @@ const PROVIDER_MESSAGES = Object.freeze({
   LLM_OUTPUT_TRUNCATED: 'Model output reached the provider token limit before the answer completed.',
   LLM_RESPONSE_BLOCKED: 'The model provider blocked or refused the response.',
   LLM_EMPTY_RESPONSE: 'The model provider returned an empty response.',
+  PI_TOOL_CALL_REQUIRED: 'The selected model returned text but did not call the required Pi tool.',
+  PI_TOOL_RESULT_NOT_OBSERVED: 'The selected model called a tool but did not consume its result.',
+  PI_TOOL_ROUND_TRIP_INCOMPLETE: 'The selected model did not complete the required Pi tool round trip.',
+  PI_TOOL_PROBE_TIMEOUT: 'The Pi tool capability check timed out.',
+  PI_TOOL_PROBE_ABORTED: 'The Pi tool capability check was cancelled.',
+  PI_TOOL_PROBE_BINDING_INVALID: 'The selected model configuration cannot be adapted to Pi tool calling.',
+  PI_TOOL_PROBE_REQUEST_FAILED: 'The provider failed the Pi tool capability check.',
+  PI_AGENT_MODEL_FAILED: 'The Pi model turn failed. Check the model settings and try again.',
+  PI_AGENT_OUTPUT_TRUNCATED: 'The Pi answer reached the configured model output limit.',
+  PI_AGENT_EMPTY_RESPONSE: 'The Pi model returned no final answer.',
+  PI_AGENT_STEP_LIMIT: 'The Pi agent reached the bounded model-turn limit before completing.',
+  PI_AGENT_TOOL_LIMIT: 'The Pi agent reached the bounded tool-call limit before completing.',
+  PI_AGENT_REQUIRED: 'The selected model cannot use the required Pi Agent tool-calling engine.',
+  PI_AGENT_COVERAGE_REQUIRED: 'The Pi agent did not verify reading coverage before completing this exhaustive request.',
+  PI_AGENT_INVENTORY_REQUIRED: 'The Pi agent did not obtain the required date inventory for this learning review.',
+  PI_SESSION_PERSISTENCE_FAILED: 'The private Pi session could not be persisted.',
+  PI_SESSION_PATH_UNSAFE: 'The configured Pi session directory is unsafe.',
   CONVERSATION_WRITE_CONFLICT: 'The conversation changed in another request. Refresh and try again.',
 });
 
@@ -25,6 +42,9 @@ function providerMessage(code) {
   if (PROVIDER_MESSAGES[code]) return PROVIDER_MESSAGES[code];
   if (code.startsWith('LLM_') || code.startsWith('MODEL_')) {
     return 'The model provider could not complete this request. Check Settings and try again.';
+  }
+  if (code.startsWith('PI_')) {
+    return 'The Pi agent could not complete this request. Check Settings and try again.';
   }
   if (
     code.startsWith('EMBEDDING_') || code.startsWith('ACTIVE_EMBEDDING_') ||

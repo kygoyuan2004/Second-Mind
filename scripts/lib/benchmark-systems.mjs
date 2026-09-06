@@ -825,58 +825,62 @@ export class OriginalAgentRunner {
   }
 }
 
-function enforcingLlm(llm, modelCalls) {
-  if (!llm || typeof llm.generate !== 'function') {
+function enforcingLlm(llm, {
+  allowInjectedAgent = false,
+  toolCapabilityVerified = () => false,
+} = {}) {
+  if (!llm || typeof llm !== 'object' || (
+    typeof llm.piBinding !== 'function' && !allowInjectedAgent
+  )) {
     throw systemError(
-      'MigratedRagRunner requires an injected llm; implicit network access is disabled.',
+      'MigratedRagRunner requires a Pi-capable injected llm; implicit network access is disabled.',
       'LLM_REQUIRED',
     );
   }
-  return {
-    async generate(messages, options = {}) {
-      const call = {
-        index: modelCalls.length,
-        roles: messages.map((message) => String(message?.role || 'user')),
-        inputCharacters: messages.reduce((sum, message) => sum + String(message?.content || '').length, 0),
-        model: BENCHMARK_SYSTEM_MODEL,
-        effort: BENCHMARK_SYSTEM_EFFORT,
-        temperature: BENCHMARK_SYSTEM_TEMPERATURE,
-        maxOutputTokens: Math.min(
-          BENCHMARK_SYSTEM_MAX_OUTPUT_TOKENS,
-          Math.max(1, Number(options.maxOutputTokens) || BENCHMARK_SYSTEM_MAX_OUTPUT_TOKENS),
-        ),
-        status: 'running',
-        durationMs: null,
-      };
-      modelCalls.push(call);
-      const startedAt = performance.now();
-      try {
-        const answer = await llm.generate(messages, {
-          ...options,
-          model: BENCHMARK_SYSTEM_MODEL,
-          effort: BENCHMARK_SYSTEM_EFFORT,
-          reasoningEffort: BENCHMARK_SYSTEM_EFFORT,
-          temperature: BENCHMARK_SYSTEM_TEMPERATURE,
-          maxOutputTokens: call.maxOutputTokens,
-        });
-        call.status = 'completed';
-        return answer;
-      } catch (error) {
-        call.status = 'failed';
-        call.errorCode = String(error?.code || error?.name || 'MODEL_CALL_FAILED');
-        throw error;
-      } finally {
-        call.durationMs = performance.now() - startedAt;
-      }
+  const enforced = {
+    async generate() {
+      throw systemError(
+        'The migrated benchmark may execute only through the Pi Agent engine.',
+        'BENCHMARK_LEGACY_ENGINE_DENIED',
+      );
     },
   };
+  if (typeof llm.piBinding === 'function') {
+    Object.defineProperty(enforced, 'piBinding', {
+      enumerable: false,
+      value() {
+        const binding = llm.piBinding();
+        if (!binding || binding.actualModel !== BENCHMARK_SYSTEM_MODEL) {
+          throw systemError(
+            'The Pi binding does not match the fixed benchmark model.',
+            'BENCHMARK_MODEL_BINDING_MISMATCH',
+          );
+        }
+        if (toolCapabilityVerified() !== true || binding.toolCapabilityVerified === true) {
+          return binding;
+        }
+        const verified = Object.create(binding);
+        Object.defineProperty(verified, 'toolCapabilityVerified', {
+          value: true,
+          enumerable: true,
+          writable: false,
+          configurable: false,
+        });
+        return Object.freeze(verified);
+      }
+    });
+  }
+  return Object.freeze(enforced);
 }
 
 export class MigratedRagRunner {
   constructor(options = {}) {
-    if (!options.llm || typeof options.llm.generate !== 'function') {
+    const injectedPiAgent = options.piAgent && typeof options.piAgent === 'object';
+    if (!options.llm || typeof options.llm !== 'object' || (
+      typeof options.llm.piBinding !== 'function' && !injectedPiAgent
+    )) {
       throw systemError(
-        'MigratedRagRunner requires an injected llm; implicit network access is disabled.',
+        'MigratedRagRunner requires a Pi-capable injected llm; implicit network access is disabled.',
         'LLM_REQUIRED',
       );
     }
@@ -886,6 +890,8 @@ export class MigratedRagRunner {
       ? options.liveVaultRoot
       : DEFAULT_LIVE_VAULT_ROOT;
     this.llm = options.llm;
+    this.piAgent = injectedPiAgent ? options.piAgent : null;
+    this.piToolCapabilityVerified = false;
     this.embeddingClient = options.embeddingClient || null;
     this.telemetryProvider = options.telemetryProvider || null;
     this.topK = Math.max(1, Math.min(30, Number(options.topK) || 12));
@@ -942,6 +948,7 @@ export class MigratedRagRunner {
     let manager;
     let index;
     let task;
+    let finalConversation = null;
     let answer = '';
     let taskFailure = null;
     let indexBuildMs = null;
@@ -967,6 +974,7 @@ export class MigratedRagRunner {
           temperature: BENCHMARK_SYSTEM_TEMPERATURE,
           maxOutputTokens: BENCHMARK_SYSTEM_MAX_OUTPUT_TOKENS,
         },
+        modelCatalog: fixedModelCatalog(),
         embedding: this.embeddingClient ? {
           provider: String(this.embeddingClient.provider || 'injected'),
           model: String(this.embeddingClient.model || this.embeddingClient.embeddingModel || 'injected'),
@@ -989,18 +997,31 @@ export class MigratedRagRunner {
       });
       await index.ready;
       indexBuildMs = performance.now() - indexBuildStartedAt;
+      const recordSearch = async (searchTarget, query, options = {}) => {
+        const searchStartedAt = performance.now();
+        const retrieval = await searchTarget.search(query, options);
+        searches.push({
+          query: String(query || ''),
+          retrieval: cloneJson(retrieval),
+          durationMs: performance.now() - searchStartedAt,
+        });
+        return retrieval;
+      };
       const indexFacade = {
         ready: index.ready,
         status: () => index.status(),
-        search: async (query, options = {}) => {
-          const searchStartedAt = performance.now();
-          const retrieval = await index.search(query, options);
-          searches.push({
-            query: String(query || ''),
-            retrieval: cloneJson(retrieval),
-            durationMs: performance.now() - searchStartedAt,
+        search: (query, options = {}) => recordSearch(index, query, options),
+        acquireSnapshot: () => {
+          const snapshot = index.acquireSnapshot();
+          return Object.freeze({
+            generation: snapshot.generation,
+            status: () => snapshot.status(),
+            listDocuments: () => snapshot.listDocuments(),
+            readDocument: (...args) => snapshot.readDocument(...args),
+            temporalInventory: (...args) => snapshot.temporalInventory(...args),
+            search: (query, options = {}) => recordSearch(snapshot, query, options),
+            release: () => snapshot.release(),
           });
-          return retrieval;
         },
         close: () => index.close(),
       };
@@ -1015,8 +1036,12 @@ export class MigratedRagRunner {
       manager = new initialized.TaskManager(config, {
         index: indexFacade,
         store,
-        llm: enforcingLlm(this.llm, modelCalls),
+        llm: enforcingLlm(this.llm, {
+          allowInjectedAgent: Boolean(this.piAgent),
+          toolCapabilityVerified: () => this.piToolCapabilityVerified,
+        }),
         conversations,
+        ...(this.piAgent ? { piAgent: this.piAgent } : {}),
       });
       const taskManagerEmit = manager.emit.bind(manager);
       manager.emit = (activeTask, type, data) => {
@@ -1047,14 +1072,37 @@ export class MigratedRagRunner {
         kind: 'qa',
         prompt: question.query,
         taskMode: question.mode,
+        model: 'benchmark-qwen',
+        effort: BENCHMARK_SYSTEM_EFFORT,
         ...(conversationId ? { conversationId } : {}),
       });
       task = manager.getTask(userId, created.taskId);
       await task.runPromise;
-      const conversation = conversations.get(userId, created.conversationId);
-      answer = String(conversation.messages
+      finalConversation = conversations.get(userId, created.conversationId);
+      answer = String(finalConversation.messages
         .slice(question.priorMessages.length + 1)
         .findLast((message) => message.role === 'assistant')?.content || '');
+      if (task.agentMetrics) {
+        modelCalls.push({
+          index: 0,
+          engine: String(task.agentMetrics.engine || 'pi-agent'),
+          model: BENCHMARK_SYSTEM_MODEL,
+          effort: BENCHMARK_SYSTEM_EFFORT,
+          temperature: BENCHMARK_SYSTEM_TEMPERATURE,
+          maxOutputTokens: BENCHMARK_SYSTEM_MAX_OUTPUT_TOKENS,
+          status: task.status === 'completed' ? 'completed' : 'failed',
+          durationMs: Number(task.agentMetrics.durationMs) || 0,
+          modelTurns: Number(task.agentMetrics.modelTurns) || 0,
+          toolCalls: Number(task.agentMetrics.toolCalls) || 0,
+          usage: cloneJson(task.agentMetrics.tokenUsage || null),
+        });
+        if (task.status === 'completed' && task.agentMetrics.engine === 'pi-agent') {
+          // A completed first run could only pass after Pi's real nonce tool
+          // round-trip. Reuse that receipt for this runner's identical pinned
+          // binding so later benchmark questions do not pay for the probe again.
+          this.piToolCapabilityVerified = true;
+        }
+      }
     } catch (error) {
       taskFailure = error;
     } finally {
@@ -1068,18 +1116,35 @@ export class MigratedRagRunner {
     if (taskFailure && !task) throw taskFailure;
     const completedAtIso = new Date().toISOString();
     const recordedSearches = searches.map(publicSearch);
-    const deepResults = question.mode === 'deep'
+    const agentCoverage = cloneJson(task?.agentMetrics?.coverage || null);
+    const resultLimit = question.mode === 'deep' ? this.deepTopK : this.topK;
+    const mergedResults = searches.length
       ? initialized.mergeDeepRetrieval(searches.map((item) => ({
           query: item.query,
           retrieval: item.retrieval,
-        })), this.deepTopK)
-      : searches[0]?.retrieval?.results || [];
+        })), resultLimit)
+      : [];
+    const reportedPaths = new Set(mergedResults.map((item) => String(item.path || '')));
+    const verifiedReadResults = (Array.isArray(agentCoverage?.reads) ? agentCoverage.reads : [])
+      .filter((read) => read?.path && Array.isArray(read.ranges) && read.ranges.length > 0)
+      .filter((read) => !reportedPaths.has(String(read.path)))
+      .map((read) => ({
+        path: String(read.path),
+        score: null,
+        lineStart: Math.min(...read.ranges.map((range) => Number(range[0]))),
+        lineEnd: Math.max(...read.ranges.map((range) => Number(range[1]))),
+        relatedPaths: [],
+      }));
+    const benchmarkResults = [...mergedResults, ...verifiedReadResults].slice(0, resultLimit);
     const telemetry = await finishTelemetry(this.telemetryProvider, {
       anonymousId: question.anonymousId,
       system: 'migrated-rag',
       stateDir,
     });
     const finishedAt = performance.now();
+    const agentMetrics = cloneJson(task?.agentMetrics || null);
+    const coverage = agentCoverage;
+    const citedSources = cloneJson(finalConversation?.researchContext?.citedSources || []);
     return {
       schemaVersion: 1,
       system: 'migrated-rag',
@@ -1092,8 +1157,8 @@ export class MigratedRagRunner {
       retrieval: {
         route: question.mode === 'deep'
           ? 'deep-hybrid'
-          : searches[0]?.retrieval?.route || null,
-        results: deepResults.map((result, indexValue) => ({
+          : searches.length > 1 ? 'pi-agent-multi-search' : searches[0]?.retrieval?.route || null,
+        results: benchmarkResults.map((result, indexValue) => ({
           rank: indexValue + 1,
           path: String(result.path || ''),
           score: Number.isFinite(Number(result.score)) ? Number(result.score) : null,
@@ -1105,9 +1170,18 @@ export class MigratedRagRunner {
         diagnostics: question.mode === 'deep'
           ? { queryCount: searches.length, sourceLimit: this.deepTopK }
           : cloneJson(searches[0]?.retrieval?.diagnostics || {}),
+        coverage,
       },
       toolEvents: toolEvents(task?.events),
-      model: { calls: modelCalls, telemetry },
+      sources: citedSources,
+      coverage,
+      model: {
+        calls: modelCalls,
+        turns: Number(agentMetrics?.modelTurns) || 0,
+        usage: cloneJson(agentMetrics?.tokenUsage || null),
+        agent: agentMetrics,
+        telemetry,
+      },
       timing: {
         startedAt: startedAtIso,
         completedAt: completedAtIso,
@@ -1115,7 +1189,11 @@ export class MigratedRagRunner {
         indexBuildMs,
         retrievalMs: searches.reduce((sum, search) => sum + search.durationMs, 0),
         ttftMs: firstTextAt === null ? null : firstTextAt - startedAt,
-        generationMs: modelCalls.reduce((sum, call) => sum + (Number(call.durationMs) || 0), 0),
+        generationMs: Number(agentMetrics?.durationMs) ||
+          modelCalls.reduce((sum, call) => sum + (Number(call.durationMs) || 0), 0),
+        firstEffectiveProgressMs: Number.isFinite(Number(agentMetrics?.firstEffectiveProgressMs))
+          ? Number(agentMetrics.firstEffectiveProgressMs)
+          : null,
         streamCompletionMs: firstTextAt === null || doneAt === null ? null : doneAt - firstTextAt,
       },
       integrity: { before, after, unchanged: true },

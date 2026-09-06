@@ -22,8 +22,10 @@ import {
   guardResearchQueries,
   hashResearchValue,
   mergeVerifiedClaims,
+  opaqueHtmlText,
   parseContextualizerOutput,
   parseEvidenceAssessment,
+  protectMarkdownCodeSegments,
   retainCitedVerifiedClaims,
   researchQueriesEquivalent,
   researchContextForSave,
@@ -46,6 +48,7 @@ import { markPublicMessage, publicError } from './public-errors.mjs';
 import { resolveLearningReviewRequest, learningReviewLimits } from './learning-review.mjs';
 import { runLearningReview } from './learning-review-runner.mjs';
 import { inspectVaultReplica } from './vault-replica.mjs';
+import { PiAgentRuntime } from './pi-agent-runtime.mjs';
 
 const KINDS = new Set(['qa', 'diary', 'plan', 'scratch']);
 const TERMINAL = new Set(['completed', 'failed', 'cancelled']);
@@ -777,48 +780,82 @@ function webCandidateSources(results, includedSources) {
 }
 
 function markdownLabel(value) {
-  return String(value || 'External source').replace(/[\[\]\r\n]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240) || 'External source';
+  return String(value || 'External source').replace(/[\[\]<>\r\n&]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240) || 'External source';
 }
 
-function stripUnverifiedExternalLinks(value, sources) {
-  const allowed = new Set((sources || []).map((item) => canonicalWebUrl(item.url)).filter(Boolean));
-  let output = String(value || '').replace(
-    /\[([^\]\n]{1,500})\]\((https?:\/\/[^)\s]+)(?:\s+"[^"]*")?\)/giu,
-    (match, label, url) => allowed.has(canonicalWebUrl(url)) ? match : markdownLabel(label),
-  );
-  output = output.replace(/https?:\/\/[^\s<>\])}]+/giu, (url) => (
-    allowed.has(canonicalWebUrl(url)) ? url : '[unverified external link removed]'
-  ));
-  return output;
+function markdownCodeSpan(value, fallback, limit) {
+  const clean = shortText(value, limit) || fallback;
+  const longestRun = Math.max(0, ...(clean.match(/`+/gu) || []).map((run) => run.length));
+  const fence = '`'.repeat(longestRun + 1);
+  // Spaces keep a filename that begins or ends with a backtick from merging
+  // into the delimiter. CommonMark removes that single padding pair.
+  return `${fence} ${clean} ${fence}`;
 }
 
-function referencedWebSources(value, sources) {
-  const allowed = new Map((sources || [])
-    .map((item) => [canonicalWebUrl(item?.url), item])
-    .filter(([url]) => Boolean(url)));
-  const referenced = new Set();
-  for (const match of String(value || '').matchAll(/https:\/\/[^\s<>\])}"']+/giu)) {
-    const candidates = [
-      match[0],
-      match[0].replace(/[.,!?;:，。！？；：]+$/gu, ''),
-    ];
-    for (const candidate of candidates) {
-      const url = canonicalWebUrl(candidate);
-      if (allowed.has(url)) {
-        referenced.add(url);
-        break;
-      }
-    }
+function verifiedVaultPathCode(value, fallback = '已核验知识库来源', limit = 1_000) {
+  const exact = String(value ?? '');
+  if (
+    !exact || exact.length > limit ||
+    /[\u0000-\u001f\u007f]/u.test(exact)
+  ) return markdownCodeSpan(fallback, fallback, limit);
+  const escaped = opaqueHtmlText(exact);
+  return `<code class="knowledge-verified-vault-path">${escaped}</code>`;
+}
+
+function finalizeAllowlistedWebLinks(value, sources) {
+  const safeSources = [];
+  const byUrl = new Map();
+  const bySourceId = new Map();
+  const originalByToken = new Map();
+  for (const source of Array.isArray(sources) ? sources : []) {
+    const url = canonicalWebUrl(source?.url);
+    const sourceId = String(source?.id || '').slice(0, 120);
+    if (!url || byUrl.has(url)) continue;
+    const id = `W${safeSources.length + 1}`;
+    const normalized = { ...source, id, url };
+    safeSources.push(normalized);
+    byUrl.set(url, normalized);
+    if (sourceId) bySourceId.set(sourceId, normalized);
+    originalByToken.set(id, { ...source, url });
   }
-  return [...allowed.entries()]
-    .filter(([url]) => referenced.has(url))
-    .map(([, source]) => source);
-}
 
-function webSourcesAppendix(value, sources) {
-  const referenced = referencedWebSources(value, sources);
-  if (!referenced.length) return '';
-  return `\n\n### 联网来源\n${referenced.map((item) => `- [${markdownLabel(item.title)}](${item.url})`).join('\n')}`;
+  const protectedCode = protectMarkdownCodeSegments(value);
+  let output = stripGeneratedAppendices(protectedCode.body);
+  // Pi sees opaque per-task source IDs. Translate only exact, successfully
+  // read IDs to the research pipeline's internal citation tokens. Unknown IDs
+  // remain non-clickable and are scrubbed below.
+  for (const [sourceId, source] of bySourceId) {
+    output = output.split(`[${sourceId}]`).join(`[${source.id}]`);
+  }
+  output = output.replace(/\[web_[A-Za-z0-9_-]{1,100}\]/gu, '[未核验来源]');
+
+  // Preserve an allowlisted legacy Markdown URL only by converting it to an
+  // opaque token first. Every actual anchor is minted later by the server.
+  output = output.replace(
+    /!?\[([^\]\n]{0,500})\]\((?:\\.|[^)\n]){0,2048}\)/gu,
+    (match, label) => {
+      const destination = match.slice(match.indexOf('](') + 2, -1).trim();
+      const withoutTitle = destination
+        .replace(/^<([^>\s]+)>(?:\s+["'(].*)?$/u, '$1')
+        .replace(/^(\S+?)(?:\s+["'(].*)?$/u, '$1');
+      const source = byUrl.get(canonicalWebUrl(withoutTitle));
+      return source ? `${markdownLabel(label)}[${source.id}]` : markdownLabel(label);
+    },
+  );
+  output = output.replace(
+    /https:\/\/[^\s<>\])}"'，。！？；：“”‘’]+/giu,
+    (url) => byUrl.get(canonicalWebUrl(url))?.id
+      ? `[${byUrl.get(canonicalWebUrl(url)).id}]`
+      : '[未核验外链已移除]',
+  );
+  output = protectedCode.restore(output);
+  const finalized = finalizeWebCitations(output, safeSources);
+  return {
+    ...finalized,
+    referencedSources: finalized.referencedSources
+      .map((source) => originalByToken.get(source.id))
+      .filter(Boolean),
+  };
 }
 
 function jsonCandidate(value) {
@@ -1082,13 +1119,16 @@ function retainDocumentsForSources(documents, sources) {
   }).filter(Boolean);
 }
 
-function finalizeVaultCitations(value, sources) {
+function prepareVaultCitations(value, sources) {
   const byPath = new Map((Array.isArray(sources) ? sources : [])
     .filter((source) => source?.kind === 'vault' && source?.id && source?.path)
     .map((source) => [String(source.path), source]));
   const referenced = [];
   const seen = new Set();
-  const body = String(value || '').replace(/\[\[([^\]\n]{1,1000})\]\]/gu, (match, rawTarget) => {
+  const tokenById = new Map();
+  const nonce = crypto.randomBytes(18).toString('hex');
+  const protectedCode = protectMarkdownCodeSegments(value);
+  const body = protectedCode.body.replace(/\[\[([^\]\n]{1,1000})\]\]/gu, (match, rawTarget) => {
     // The research prompt requests exact paths only. Aliases, headings and
     // model-invented paths are rejected so a citation can never escape the
     // source set actually supplied to the model.
@@ -1098,10 +1138,75 @@ function finalizeVaultCitations(value, sources) {
     if (!seen.has(source.id)) {
       seen.add(source.id);
       referenced.push(source);
+      tokenById.set(source.id, `SMVAULT${nonce}SOURCE${tokenById.size}END`);
     }
-    return `[[${source.path}]]`;
+    return tokenById.get(source.id);
   });
-  return { body, referencedSources: referenced };
+  return {
+    body: protectedCode.restore(body),
+    referencedSources: referenced,
+    tokens: referenced.map((source) => ({
+      token: tokenById.get(source.id),
+      source,
+    })),
+  };
+}
+
+function materializeVaultCitations(value, tokens) {
+  let output = String(value || '');
+  for (const entry of Array.isArray(tokens) ? tokens : []) {
+    if (!entry?.token || !entry?.source?.path) continue;
+    output = output.split(entry.token).join(
+      verifiedVaultPathCode(entry.source.path),
+    );
+  }
+  return output;
+}
+
+function retainedVaultCitationTokens(value, tokens) {
+  const body = String(value || '');
+  return (Array.isArray(tokens) ? tokens : []).filter((entry) => (
+    entry?.token && entry?.source && body.includes(entry.token)
+  ));
+}
+
+function finalizeVaultCitations(value, sources) {
+  const prepared = prepareVaultCitations(value, sources);
+  return {
+    body: materializeVaultCitations(prepared.body, prepared.tokens),
+    referencedSources: prepared.referencedSources,
+  };
+}
+
+function piCoverageAppendix(ledger, options = {}) {
+  if (!ledger || typeof ledger !== 'object') return '';
+  const uncovered = Array.isArray(ledger.uncovered) ? ledger.uncovered : [];
+  if (!options.always && uncovered.length === 0 && ledger.truncated !== true) return '';
+  const reads = Array.isArray(ledger.reads) ? ledger.reads : [];
+  const completeReads = reads.filter((item) => item?.complete === true).length;
+  const lines = [
+    '### 阅读覆盖',
+    '',
+    `- 已读取原文：${reads.length} 篇（完整 ${completeReads}，部分 ${reads.length - completeReads}）`,
+    `- 覆盖账本：${ledger.complete === true ? '完整' : '仍有缺口'}`,
+  ];
+  if (uncovered.length) {
+    lines.push('- 未覆盖内容与原因：');
+    for (const item of uncovered.slice(0, 20)) {
+      // Never copy an unread/unverified URL into the answer. Vault paths and
+      // source IDs are untrusted names too, so render them as inert code spans
+      // rather than allowing Markdown/HTML syntax from a filename.
+      const target = item?.path || item?.sourceId || (item?.url ? '外部来源' : '未指定对象');
+      const reason = item?.reason || 'unknown';
+      lines.push(`  - ${markdownCodeSpan(target, '未指定对象', 300)}：${markdownCodeSpan(reason, 'unknown', 100)}`);
+    }
+    if (uncovered.length > 20 || ledger.truncated === true) {
+      lines.push(`  - 账本输出已截断；另有 ${Math.max(0, uncovered.length - 20)} 项未逐项展示。`);
+    }
+  } else if (ledger.truncated === true) {
+    lines.push('- 未覆盖内容与原因：覆盖账本达到记录上限，无法证明完整性。');
+  }
+  return `\n\n${lines.join('\n')}`;
 }
 
 function appendBoundedDocuments(target, candidates, maximumChars = 40_000) {
@@ -1389,6 +1494,14 @@ export class TaskManager {
       extract: async () => ({ text: '', extractedSourceIds: [], toolCounts: {}, attempts: [], errors: [] }),
     };
     this.conversations = dependencies.conversations;
+    // The legacy generator exists only so the historical unit fixtures can
+    // exercise isolated helpers. There is deliberately no environment or HTTP
+    // switch for this: every production task must bind to Pi or fail closed.
+    this.allowLegacyTestEngine = dependencies.allowLegacyTestEngine === true;
+    this.piAgent = dependencies.piAgent || new PiAgentRuntime(config, {
+      store: this.store,
+      ...(dependencies.piAgentDependencies || {}),
+    });
     this.tasks = new Map();
     this.pendingCreations = new Set();
     this.closing = false;
@@ -1399,7 +1512,17 @@ export class TaskManager {
       this.index.ready,
       this.store.ready,
       this.conversations.ready,
-    ]);
+    ]).then(async (values) => {
+      if (
+        typeof this.piAgent.pruneSessions === 'function' &&
+        typeof this.conversations.referencedPiSessionFiles === 'function'
+      ) {
+        await this.piAgent.pruneSessions(
+          this.conversations.referencedPiSessionFiles(),
+        ).catch(() => {});
+      }
+      return values;
+    });
   }
 
   async refreshRuntimeConfiguration() {
@@ -1470,6 +1593,7 @@ export class TaskManager {
       draftId: task.draftId || null,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
+      ...(task.agentMetrics ? { agent: task.agentMetrics } : {}),
     };
   }
 
@@ -1521,7 +1645,16 @@ export class TaskManager {
       },
       rootLabel: this.vaultLabel,
       taskContractVersion: TASK_CONTRACT_VERSION,
-      capabilities: { modelCatalogRevision: true },
+      capabilities: {
+        modelCatalogRevision: true,
+        piAgent: true,
+        toolCallingValidation: true,
+      },
+      agent: {
+        engine: 'pi-agent',
+        version: '0.85.1',
+        sessionPersistence: 'data-dir',
+      },
       buildRevision: TASK_BUILD_REVISION,
       configRevision: this.runtimeConfigRevision || null,
       modelCatalogRevision: this.modelCatalogRevision,
@@ -1571,12 +1704,34 @@ export class TaskManager {
     return [...this.tasks.values()].some((task) => task.conversationId === id && !TERMINAL.has(task.status));
   }
 
-  deleteConversation(userId, id) {
-    return this.conversations.delete(userId, id, { isBusy: (value) => this.isConversationBusy(value) });
+  async deleteConversation(userId, id) {
+    await this.ready;
+    const before = this.conversations.referencedPiSessionFiles?.() || new Set();
+    const result = await this.conversations.delete(userId, id, {
+      isBusy: (value) => this.isConversationBusy(value),
+    });
+    await this.removeUnreferencedPiSessions(before);
+    return result;
   }
 
-  clearConversations(userId, kind) {
-    return this.conversations.clear(userId, kind, { isBusy: (value) => this.isConversationBusy(value) });
+  async clearConversations(userId, kind) {
+    await this.ready;
+    const before = this.conversations.referencedPiSessionFiles?.() || new Set();
+    const result = await this.conversations.clear(userId, kind, {
+      isBusy: (value) => this.isConversationBusy(value),
+    });
+    await this.removeUnreferencedPiSessions(before);
+    return result;
+  }
+
+  async removeUnreferencedPiSessions(candidates) {
+    if (typeof this.piAgent.removeSessionFile !== 'function') return;
+    const referenced = this.conversations.referencedPiSessionFiles?.() || new Set();
+    for (const filename of candidates || []) {
+      if (!referenced.has(filename)) {
+        await this.piAgent.removeSessionFile(filename).catch(() => {});
+      }
+    }
   }
 
   async createTask(userId, body = {}) {
@@ -1851,6 +2006,7 @@ export class TaskManager {
       webSearchBindingRevision,
       webSearchClient,
       webExtractorClient,
+      webReader: this.webReader,
       llmClient,
       prompt,
       date: body.date,
@@ -2223,7 +2379,11 @@ export class TaskManager {
     let draft = null;
     let persisted = false;
     task.status = 'running';
-    if (task.kind === 'qa' && this.config.research?.contextualizerEnabled === true) {
+    task.usePiAgent = this.piAgent.supports(task.llmClient || this.llm);
+    if (
+      task.kind === 'qa' && !task.usePiAgent && this.allowLegacyTestEngine &&
+      this.config.research?.contextualizerEnabled === true
+    ) {
       // Keep the audit accumulator on the task rather than the conversation: it
       // must survive a cancelled generation or a failed conversation commit,
       // and it must never persist query text, URLs, snippets, or page bodies.
@@ -2277,6 +2437,9 @@ export class TaskManager {
           { expectedUpdatedAt: conversationCheckpoint.updatedAt },
         );
         persisted = true;
+        await this.removeUnreferencedPiSessions(new Set([
+          task.previousPiSessionFile || conversationCheckpoint.piSessionFile || '',
+        ].filter(Boolean)));
       } catch (cause) {
         throw taskError(
           503,
@@ -2291,8 +2454,12 @@ export class TaskManager {
         message: 'Task completed.',
         conversationId: conversation.id,
         forkedFromConversationId: task.forkedFromConversationId || null,
+        ...(task.agentMetrics ? { agent: task.agentMetrics } : {}),
       });
     } catch (error) {
+      if (!persisted) {
+        await this.discardPendingPiSessions(task).catch(() => {});
+      }
       if (task.researchAuditState) {
         const abortCode = task.abortController.signal.reason?.code === 'TASK_TIMEOUT'
           ? 'TASK_TIMEOUT'
@@ -2314,12 +2481,14 @@ export class TaskManager {
         this.emit(task, 'done', {
           status: 'failed', ...failure, conversationId: conversation.id,
           forkedFromConversationId: task.forkedFromConversationId || null,
+          ...(task.agentMetrics ? { agent: task.agentMetrics } : {}),
         });
       } else if (task.abortController.signal.aborted || error?.name === 'AbortError') {
         task.status = 'cancelled';
         this.emit(task, 'done', {
           status: 'cancelled', message: 'Task cancelled.', conversationId: conversation.id,
           forkedFromConversationId: task.forkedFromConversationId || null,
+          ...(task.agentMetrics ? { agent: task.agentMetrics } : {}),
         });
       } else {
         task.status = 'failed';
@@ -2331,6 +2500,7 @@ export class TaskManager {
         this.emit(task, 'done', {
           status: 'failed', ...failure, conversationId: conversation.id,
           forkedFromConversationId: task.forkedFromConversationId || null,
+          ...(task.agentMetrics ? { agent: task.agentMetrics } : {}),
         });
       }
     } finally {
@@ -2355,7 +2525,52 @@ export class TaskManager {
     }
   }
 
+  async finalizePiSession(task, conversation, result) {
+    const working = String(result?.sessionFile || '');
+    if (!working) {
+      throw taskError(500, 'Pi did not return a private session checkpoint.', 'PI_SESSION_PERSISTENCE_FAILED');
+    }
+    task.previousPiSessionFile ||= String(conversation.piSessionFile || result.previousSessionFile || '');
+    let canonical = working;
+    if (typeof this.piAgent.finalizeSession === 'function') {
+      canonical = await this.piAgent.finalizeSession({
+        task,
+        conversation,
+        workingSessionFile: working,
+        checkpoint: result.sessionCheckpoint,
+      });
+      task.piWorkingSessionFile = '';
+    }
+    task.pendingPiSessionFile = String(canonical || '');
+    if (!task.pendingPiSessionFile) {
+      throw taskError(500, 'Pi could not finalize its private session checkpoint.', 'PI_SESSION_PERSISTENCE_FAILED');
+    }
+    conversation.piSessionFile = task.pendingPiSessionFile;
+  }
+
+  async discardPendingPiSessions(task) {
+    if (typeof this.piAgent.removeSessionFile !== 'function') return;
+    const protectedFile = String(task.previousPiSessionFile || '');
+    const candidates = new Set([
+      task.piWorkingSessionFile,
+      task.pendingPiSessionFile,
+    ].map((item) => String(item || '')).filter((item) => item && item !== protectedFile));
+    for (const filename of candidates) {
+      await this.piAgent.removeSessionFile(filename).catch(() => {});
+    }
+  }
+
   async runQa(task, conversation) {
+    if (task.usePiAgent === true) {
+      return this.runPiQa(task, conversation);
+    }
+    if (!this.allowLegacyTestEngine) {
+      throw taskError(
+        503,
+        'The selected model cannot be bound to the required Pi Agent engine.',
+        'PI_AGENT_REQUIRED',
+      );
+    }
     const review = task.learningReviewRequest || resolveLearningReviewRequest(task.prompt, {
       now: Date.parse(task.createdAt), timeZone: this.config.timezone,
       previousReview: conversation.researchContext?.learningReview,
@@ -2395,6 +2610,98 @@ export class TaskManager {
       return this.runLegacyQa(task, conversation);
     }
     return this.runResearchQa(task, conversation);
+  }
+
+  async runPiQa(task, conversation) {
+    task.resolvedQuestion = task.prompt;
+    this.emit(task, 'thinking', {
+      message: 'Pi 将依据工具结果自主选择检索、原文读取和继续读取步骤。',
+    });
+    const attached = attachmentPrompt(task.attachments);
+    const piPrompt = [
+      task.prompt,
+      attached ? `<user_attachments>\n${attached}\n</user_attachments>` : '',
+    ].filter(Boolean).join('\n\n');
+    const result = await this.piAgent.runQa({
+      task,
+      conversation,
+      indexSnapshot: this.taskIndex(task),
+      prompt: piPrompt,
+      emit: (type, data) => this.emit(task, type, data),
+    });
+    task.piWorkingSessionFile = result.sessionFile;
+    const resultSources = Array.isArray(result.sources) ? result.sources : [];
+    const verifiedSources = resultSources.filter((source) => source?.kind === 'vault').map((source) => ({
+      ...source,
+      id: vaultSourceId(source.path),
+    }));
+    const verifiedWebSources = resultSources.filter((source) => (
+      source?.kind === 'web' && canonicalWebUrl(source.url)
+    )).map((source) => ({
+      id: String(source.id || '').slice(0, 120),
+      kind: 'web',
+      title: shortText(source.title || new URL(canonicalWebUrl(source.url)).hostname, 300),
+      url: canonicalWebUrl(source.url),
+      source: shortText(source.source || new URL(canonicalWebUrl(source.url)).hostname, 200),
+      publishedAt: shortText(source.publishedAt || '', 100),
+    })).filter((source) => source.id);
+    const finalized = prepareVaultCitations(result.answer, verifiedSources);
+    const finalizedWeb = finalizeAllowlistedWebLinks(finalized.body, verifiedWebSources);
+    const retainedVaultCitations = retainedVaultCitationTokens(finalizedWeb.body, finalized.tokens);
+    let finalAnswer = materializeVaultCitations(finalizedWeb.body, retainedVaultCitations);
+    if (finalizedWeb.appendix) finalAnswer += finalizedWeb.appendix;
+    finalAnswer += piCoverageAppendix(result.ledger, {
+      always: Boolean(task.learningReviewRequest),
+    });
+    task.agentMetrics = result.metrics;
+    task.learningReviewCoverage = task.learningReviewRequest
+      ? result.ledger?.coverage || result.ledger
+      : null;
+    this.emit(task, 'activity', {
+      title: 'Pi 阅读覆盖已核对',
+      message: `${verifiedSources.length} 篇原文经过固定索引快照与内容哈希核验。`,
+      toolName: 'pi_coverage',
+      stage: 'complete',
+      diagnostics: {
+        verifiedFiles: verifiedSources.length,
+        completeFiles: verifiedSources.filter((source) => source.complete).length,
+        partialFiles: verifiedSources.filter((source) => !source.complete).length,
+        uncoveredCount: Array.isArray(result.ledger?.uncovered)
+          ? result.ledger.uncovered.length
+          : Number(result.ledger?.uncoveredCount) || 0,
+      },
+    });
+    const verifiedExternalUrls = finalizedWeb.referencedSources.map((source) => source.url);
+    this.emit(task, result.visibleTextStreamed ? 'text_replace' : 'text', {
+      text: finalAnswer,
+      verifiedExternalUrls,
+    });
+    conversation.messages.push({
+      role: 'assistant', content: finalAnswer, verifiedExternalUrls, at: new Date().toISOString(),
+    });
+    conversation.messages = conversation.messages.slice(-MAX_MESSAGES);
+    await this.finalizePiSession(task, conversation, result);
+    conversation.researchContext = {
+      subject: task.learningReviewRequest
+        ? { name: '个人学习回顾', type: 'personal', aliases: [] }
+        : { name: shortText(task.prompt, 240), type: 'topic', aliases: [] },
+      requiredAnchors: [],
+      intent: {
+        label: task.learningReviewRequest ? 'personal_learning_review' : 'pi_agent_qa',
+        terms: [],
+      },
+      temporal: {
+        mode: task.learningReviewRequest ? 'historical' : 'unspecified',
+        asOf: task.learningReviewRequest?.capturedAt || null,
+      },
+      lastStandaloneQuestion: task.prompt,
+      verifiedClaims: [],
+      citedSources: [
+        ...retainedVaultCitations.map((entry) => entry.source),
+        ...finalizedWeb.referencedSources,
+      ],
+      ...(task.learningReviewRequest ? { learningReview: task.learningReviewRequest } : {}),
+    };
   }
 
   completeUnsupportedTemporalInventory(task, conversation, resolution = {}) {
@@ -3971,9 +4278,10 @@ export class TaskManager {
       stage: 'complete',
       diagnostics: { durationMs: Math.max(0, Date.now() - finalStartedAt) },
     });
-    const finalizedVault = finalizeVaultCitations(rawAnswer, finalVaultSources);
+    const finalizedVault = prepareVaultCitations(rawAnswer, finalVaultSources);
     const finalized = finalizeWebCitations(finalizedVault.body, finalWebSources);
-    let answer = finalized.body;
+    const retainedVaultCitations = retainedVaultCitationTokens(finalized.body, finalizedVault.tokens);
+    let answer = materializeVaultCitations(finalized.body, retainedVaultCitations);
     if (task.webSearch && !temporalPlan && currentWebSources.length === 0) {
       const completedWebAttempt = webAttempts.some((attempt) => attempt?.status === 'completed');
       const webCallFailed = webErrors.length > 0 || webAttempts.some((attempt) => (
@@ -4000,11 +4308,17 @@ export class TaskManager {
       }
     }
     if (finalized.appendix) answer += finalized.appendix;
-    this.emit(task, streamLocalResearchAnswer ? 'text_replace' : 'text', { text: answer });
-    conversation.messages.push({ role: 'assistant', content: answer, at: new Date().toISOString() });
+    const verifiedExternalUrls = finalized.referencedSources.map((source) => source.url);
+    this.emit(task, streamLocalResearchAnswer ? 'text_replace' : 'text', {
+      text: answer,
+      verifiedExternalUrls,
+    });
+    conversation.messages.push({
+      role: 'assistant', content: answer, verifiedExternalUrls, at: new Date().toISOString(),
+    });
     conversation.messages = conversation.messages.slice(-MAX_MESSAGES);
     const referencedSources = [
-      ...finalizedVault.referencedSources,
+      ...retainedVaultCitations.map((entry) => entry.source),
       ...finalized.referencedSources,
     ];
     const savedContext = researchContextForSave(state, verifiedClaims, referencedSources);
@@ -4243,24 +4557,25 @@ export class TaskManager {
         ? undefined
         : (text) => this.emit(task, 'text', { text }),
     });
+    let finalizedLegacyWeb = null;
     if (task.webSearch && !temporalPlan) {
-      answer = stripUnverifiedExternalLinks(
-        stripGeneratedAppendices(answer),
-        webContext.includedSources,
-      );
-      this.emit(task, 'text', { text: answer });
+      finalizedLegacyWeb = finalizeAllowlistedWebLinks(answer, webContext.includedSources);
+      answer = finalizedLegacyWeb.body;
+      this.emit(task, 'text', {
+        text: answer,
+        verifiedExternalUrls: finalizedLegacyWeb.referencedSources.map((source) => source.url),
+      });
     } else {
       // Reconcile the streamed draft with the canonical, overlap-deduplicated
       // answer after a possible provider-limit continuation.
       this.emit(task, 'text_replace', { text: answer });
     }
-    const answerBody = answer;
     if (webFailed) {
       const warning = '\n\n> 联网搜索失败，本次仅依据知识库回答。';
       answer += warning;
       this.emit(task, 'text', { text: warning });
     }
-    const externalSources = webSourcesAppendix(answerBody, webContext.includedSources);
+    const externalSources = finalizedLegacyWeb?.appendix || '';
     if (externalSources) {
       answer += externalSources;
       this.emit(task, 'text', { text: externalSources });
@@ -4278,7 +4593,12 @@ export class TaskManager {
         this.emit(task, 'text', { text: warning });
       }
     }
-    conversation.messages.push({ role: 'assistant', content: answer, at: new Date().toISOString() });
+    conversation.messages.push({
+      role: 'assistant',
+      content: answer,
+      verifiedExternalUrls: finalizedLegacyWeb?.referencedSources.map((source) => source.url) || [],
+      at: new Date().toISOString(),
+    });
     conversation.messages = conversation.messages.slice(-MAX_MESSAGES);
   }
 
@@ -4414,14 +4734,38 @@ export class TaskManager {
       `<user_input>\n${task.prompt}\n</user_input>`,
     ].filter(Boolean).join('\n\n');
     this.emit(task, 'thinking', { message: 'Generating Markdown for review.' });
-    const content = await this.generateModel(task, 'draft_generation', [
-      { role: 'system', content: draftSystemPrompt(task.kind) },
-      { role: 'user', content: prompt },
-    ], {
-      signal: task.abortController.signal,
-      ...this.generationOptions(task),
-      onToken: (text) => this.emit(task, 'text', { text }),
-    });
+    let content;
+    let piResult = null;
+    if (task.usePiAgent === true) {
+      const result = await this.piAgent.runDraft({
+        task,
+        conversation,
+        prompt,
+        emit: (type, data) => this.emit(task, type, data),
+      });
+      piResult = result;
+      task.piWorkingSessionFile = result.sessionFile;
+      content = result.answer;
+      task.agentMetrics = result.metrics;
+      this.emit(task, 'text', { text: content });
+    } else if (this.allowLegacyTestEngine) {
+      // Compatibility for isolated legacy test doubles. Production clients
+      // expose piBinding() and never enter this branch.
+      content = await this.generateModel(task, 'draft_generation', [
+        { role: 'system', content: draftSystemPrompt(task.kind) },
+        { role: 'user', content: prompt },
+      ], {
+        signal: task.abortController.signal,
+        ...this.generationOptions(task),
+        onToken: (text) => this.emit(task, 'text', { text }),
+      });
+    } else {
+      throw taskError(
+        503,
+        'The selected model cannot be bound to the required Pi Agent engine.',
+        'PI_AGENT_REQUIRED',
+      );
+    }
     const draft = await this.store.createDraft({
       userId: task.userId,
       kind: task.kind,
@@ -4435,6 +4779,7 @@ export class TaskManager {
       role: 'assistant', content, draftId: draft.id, at: new Date().toISOString(),
     });
     conversation.messages = conversation.messages.slice(-MAX_MESSAGES);
+    if (piResult) await this.finalizePiSession(task, conversation, piResult);
     return draft;
   }
 

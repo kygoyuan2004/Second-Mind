@@ -36,7 +36,9 @@ test('conversation persistence failure rolls back the queued task and allows ret
     retrieval: { topK: 3, maxContextChars: 2_000 },
     sync: { provider: 'filesystem', displayName: 'Fixture' },
   };
-  const manager = new TaskManager(config, { index, store, llm, conversations });
+  const manager = new TaskManager(config, {
+    index, store, llm, conversations, allowLegacyTestEngine: true,
+  });
   t.after(() => manager.close());
   await manager.ready;
 
@@ -316,7 +318,9 @@ test('task failure events discard provider endpoints and credential-shaped detai
     retrieval: { topK: 3, maxContextChars: 2_000 },
     sync: { provider: 'filesystem', displayName: 'Fixture' },
   };
-  const manager = new TaskManager(config, { index, store, llm, conversations });
+  const manager = new TaskManager(config, {
+    index, store, llm, conversations, allowLegacyTestEngine: true,
+  });
   t.after(() => manager.close());
   await manager.ready;
 

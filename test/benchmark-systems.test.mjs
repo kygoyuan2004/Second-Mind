@@ -13,6 +13,7 @@ import {
   benchmarkSystemInternals,
   snapshotManifest,
 } from '../scripts/lib/benchmark-systems.mjs';
+import { createPiKnowledgeTools } from '../src/pi-agent-tools.mjs';
 
 async function fixture() {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'vaultmind-system-runner-'));
@@ -41,6 +42,99 @@ async function fixture() {
       await fsp.rm(root, { recursive: true, force: true });
     },
   };
+}
+
+function offlinePiFixture(options = {}) {
+  const observations = { legacyGenerateCalls: 0, runs: [], supportedClients: [] };
+  let session = 0;
+  const llm = {
+    async generate() {
+      observations.legacyGenerateCalls += 1;
+      assert.fail('Migrated benchmark must never enter legacy llm.generate');
+    },
+  };
+  const piAgent = {
+    supports(client) {
+      observations.supportedClients.push(client);
+      return typeof client?.generate === 'function';
+    },
+    async runQa(input) {
+      const toolset = createPiKnowledgeTools({
+        indexSnapshot: input.indexSnapshot,
+        store: {},
+        emit: input.emit,
+        signal: input.task.abortController.signal,
+      });
+      const call = async (name, params) => {
+        const tool = toolset.tools.find((candidate) => candidate.name === name);
+        assert(tool, `missing ${name}`);
+        const result = await tool.execute(
+          `offline-${name}`, params, input.task.abortController.signal, undefined, {},
+        );
+        return JSON.parse(result.content[0].text);
+      };
+      const queries = input.task.taskMode.id === 'deep'
+        ? [input.prompt, 'Project Aurora launch date and owner']
+        : [input.prompt];
+      const discovered = [];
+      for (const query of queries) {
+        const search = await call('search_knowledge', { query, route: 'hybrid', limit: 4 });
+        discovered.push(...search.results.map((result) => result.path));
+      }
+      const selected = [...new Set(discovered)];
+      assert(selected.length > 0, 'the agent must discover a note before choosing read_note');
+      const pages = [];
+      for (const relative of selected) {
+        pages.push(await call('read_note', { path: relative, startLine: 1, maxLines: 200 }));
+      }
+      await call('get_reading_coverage', {});
+      await options.afterTools?.({ input, pages });
+      const ledger = toolset.getLedger();
+      const evidence = pages.flatMap((page) => page.lines.map((line) => line.text)).join('\n');
+      const date = evidence.match(/\b\d{4}-\d{2}-\d{2}\b/u)?.[0] || 'unknown';
+      const owner = evidence.match(/owner is ([A-Za-z]+)/iu)?.[1] || '';
+      const cited = ledger.reads[0]?.path;
+      session += 1;
+      observations.runs.push({
+        queries,
+        selected,
+        evidence,
+        coverageChecks: ledger.coverageChecks,
+        conversationMessages: structuredClone(input.conversation.messages),
+      });
+      return {
+        answer: `The launch date is ${date}${owner ? ` and the owner is ${owner}` : ''}. [[${cited}]]`,
+        sessionFile: `benchmark-pi-${session}.jsonl`,
+        sources: ledger.reads.filter((read) => read.ranges.length > 0).map((read) => ({
+          kind: 'vault', path: read.path, hash: read.hash,
+          ranges: read.ranges, complete: read.complete,
+        })),
+        ledger,
+        metrics: {
+          engine: 'pi-agent',
+          durationMs: 5,
+          firstEffectiveProgressMs: 1,
+          firstTextDeltaMs: 4,
+          modelTurns: queries.length + selected.length + 1,
+          toolCalls: queries.length + selected.length + 1,
+          compactions: 0,
+          retries: 0,
+          tokenUsage: {
+            inputTokens: 120,
+            outputTokens: 24,
+            cacheReadInputTokens: 0,
+            cacheCreationInputTokens: 0,
+            reasoningTokens: 0,
+            totalTokens: 144,
+            usageAvailable: true,
+          },
+          coverage: ledger,
+        },
+        visibleTextStreamed: false,
+      };
+    },
+  };
+  return { llm, piAgent, observations };
 }
 
 test('snapshotManifest is deterministic and covers content changes', async (t) => {
@@ -91,12 +185,13 @@ test('snapshotManifest rejects writable files and external hard links', async (t
 test('runner initialization rejects live Vault overlap without reading live contents', async (t) => {
   const project = await fixture();
   t.after(project.cleanup);
-  const llm = { generate: async () => 'offline' };
+  const offline = offlinePiFixture();
   const snapshotOverlap = new MigratedRagRunner({
     snapshotRoot: project.snapshotRoot,
     runRoot: project.runRoot,
     liveVaultRoot: project.root,
-    llm,
+    llm: offline.llm,
+    piAgent: offline.piAgent,
   });
   await assert.rejects(
     () => snapshotOverlap.initialize(),
@@ -110,7 +205,8 @@ test('runner initialization rejects live Vault overlap without reading live cont
     snapshotRoot: project.snapshotRoot,
     runRoot: path.join(liveVaultRoot, 'benchmark-state'),
     liveVaultRoot,
-    llm,
+    llm: offline.llm,
+    piAgent: offline.piAgent,
   });
   await assert.rejects(
     () => stateOverlap.initialize(),
@@ -121,7 +217,8 @@ test('runner initialization rejects live Vault overlap without reading live cont
     snapshotRoot: project.snapshotRoot,
     runRoot: project.runRoot,
     liveVaultRoot: path.join(project.root, 'missing-live-vault'),
-    llm,
+    llm: offline.llm,
+    piAgent: offline.piAgent,
   });
   await assert.rejects(
     () => missingLiveVault.initialize(),
@@ -140,11 +237,13 @@ test('runners reject implicit model networking and overlapping state paths', asy
     () => new MigratedRagRunner({}),
     (error) => error instanceof BenchmarkSystemError && error.code === 'LLM_REQUIRED',
   );
+  const offline = offlinePiFixture();
   const runner = new MigratedRagRunner({
     snapshotRoot: project.snapshotRoot,
     runRoot: path.join(project.snapshotRoot, 'runs'),
     liveVaultRoot: null,
-    llm: { generate: async () => 'offline' },
+    llm: offline.llm,
+    piAgent: offline.piAgent,
   });
   await assert.rejects(
     () => runner.initialize(),
@@ -174,26 +273,16 @@ test('runners reject implicit model networking and overlapping state paths', asy
   );
 });
 
-test('MigratedRagRunner executes real normal/deep retrieval with an offline LLM', async (t) => {
+test('MigratedRagRunner executes autonomous Pi search/read loops without legacy generation', async (t) => {
   const project = await fixture();
   t.after(project.cleanup);
-  const calls = [];
-  const llm = {
-    async generate(messages, options) {
-      calls.push({ messages: structuredClone(messages), options: { ...options } });
-      const system = String(messages[0]?.content || '');
-      if (/search quer/i.test(system) || /retrieval quer/i.test(system)) {
-        return JSON.stringify(['Aurora launch date', 'Aurora owner']);
-      }
-      options.onToken?.('The launch date is 2026-09-05.');
-      return 'The launch date is 2026-09-05.';
-    },
-  };
+  const offline = offlinePiFixture();
   const runner = new MigratedRagRunner({
     snapshotRoot: project.snapshotRoot,
     runRoot: project.runRoot,
     liveVaultRoot: null,
-    llm,
+    llm: offline.llm,
+    piAgent: offline.piAgent,
     topK: 12,
   });
   assert.equal(runner.deepTopK, 12);
@@ -218,14 +307,30 @@ test('MigratedRagRunner executes real normal/deep retrieval with an offline LLM'
   assert.equal(normal.integrity.before.sha256, normal.integrity.after.sha256);
   assert.ok(normal.retrieval.results.some((result) => result.path === 'notes/aurora.md'));
   assert.equal(normal.model.calls.length, 1);
+  assert.equal(normal.model.calls[0].engine, 'pi-agent');
   assert.equal(normal.model.calls[0].temperature, 0);
+  assert.equal(normal.model.turns, normal.model.agent.modelTurns);
+  assert.equal(normal.model.agent.engine, 'pi-agent');
+  assert.equal(normal.model.agent.toolCalls >= 3, true);
+  assert.equal(normal.model.usage.totalTokens, 144);
+  assert.equal(normal.coverage.coverageChecks, 1);
+  assert.ok(normal.coverage.reads.some((read) => read.path === 'notes/aurora.md'));
+  assert.ok(normal.sources.some((source) => source.path === 'notes/aurora.md'));
+  assert.ok(normal.toolEvents.some((event) => event.toolName === 'search_knowledge'));
+  assert.ok(normal.toolEvents.some((event) => event.toolName === 'read_note'));
   assert.ok(normal.timing.indexBuildMs >= 0);
   assert.ok(normal.timing.ttftMs >= 0);
   assert.ok(normal.timing.generationMs >= 0);
   assert.ok(normal.timing.streamCompletionMs >= 0);
-  assert.ok(calls[0].messages.some((message) => message.content.includes('We were discussing')));
-  assert.equal(calls[0].options.model, BENCHMARK_SYSTEM_MODEL);
-  assert.equal(calls[0].options.effort, BENCHMARK_SYSTEM_EFFORT);
+  assert.equal(offline.observations.legacyGenerateCalls, 0);
+  assert.notStrictEqual(offline.observations.supportedClients[0], offline.llm,
+    'TaskManager receives the fixed Pi-only wrapper, not the raw test client');
+  assert.equal(offline.observations.runs[0].coverageChecks, 1);
+  assert.ok(offline.observations.runs[0].selected.includes('notes/aurora.md'));
+  assert.match(offline.observations.runs[0].evidence, /2026-09-05/u);
+  assert(offline.observations.runs[0].conversationMessages.some((message) => (
+    message.role === 'user' && message.content.includes('We were discussing')
+  )));
   assert.deepEqual(await fsp.readdir(project.runRoot), []);
 
   const deep = await runner.runQuestion({
@@ -235,9 +340,12 @@ test('MigratedRagRunner executes real normal/deep retrieval with an offline LLM'
   });
   assert.equal(deep.status, 'completed');
   assert.equal(deep.mode, 'deep');
-  assert.ok(deep.model.calls.length >= 2);
-  assert.ok(deep.retrieval.searches.length >= 1);
+  assert.equal(deep.model.calls.length, 1);
+  assert.ok(deep.model.turns >= 4);
+  assert.ok(deep.retrieval.searches.length >= 2);
   assert.ok(deep.retrieval.results.some((result) => result.path === 'notes/aurora.md'));
+  assert.equal(deep.coverage.coverageChecks, 1);
+  assert.equal(offline.observations.legacyGenerateCalls, 0);
   assert.deepEqual(await fsp.readdir(project.runRoot), []);
 });
 
@@ -245,18 +353,19 @@ test('a runner fails closed when an injected dependency mutates the snapshot', a
   const project = await fixture();
   t.after(project.cleanup);
   const target = path.join(project.snapshotRoot, 'notes', 'aurora.md');
+  const offline = offlinePiFixture({
+    async afterTools() {
+      await fsp.chmod(target, 0o600);
+      await fsp.writeFile(target, '# Project Aurora\n\nmutated fixture\n');
+      await fsp.chmod(target, 0o400);
+    },
+  });
   const runner = new MigratedRagRunner({
     snapshotRoot: project.snapshotRoot,
     runRoot: project.runRoot,
     liveVaultRoot: null,
-    llm: {
-      async generate() {
-        await fsp.chmod(target, 0o600);
-        await fsp.writeFile(target, '# Project Aurora\n\nmutated fixture\n');
-        await fsp.chmod(target, 0o400);
-        return 'This result must be rejected.';
-      },
-    },
+    llm: offline.llm,
+    piAgent: offline.piAgent,
   });
   await assert.rejects(
     () => runner.runQuestion({ anonymousId: 'Q-mut', query: 'Aurora date?', mode: 'normal' }),

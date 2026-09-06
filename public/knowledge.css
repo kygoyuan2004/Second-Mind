@@ -338,6 +338,10 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .knowledge-message-label { margin-bottom: 8px; color: var(--kb-muted); font-size: .65rem; font-weight: 700; letter-spacing: .12em; }
 .knowledge-message.user .knowledge-message-content { margin-left: auto; max-width: 78%; padding: 15px 17px; color: white; background: var(--kb-ink); white-space: pre-wrap; line-height: 1.65; }
 .knowledge-message.assistant .knowledge-message-content { padding: 20px 0; line-height: 1.75; }
+.knowledge-message-content code.knowledge-verified-vault-path,
+.knowledge-rendered code.knowledge-verified-vault-path,
+.knowledge-message-content code.knowledge-model-code,
+.knowledge-rendered code.knowledge-model-code { white-space: break-spaces; }
 .knowledge-message-content > :first-child { margin-top: 0; }
 .knowledge-message-content > :last-child { margin-bottom: 0; }
 .knowledge-message-content pre, .knowledge-rendered pre { overflow: auto; padding: 14px; background: #eef1f3; }

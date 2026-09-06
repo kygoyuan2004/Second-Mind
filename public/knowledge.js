@@ -27,6 +27,7 @@ const state = {
   attachments: [],
   assistantText: '',
   assistantNode: null,
+  assistantVerifiedExternalUrls: [],
   processCard: null,
   processSummary: null,
   processList: null,
@@ -642,6 +643,22 @@ function friendlyModelError(code, fallback = '') {
     LLM_RESPONSE_BLOCKED: '模型供应商拦截或拒绝了本次回答；未完成内容没有保存。',
     LLM_UNSUPPORTED_STOP_REASON: '模型以当前工作台不支持的状态结束；未完成内容没有保存，请检查模型兼容性。',
     MODEL_CONNECTION_INCOMPLETE: '模型连接缺少 API 地址、模型 ID 或 API Key。请先完成模型配置。',
+    PI_TOOL_CALL_REQUIRED: '当前模型返回了文本，但没有调用 Pi 要求的工具；请到“模型配置”更换模型或接口。',
+    PI_TOOL_RESULT_NOT_OBSERVED: '当前模型发起了工具调用，但没有正确读取工具结果；请检查模型的原生工具调用兼容性。',
+    PI_TOOL_ROUND_TRIP_INCOMPLETE: '当前模型没有完成 Pi 的工具往返；请到“模型配置”重新执行连接检查。',
+    PI_TOOL_PROBE_TIMEOUT: 'Pi 工具调用能力检查超时，请检查模型服务后重试。',
+    PI_TOOL_PROBE_BINDING_INVALID: '当前模型协议或请求配置无法接入 Pi 工具调用。',
+    PI_TOOL_PROBE_REQUEST_FAILED: '模型服务未能完成 Pi 工具调用能力检查。',
+    PI_AGENT_STEP_LIMIT: 'Pi Agent 已达到本任务的模型回合上限，未完成回答没有保存。',
+    PI_AGENT_TOOL_LIMIT: 'Pi Agent 已达到本任务的工具调用上限，未完成回答没有保存。',
+    PI_AGENT_REQUIRED: '当前模型无法绑定到必须使用的 Pi Agent 引擎；不会退回旧问答流程。请重新验证模型配置。',
+    PI_AGENT_COVERAGE_REQUIRED: 'Pi Agent 在完整盘点前没有核对阅读覆盖，本次回答未保存，请重试。',
+    PI_AGENT_INVENTORY_REQUIRED: 'Pi Agent 未取得学习回顾所需的日期清单，本次回答未保存。',
+    PI_AGENT_MODEL_FAILED: 'Pi 模型回合执行失败，请检查模型配置后重试。',
+    PI_AGENT_OUTPUT_TRUNCATED: 'Pi 回答达到模型输出上限，未完成内容没有保存。',
+    PI_AGENT_EMPTY_RESPONSE: 'Pi 模型没有返回可用回答，请检查模型兼容性。',
+    PI_SESSION_PERSISTENCE_FAILED: 'Pi 私有会话检查点无法安全保存，请检查数据目录权限。',
+    PI_SESSION_PATH_UNSAFE: 'Pi 私有会话目录不安全；服务已拒绝使用该路径。',
   };
   return messages[String(code || '')] || String(fallback || '知识库任务失败。');
 }
@@ -1043,12 +1060,12 @@ function knowledgeFileLink(relativePath) {
   return knowledgeApiPath(`/api/knowledge/file?path=${encodeURIComponent(relativePath)}`);
 }
 
-function renderMarkdown(target, source, basePath = '') {
+function renderMarkdown(target, source, basePath = '', options = {}) {
   if (!window.VaultMindRenderer?.render) {
     target.textContent = source;
     return;
   }
-  if (window.VaultMindRenderer.render(target, source)) {
+  if (window.VaultMindRenderer.render(target, source, options)) {
     enhanceSourceLinks(target, { basePath, fileUrl: knowledgeFileLink, onOpen: openSource });
   }
 }
@@ -1331,6 +1348,7 @@ function resetTranscript() {
   clearProcessTimer();
   state.assistantNode = null;
   state.assistantText = '';
+  state.assistantVerifiedExternalUrls = [];
   state.processCard = null;
   state.processSummary = null;
   state.processList = null;
@@ -1640,7 +1658,10 @@ function appendMessage(role, text, options = {}) {
   label.textContent = role === 'user' ? '你' : '知识库助手';
   const content = document.createElement('div');
   content.className = 'knowledge-message-content';
-  if (role === 'assistant') renderMarkdown(content, text);
+  if (role === 'assistant') renderMarkdown(content, text, '', {
+    verifiedExternalOnly: true,
+    verifiedExternalUrls: options.verifiedExternalUrls || [],
+  });
   else content.textContent = text;
   article.append(label, content);
   attachDraftButton(article, options.draftId);
@@ -1672,6 +1693,7 @@ function discardPartialAssistant() {
   state.assistantNode.closest('.knowledge-message')?.remove();
   state.assistantNode = null;
   state.assistantText = '';
+  state.assistantVerifiedExternalUrls = [];
   return true;
 }
 
@@ -1801,7 +1823,10 @@ function renderConversationTranscript(conversation, options = {}) {
   for (const message of messages) {
     const names = message.role === 'user' && message.attachments?.length
       ? `\n\n附件：${message.attachments.join('、')}` : '';
-    appendMessage(message.role, `${message.text ?? message.content ?? ''}${names}`, { draftId: message.draftId });
+    appendMessage(message.role, `${message.text ?? message.content ?? ''}${names}`, {
+      draftId: message.draftId,
+      verifiedExternalUrls: message.verifiedExternalUrls,
+    });
   }
 }
 
@@ -1977,6 +2002,9 @@ function connectTask(taskId, options = {}) {
   listen('token_usage', handleUsage);
   listen('text', (event) => {
     const data = parseEvent(event);
+    if (Array.isArray(data.verifiedExternalUrls)) {
+      state.assistantVerifiedExternalUrls = data.verifiedExternalUrls;
+    }
     if (data.usage || data.tokenUsage) updateProcessUsage(data, { eventId: event.lastEventId });
     const text = data.text || '';
     if (!state.processGenerating) {
@@ -1985,11 +2013,17 @@ function connectTask(taskId, options = {}) {
     }
     if (!state.assistantNode) state.assistantNode = appendMessage('assistant', '');
     state.assistantText += text;
-    renderMarkdown(state.assistantNode, state.assistantText);
+    renderMarkdown(state.assistantNode, state.assistantText, '', {
+      verifiedExternalOnly: true,
+      verifiedExternalUrls: state.assistantVerifiedExternalUrls,
+    });
     scrollTranscript();
   });
   listen('text_replace', (event) => {
     const data = parseEvent(event);
+    if (Array.isArray(data.verifiedExternalUrls)) {
+      state.assistantVerifiedExternalUrls = data.verifiedExternalUrls;
+    }
     if (data.usage || data.tokenUsage) updateProcessUsage(data, { eventId: event.lastEventId });
     if (!state.processGenerating) {
       state.processGenerating = true;
@@ -1997,7 +2031,10 @@ function connectTask(taskId, options = {}) {
     }
     if (!state.assistantNode) state.assistantNode = appendMessage('assistant', '');
     state.assistantText = String(data.text || '');
-    renderMarkdown(state.assistantNode, state.assistantText);
+    renderMarkdown(state.assistantNode, state.assistantText, '', {
+      verifiedExternalOnly: true,
+      verifiedExternalUrls: state.assistantVerifiedExternalUrls,
+    });
     scrollTranscript();
   });
   listen('draft_ready', (event) => {
@@ -2014,7 +2051,8 @@ function connectTask(taskId, options = {}) {
     const data = parseEvent(event);
     const message = friendlyModelError(data.code, data.message || '知识库任务失败。');
     const configurationLink = String(data.code || '').startsWith('LLM_') ||
-      String(data.code || '').startsWith('MODEL_');
+      String(data.code || '').startsWith('MODEL_') ||
+      String(data.code || '').startsWith('PI_');
     discardPartialAssistant();
     appendNotice(message, 'error', { configurationLink });
     completeProcess(false, message);
@@ -3056,6 +3094,7 @@ elements.form.addEventListener('submit', async (event) => {
   appendMessage('user', `${prompt}${names.length ? `\n\n附件：${names.join('、')}` : ''}`);
   state.assistantNode = null;
   state.assistantText = '';
+  state.assistantVerifiedExternalUrls = [];
   startProcess('正在启动知识库助手');
   setBusy(true);
   setStatus('working', '正在启动', '正在连接知识库助手。');

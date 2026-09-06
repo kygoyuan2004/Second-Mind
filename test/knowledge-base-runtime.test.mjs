@@ -100,3 +100,112 @@ test('fresh dynamic context builds lexical state without calling a paid embeddin
     await fsp.rm(root, { recursive: true, force: true });
   }
 });
+
+test('each knowledge-base context overrides a shared Pi session directory', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'second-mind-kb-pi-session-'));
+  try {
+    const captured = [];
+    const baseConfig = {
+      embedding: { provider: 'disabled', dimensions: 8 },
+      pi: { sessionDir: path.join(root, 'unsafe-shared-pi-sessions') },
+    };
+    const dependencies = {
+      indexFactoryByKnowledgeBase: async (_entry, config) => fakeIndex(config),
+      storeFactory: async () => ({ ready: Promise.resolve() }),
+      conversationFactory: async () => ({ ready: Promise.resolve() }),
+      managerFactory: async (_entry, config) => {
+        captured.push(config);
+        return { ready: Promise.resolve(), close: async () => {} };
+      },
+    };
+    const contexts = [];
+    for (const id of ['alpha', 'beta']) {
+      const stateRoot = path.join(root, 'state', id);
+      contexts.push(await createKnowledgeBaseContext(baseConfig, {
+        knowledgeBaseId: id,
+        revision: `${id}-1`,
+        name: `Example ${id}`,
+        rootPath: path.join(root, 'vaults', id),
+        state: {
+          dataDir: stateRoot,
+          indexDir: path.join(stateRoot, 'index'),
+          draftDir: path.join(stateRoot, 'drafts'),
+          recoveryDir: path.join(stateRoot, 'recovery'),
+          conversationFile: path.join(stateRoot, 'conversations.json'),
+          auditFile: path.join(stateRoot, 'audit.jsonl'),
+          piSessionDir: path.join(stateRoot, 'pi-sessions'),
+          embeddingProfileFile: path.join(stateRoot, 'embedding-active.json'),
+          embeddingSlotsRoot: path.join(stateRoot, 'embedding-slots'),
+        },
+      }, dependencies));
+    }
+
+    assert.deepEqual(
+      captured.map((config) => config.pi.sessionDir),
+      ['alpha', 'beta'].map((id) => path.join(root, 'state', id, 'pi-sessions')),
+    );
+    assert.ok(captured.every((config) => config.pi.sessionDir !== baseConfig.pi.sessionDir));
+    await Promise.all(contexts.map((context) => context.close()));
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('context close drains embedding maintenance after the manager releases its index', async () => {
+  const order = [];
+  const stateRoot = path.join(os.tmpdir(), 'second-mind-close-order-state');
+  const config = { embedding: { provider: 'disabled', dimensions: 8 } };
+  const context = await createKnowledgeBaseContext(config, {
+    knowledgeBaseId: 'close-order',
+    revision: 'close-order-1',
+    name: 'Close order',
+    rootPath: path.join(os.tmpdir(), 'second-mind-close-order-vault'),
+    state: {
+      dataDir: stateRoot,
+      piSessionDir: path.join(stateRoot, 'pi-sessions'),
+    },
+  }, {
+    indexFactoryByKnowledgeBase: async (_entry, contextConfig) => ({
+      index: fakeIndex(contextConfig),
+      embeddingRuntime: {
+        waitForMaintenance: async () => { order.push('maintenance'); },
+      },
+    }),
+    storeFactory: async () => ({ ready: Promise.resolve() }),
+    conversationFactory: async () => ({ ready: Promise.resolve() }),
+    managerFactory: async () => ({
+      ready: Promise.resolve(),
+      close: async () => { order.push('manager'); },
+    }),
+  });
+
+  await context.close();
+  assert.deepEqual(order, ['manager', 'maintenance']);
+});
+
+test('a failed context construction closes an index opened earlier in the pipeline', async () => {
+  let closed = 0;
+  const stateRoot = path.join(os.tmpdir(), 'second-mind-failed-context-state');
+  await assert.rejects(() => createKnowledgeBaseContext({
+    embedding: { provider: 'disabled', dimensions: 8 },
+  }, {
+    knowledgeBaseId: 'failed-context',
+    revision: 'failed-context-1',
+    name: 'Failed context',
+    rootPath: path.join(os.tmpdir(), 'second-mind-failed-context-vault'),
+    state: {
+      dataDir: stateRoot,
+      piSessionDir: path.join(stateRoot, 'pi-sessions'),
+    },
+  }, {
+    indexFactoryByKnowledgeBase: async (_entry, contextConfig) => ({
+      index: { ...fakeIndex(contextConfig), close: async () => { closed += 1; } },
+    }),
+    storeFactory: async () => ({ ready: Promise.resolve() }),
+    conversationFactory: async () => ({ ready: Promise.resolve() }),
+    managerFactory: async () => {
+      throw Object.assign(new Error('fixture manager failure'), { code: 'FIXTURE_MANAGER_FAILED' });
+    },
+  }), (error) => error?.code === 'FIXTURE_MANAGER_FAILED');
+  assert.equal(closed, 1);
+});

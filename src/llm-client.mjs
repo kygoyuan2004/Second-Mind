@@ -537,9 +537,16 @@ function authenticationHeaders(config, protocol) {
   return { 'x-api-key': apiKey };
 }
 
-function effortRequestFields(profile, options) {
-  const effort = reasoningEffort(options);
-  if (!effort || profile === 'default') return {};
+export function requestProfileReasoningFields(profileInput, effortInput = '') {
+  const profile = String(profileInput || '').trim().toLowerCase();
+  const effort = String(effortInput || '').trim().toLowerCase();
+  if (!REQUEST_PROFILES.has(profile)) {
+    throw providerError('Model request profile is invalid.', 'LLM_INVALID_REQUEST_PROFILE');
+  }
+  if (effort && !['default', 'off'].includes(effort) && !REASONING_EFFORTS.has(effort)) {
+    throw providerError('Model reasoning effort is invalid.', 'LLM_INVALID_EFFORT');
+  }
+  if (!effort || ['default', 'off'].includes(effort) || profile === 'default') return {};
   if (profile === 'anthropic-standard') return { output_config: { effort } };
   if (profile === 'openai-standard') return { reasoning_effort: effort };
   if (profile === 'kimi-openai') return { reasoning_effort: effort };
@@ -561,6 +568,10 @@ function effortRequestFields(profile, options) {
     };
   }
   return {};
+}
+
+function effortRequestFields(profile, options) {
+  return requestProfileReasoningFields(profile, reasoningEffort(options));
 }
 
 function requestTimeoutMs(options = {}, config = {}) {
@@ -824,8 +835,8 @@ export function createPinnedModelFetch(options = {}) {
         ? Buffer.from(init.body)
         : Buffer.from(String(init.body ?? ''), 'utf8');
     if (target.protocol === 'http:') {
-      if (!allowInsecureHttp || !isLocalHostname(target.hostname)) {
-        throw providerError('Plain HTTP is permitted only for an explicitly enabled loopback model provider.', 'LLM_INSECURE_ENDPOINT');
+      if (!isLocalHostname(target.hostname) && !allowInsecureHttp) {
+        throw providerError('Plain HTTP is permitted only for loopback providers or an explicitly enabled trusted private network.', 'LLM_INSECURE_ENDPOINT');
       }
       return requestAsFetch(httpRequest, target, {
         method,
@@ -878,6 +889,44 @@ export class ChatModelClient {
       model: this.config.model,
       configured: Boolean(this.config.apiBase && this.config.model),
     };
+  }
+
+  /**
+   * Return an ephemeral Pi transport binding. Secrets and the pinned fetch
+   * implementation are deliberately non-enumerable so task/status/audit
+   * serialization cannot expose them. Pi receives no ambient environment or
+   * host-level credential source.
+   */
+  piBinding() {
+    const provider = String(this.config.provider || '').trim().toLowerCase();
+    const actualModel = String(this.config.model || '').trim();
+    const requiresCompleteAssistantReplay = (
+      this.requestProfile === 'deepseek-openai'
+      || (
+        this.requestProfile === 'kimi-openai'
+        && /^kimi-k3(?:-|$)/iu.test(actualModel)
+      )
+    );
+    const binding = {
+      protocol: this.protocol,
+      providerId: ['bailian', 'deepseek', 'glm', 'kimi'].includes(provider) ? provider : 'custom',
+      requestProfile: this.requestProfile,
+      authMode: this.authMode,
+      apiBase: this.config.apiBase,
+      actualModel,
+      maxOutputTokens: Number(this.config.maxOutputTokens) || 3_000,
+      contextWindow: Number(this.config.contextWindow) || 64_000,
+      temperature: this.requestProfile === 'kimi-openai'
+        ? null
+        : Number.isFinite(this.config.temperature) ? this.config.temperature : null,
+      requiresCompleteAssistantReplay,
+      assistantReasoningField: requiresCompleteAssistantReplay ? 'reasoning_content' : '',
+    };
+    Object.defineProperties(binding, {
+      apiKey: { value: this.config.apiKey || '', enumerable: false },
+      fetch: { value: this.fetch, enumerable: false },
+    });
+    return Object.freeze(binding);
   }
 
   async generate(messagesInput, options = {}) {

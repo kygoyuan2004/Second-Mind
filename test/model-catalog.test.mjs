@@ -54,6 +54,7 @@ async function fixture(t, options = {}) {
     deep: { enabled: true, topK: 12 },
     sync: { provider: 'filesystem', displayName: 'Fixture' },
   }, {
+    allowLegacyTestEngine: true,
     index: {
       ready: Promise.resolve(),
       status: () => ({ available: true, files: 1, chunks: 1, semanticAvailable: false }),
@@ -188,6 +189,7 @@ test('a duplicated real model ID must be selected through its stable catalog ID'
     }],
     embedding: { provider: 'disabled' },
   }, {
+    allowLegacyTestEngine: true,
     index: {
       ready: Promise.resolve(),
       status: () => ({ available: true, files: 0, chunks: 0, semanticAvailable: false }),

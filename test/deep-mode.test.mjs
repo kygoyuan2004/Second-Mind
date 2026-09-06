@@ -69,7 +69,9 @@ async function deepFixture(t, options = {}) {
     sync: { provider: 'filesystem', displayName: 'Fixture' },
     deep: { enabled: options.deepEnabled !== false, topK: 16 },
   };
-  const manager = new TaskManager(config, { index, store, llm, conversations });
+  const manager = new TaskManager(config, {
+    index, store, llm, conversations, allowLegacyTestEngine: true,
+  });
   t.after(() => manager.close());
   await manager.ready;
   return { manager, conversations, searches, modelCalls };
@@ -232,8 +234,25 @@ test('Vault citations retain only exact paths actually supplied to the model', (
     '可信 [[notes/verified.md]]；伪造 [[private/unknown.md]]；别名 [[notes/verified.md|标题]]。',
     sources,
   );
-  assert.match(finalized.body, /\[\[notes\/verified\.md\]\]/u);
+  assert.match(
+    finalized.body,
+    /<code class="knowledge-verified-vault-path">notes&#47;verified&#46;md<\/code>/u,
+  );
   assert.equal((finalized.body.match(/未核验知识库来源/gu) || []).length, 2);
+  assert.deepEqual(finalized.referencedSources, sources);
+});
+
+test('verified Vault citations preserve an untrusted HTML-like path as inert source code', () => {
+  const path = 'notes/<b>secret</b>.md';
+  const sources = [{
+    id: taskManagerInternals.vaultSourceId(path), kind: 'vault', path, title: path,
+  }];
+  const finalized = taskManagerInternals.finalizeVaultCitations(`证据 [[${path}]]`, sources);
+
+  assert.equal(
+    finalized.body,
+    '证据 <code class="knowledge-verified-vault-path">notes&#47;&#60;b&#62;secret&#60;&#47;b&#62;&#46;md</code>',
+  );
   assert.deepEqual(finalized.referencedSources, sources);
 });
 
@@ -359,6 +378,7 @@ test('Deep uses a safe top-k fallback when an older programmatic config has no d
     retrieval: { topK: 3, maxContextChars: 2_000 },
     sync: { provider: 'filesystem', displayName: 'Fixture' },
   }, {
+    allowLegacyTestEngine: true,
     index: {
       ready: Promise.resolve(),
       status: () => ({ available: true }),

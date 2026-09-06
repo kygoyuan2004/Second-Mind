@@ -21,7 +21,7 @@ const TASK_MODE_DEFINITIONS = Object.freeze({
 });
 
 export const TASK_CONTRACT_VERSION = 2;
-export const TASK_BUILD_REVISION = 'knowledge-ui-2.1.6';
+export const TASK_BUILD_REVISION = 'knowledge-ui-2.1.7';
 
 const MODEL_CATALOG_REVISION = /^[0-9a-f]{64}$/iu;
 

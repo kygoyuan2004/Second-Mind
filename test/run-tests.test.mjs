@@ -24,6 +24,7 @@ test('test runner keeps POSIX container guarantees explicit on Windows', () => {
     'runtime-config-registry-boundaries.test.mjs',
     'runtime-config-registry.test.mjs',
     'runtime-v2-integration.test.mjs',
+    'vault-replica.test.mjs',
   ]);
   const fixtures = [
     '/repo/test/runtime-config-registry.test.mjs',

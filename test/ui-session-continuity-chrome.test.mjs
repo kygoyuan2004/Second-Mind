@@ -57,7 +57,7 @@ const statusPayload = {
   knowledgeBaseRevision: 'browser-fixture-1',
   taskContractVersion: 2,
   capabilities: { modelCatalogRevision: true },
-  buildRevision: 'knowledge-ui-2.1.6',
+  buildRevision: 'knowledge-ui-2.1.7',
   modelCatalogRevision: 'a'.repeat(64),
   appName: 'Second Mind UI Test',
   vaultLabel: '本地测试库',
@@ -587,7 +587,9 @@ test('headless Chrome preserves explicit UI conversation continuity and fork sem
     cdp?.close();
     await stopChrome(chrome);
     await application.close();
-    await fsp.rm(profile, { recursive: true, force: true });
+    // Chromium helpers can finish their profile writes just after the main
+    // process exits. Retry transient ENOTEMPTY instead of failing passed UI assertions.
+    await fsp.rm(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   });
 
   ({ chrome, cdp } = await launchChrome(application.url, profile, WebSocketImpl));

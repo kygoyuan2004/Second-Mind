@@ -43,6 +43,9 @@ import {
   universalReasoningPolicy,
 } from './model-provider-registry.mjs';
 import { markPublicMessage, publicError } from './public-errors.mjs';
+import { resolveLearningReviewRequest, learningReviewLimits } from './learning-review.mjs';
+import { runLearningReview } from './learning-review-runner.mjs';
+import { inspectVaultReplica } from './vault-replica.mjs';
 
 const KINDS = new Set(['qa', 'diary', 'plan', 'scratch']);
 const TERMINAL = new Set(['completed', 'failed', 'cancelled']);
@@ -1485,8 +1488,13 @@ export class TaskManager {
     )) || this.modelCatalog.find((model) => model.available) || null;
     const webSearch = this.webSearch.publicStatus?.() || config.webSearch;
     const fallback = this.responsesExtractor.publicStatus?.() || {};
+    const replica = this.config.sync?.replicaStateDir
+      ? await inspectVaultReplica({ stateDir: this.config.sync.replicaStateDir, targetRoot: this.config.vaultPath })
+        .catch(() => ({ configured: true, mode: 'manual-replica', status: 'error', indexPending: true }))
+      : null;
     return {
       ...config,
+      ...(replica?.configured ? { sync: { ...config.sync, ...replica } } : {}),
       ...(this.knowledgeBaseId ? {
         knowledgeBaseId: this.knowledgeBaseId,
         knowledgeBaseRevision: this.knowledgeBaseRevision,
@@ -1634,13 +1642,19 @@ export class TaskManager {
         throw taskError(409, 'Conversation mode does not match.', 'CONVERSATION_MISMATCH');
       }
     }
+    const taskCreatedAt = new Date(this.now()).toISOString();
+    const learningReviewRequest = kind === 'qa' ? resolveLearningReviewRequest(prompt, {
+      now: Date.parse(taskCreatedAt), timeZone: this.config.timezone,
+      previousReview: referencedConversation?.researchContext?.learningReview,
+      history: referencedConversation?.messages || [],
+    }) : null;
     const webSearch = kind === 'qa' && (
       Object.hasOwn(body, 'webSearch')
         ? body.webSearch === true
         : referencedConversation?.webSearch === true
     );
     const webSearchStatus = this.webSearch.publicStatus?.() || {};
-    if (webSearch && (webSearchStatus.enabled !== true || webSearchStatus.configured !== true)) {
+    if (webSearch && !learningReviewRequest && (webSearchStatus.enabled !== true || webSearchStatus.configured !== true)) {
       throw taskError(503, 'Web Search is not configured on this server.', 'WEB_SEARCH_UNAVAILABLE');
     }
     const webSearchProvider = webSearch
@@ -1708,7 +1722,7 @@ export class TaskManager {
       )
     ));
     const storedWebBindingChanged = Boolean(
-      referencedConversation?.webSearch === true && webSearch && (
+      !learningReviewRequest && referencedConversation?.webSearch === true && webSearch && (
         (
           referencedConversation.webSearchProvider &&
           referencedConversation.webSearchProvider !== webSearchProvider
@@ -1758,7 +1772,7 @@ export class TaskManager {
     }
     let webSearchClient = null;
     let webExtractorClient = null;
-    if (webSearch) {
+    if (webSearch && !learningReviewRequest) {
       try {
         webSearchClient = typeof this.webSearch.acquireForTask === 'function'
           ? await this.webSearch.acquireForTask({
@@ -1815,7 +1829,7 @@ export class TaskManager {
         webSearchBindingRevision,
       });
     }
-    const now = new Date(this.now()).toISOString();
+    const now = taskCreatedAt;
     const task = {
       id: crypto.randomUUID(),
       knowledgeBaseId: this.knowledgeBaseId,
@@ -1831,7 +1845,8 @@ export class TaskManager {
       modelCatalogRevision: catalogRevision,
       effort: selection.effort,
       effectiveEffort: selection.effectiveEffort,
-      webSearch,
+      webSearch: webSearch && !learningReviewRequest,
+      learningReviewRequest,
       webSearchProvider,
       webSearchBindingRevision,
       webSearchClient,
@@ -2341,6 +2356,41 @@ export class TaskManager {
   }
 
   async runQa(task, conversation) {
+    const review = task.learningReviewRequest || resolveLearningReviewRequest(task.prompt, {
+      now: Date.parse(task.createdAt), timeZone: this.config.timezone,
+      previousReview: conversation.researchContext?.learningReview,
+      history: conversation.messages.slice(0, -1),
+    });
+    if (review) {
+      task.resolvedQuestion = review.originalQuestion;
+      const result = await runLearningReview({
+        task, review, index: this.taskIndex(task),
+        maxContextChars: this.config.retrieval.maxContextChars,
+        emit: (type, data) => this.emit(task, type, data),
+        budgetAvailable: (milliseconds) => this.researchBudgetAvailable(task, milliseconds),
+        generate: (messages) => this.generateModel(task, 'learning_review_extraction', messages, {
+          ...this.auxiliaryGenerationOptions(task, learningReviewLimits.extractionOutputTokens, learningReviewLimits.extractionTimeoutMs),
+          signal: task.abortController.signal,
+        }),
+        generateFinal: (messages) => this.generateModel(task, 'learning_review_summary', messages, {
+          // Facts are already verified; this call only groups their IDs.
+          ...this.auxiliaryGenerationOptions(task, 2_500, 90_000), signal: task.abortController.signal,
+        }),
+      });
+      task.learningReviewCoverage = result.coverage;
+      this.emit(task, 'text', { text: result.answer });
+      conversation.messages.push({ role: 'assistant', content: result.answer, at: new Date().toISOString() });
+      conversation.messages = conversation.messages.slice(-MAX_MESSAGES);
+      conversation.researchContext = {
+        subject: { name: '个人学习回顾', type: 'personal', aliases: [] },
+        requiredAnchors: [], intent: { label: 'personal_learning_review', terms: ['学习回顾'] },
+        temporal: { mode: 'historical', asOf: review.capturedAt },
+        lastStandaloneQuestion: review.originalQuestion,
+        verifiedClaims: [], citedSources: result.sources, learningReview: review,
+      };
+      if (task.researchAuditState) task.researchAuditState.researchStopReason = 'learning_review_completed';
+      return;
+    }
     if (this.config.research?.contextualizerEnabled !== true) {
       return this.runLegacyQa(task, conversation);
     }

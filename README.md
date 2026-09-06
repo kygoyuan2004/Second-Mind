@@ -53,6 +53,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 | 隔离 | 每库独立索引、会话、草稿、恢复副本和审计；跨库任务、会话、草稿 ID 会失败 |
 | 检索 | 中文感知 BM25；可选 OpenAI-compatible 或 DashScope Embedding；混合 RRF；语义失效时明确降级 |
 | 问答 | Normal 单轮检索与 Deep 反馈式多路径检索；服务器控制工具；答案引用具体 Vault 相对路径 |
+| 学习回顾 | [固定日期范围、日期记录清单与分批核验](docs/learning-review.md)；区分计划与完成，显示实际覆盖缺口 |
 | 联网补充 | 每个会话显式选择；Alibaba Model Studio WebSearch MCP 或 Tavily REST；安全网页读取与 Vault-only 降级 |
 | 会话 | 刷新恢复；模型、思考强度或联网设置变化时派生子会话；Normal 与 Deep 可在原会话切换 |
 | 写入 | 日记、计划、随心记生成；可编辑 Markdown 预览；明确确认后只写入允许目录；冲突检查和恢复副本 |

@@ -27,6 +27,7 @@ export const WINDOWS_CONTAINER_SECURITY_SUITES = Object.freeze([
   'runtime-config-registry-boundaries.test.mjs',
   'runtime-config-registry.test.mjs',
   'runtime-v2-integration.test.mjs',
+  'vault-replica.test.mjs',
 ]);
 
 export function selectTestFiles(files, platform = process.platform) {

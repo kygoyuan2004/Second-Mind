@@ -48,7 +48,7 @@ function statusFor(knowledgeBaseId) {
     knowledgeBaseRevision: `${knowledgeBaseId}-browser-revision`,
     taskContractVersion: 2,
     capabilities: { modelCatalogRevision: true },
-    buildRevision: 'knowledge-ui-2.1.6',
+    buildRevision: 'knowledge-ui-2.1.7',
     modelCatalogRevision: (alpha ? 'a' : 'b').repeat(64),
     appName: 'Two Vault Browser Test',
     vaultLabel: alpha ? 'Alpha Notes' : 'Beta Notes',

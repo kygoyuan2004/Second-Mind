@@ -1411,6 +1411,7 @@ export class KnowledgeIndex {
         throw error;
       }
     };
+    const documentReads = new Map();
     return Object.freeze({
       generation: String(view.generation?.generation || 'unbuilt'),
       status: () => {
@@ -1425,8 +1426,49 @@ export class KnowledgeIndex {
         assertHeld();
         return view.temporalInventory(...args);
       },
+      listDocuments: () => {
+        assertHeld();
+        return Object.entries(view.generation.files || {})
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([relative, metadata]) => ({
+            path: relative, hash: metadata.hash, size: metadata.size,
+          }));
+      },
+      readDocument: async (relativeInput, options = {}) => {
+        assertHeld();
+        options.signal?.throwIfAborted?.();
+        const { relative } = view.policy.assertAllowed(relativeInput);
+        const expected = view.generation.files?.[relative];
+        if (!expected) {
+          const error = new Error('The document is not present in this index snapshot.');
+          error.code = 'INDEX_DOCUMENT_NOT_FOUND';
+          error.status = 404;
+          throw error;
+        }
+        if (documentReads.has(relative)) return documentReads.get(relative);
+        const file = await view.policy.existingFile(relative, { maxBytes: MAX_TEXT_BYTES });
+        const buffer = await fsp.readFile(file.target, { signal: options.signal });
+        assertHeld();
+        options.signal?.throwIfAborted?.();
+        if (sha256(buffer) !== expected.hash) {
+          const error = new Error('The document changed after this index snapshot was created.');
+          error.code = 'INDEX_DOCUMENT_CHANGED';
+          error.status = 409;
+          throw error;
+        }
+        if (buffer.includes(0)) {
+          const error = new Error('The indexed document is not a text file.');
+          error.code = 'UNSUPPORTED_VAULT_FILE';
+          error.status = 415;
+          throw error;
+        }
+        const document = Object.freeze({ path: relative, hash: expected.hash, text: buffer.toString('utf8') });
+        documentReads.set(relative, document);
+        return document;
+      },
       release: () => {
         released = true;
+        documentReads.clear();
       },
     });
   }

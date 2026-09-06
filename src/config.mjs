@@ -365,6 +365,8 @@ export function createConfig(overrides = {}) {
     },
     sync: {
       provider: syncProvider,
+      replicaStateDir: text('SYNC_REPLICA_STATE_DIR', '')
+        ? absolute('SYNC_REPLICA_STATE_DIR', '') : '',
       displayName: text(
         'SYNC_DISPLAY_NAME',
         syncProvider === 'obsidian-headless' ? 'Obsidian Headless Sync' : 'Filesystem',

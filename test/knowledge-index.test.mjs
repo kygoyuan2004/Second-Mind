@@ -277,6 +277,54 @@ test('an acquired snapshot keeps one exact generation across same-slot file upda
   );
 });
 
+test('document snapshot reads are hash verified, cached and confined to the captured file manifest', async (t) => {
+  const setup = await fixture(t);
+  await fsp.writeFile(path.join(setup.vaultPath, 'cached.md'), '# Original\n原文。\n');
+  await fsp.writeFile(path.join(setup.vaultPath, 'unread.md'), '# Before\n未读内容。\n');
+  const index = new KnowledgeIndex(setup.config);
+  t.after(() => index.close());
+  await index.ready;
+  const snapshot = index.acquireSnapshot();
+  t.after(() => snapshot.release());
+  assert.deepEqual(snapshot.listDocuments().map((item) => item.path), ['cached.md', 'unread.md']);
+  assert.ok(snapshot.listDocuments().every((item) => /^[a-f0-9]{64}$/u.test(item.hash)));
+  const read = await snapshot.readDocument('cached.md');
+  assert.equal(read.text, '# Original\n原文。\n');
+  await fsp.writeFile(path.join(setup.vaultPath, 'cached.md'), '# Replaced\n新版。\n');
+  await fsp.writeFile(path.join(setup.vaultPath, 'unread.md'), '# Changed before first read\n');
+  await fsp.writeFile(path.join(setup.vaultPath, 'new.md'), '# New\n');
+  await index.updatePaths(['cached.md', 'unread.md', 'new.md']);
+  assert.equal(await snapshot.readDocument('cached.md'), read);
+  await assert.rejects(snapshot.readDocument('unread.md'), (error) => error.code === 'INDEX_DOCUMENT_CHANGED');
+  await assert.rejects(snapshot.readDocument('new.md'), (error) => error.code === 'INDEX_DOCUMENT_NOT_FOUND');
+  await assert.rejects(snapshot.readDocument('../outside.md'), (error) => error.code === 'INVALID_VAULT_PATH');
+  await assert.rejects(snapshot.readDocument('.obsidian/private.md'), (error) => error.code === 'VAULT_PATH_EXCLUDED');
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(snapshot.readDocument('cached.md', { signal: controller.signal }), (error) => error.name === 'AbortError');
+  snapshot.release();
+  assert.throws(() => snapshot.listDocuments(), (error) => error.code === 'INDEX_SNAPSHOT_RELEASED');
+  await assert.rejects(snapshot.readDocument('cached.md'), (error) => error.code === 'INDEX_SNAPSHOT_RELEASED');
+});
+
+test('document snapshot rejects a symlink introduced after indexing', {
+  skip: process.platform === 'win32' ? 'POSIX symlink boundary is exercised in the deployed container' : false,
+}, async (t) => {
+  const setup = await fixture(t);
+  const target = path.join(setup.vaultPath, 'safe.md');
+  const outside = path.join(setup.temporary, 'outside.md');
+  await fsp.writeFile(target, 'identical bytes');
+  await fsp.writeFile(outside, 'identical bytes');
+  const index = new KnowledgeIndex(setup.config);
+  t.after(() => index.close());
+  await index.ready;
+  const snapshot = index.acquireSnapshot();
+  t.after(() => snapshot.release());
+  await fsp.rm(target);
+  await fsp.symlink(outside, target);
+  await assert.rejects(snapshot.readDocument('safe.md'), (error) => error.code === 'VAULT_SYMLINK_DENIED');
+});
+
 test('explicit entity questions require the entity in keyword, semantic, and hybrid results', async (t) => {
   const setup = await fixture(t, {
     provider: 'openai-compatible',

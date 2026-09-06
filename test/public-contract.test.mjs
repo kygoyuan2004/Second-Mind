@@ -184,9 +184,9 @@ test('model catalog concurrency guard is capability-gated and the UI asset has a
     readFile(new URL('../public/knowledge.js', import.meta.url), 'utf8'),
   ]);
 
-  assert.match(html, /knowledge\.js\?v=2\.1\.6/);
-  assert.match(html, /knowledge\.css\?v=2\.1\.6/);
-  assert.match(source, /const CLIENT_BUILD_REVISION = 'knowledge-ui-2\.1\.6'/);
+  assert.match(html, /knowledge\.js\?v=2\.1\.7/);
+  assert.match(html, /knowledge\.css\?v=2\.1\.7/);
+  assert.match(source, /const CLIENT_BUILD_REVISION = 'knowledge-ui-2\.1\.7'/);
   assert.match(source, /function modelCatalogRevisionRequest\(status = state\.status\)/);
   assert.match(source, /status\?\.taskContractVersion === 2/);
   assert.match(source, /status\?\.capabilities\?\.modelCatalogRevision === true/);

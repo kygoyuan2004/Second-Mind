@@ -4,7 +4,7 @@ import { filesFromClipboard } from './knowledge-clipboard.js?v=1.0.0';
 const CONVERSATION_SELECTION_PREFIX = 'vaultmind:selected-conversation:v2:';
 const KNOWLEDGE_BASE_SELECTION_PREFIX = 'second-mind:selected-knowledge-base:v1:';
 const NEW_CONVERSATION_SENTINEL = '__new_conversation__';
-const CLIENT_BUILD_REVISION = 'knowledge-ui-2.1.6';
+const CLIENT_BUILD_REVISION = 'knowledge-ui-2.1.7';
 const MODEL_CATALOG_REVISION = /^[0-9a-f]{64}$/i;
 const UNIVERSAL_EFFORT_IDS = Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']);
 const EFFECTIVE_EFFORT_IDS = new Set(['minimal', ...UNIVERSAL_EFFORT_IDS, 'default']);
@@ -670,6 +670,19 @@ function todayForTimezone() {
 function syncSummary(sync) {
   if (typeof sync === 'string' && sync.trim()) return { text: sync.trim(), connected: null };
   if (!sync || typeof sync !== 'object') return { text: '同步状态未知', connected: null };
+  if (sync.mode === 'manual-replica') {
+    const at = Date.parse(sync.lastSuccessfulSyncAt);
+    const timestamp = Number.isFinite(at)
+      ? new Intl.DateTimeFormat('zh-CN', { timeZone: configuredTimezone(),
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(at)
+      : null;
+    const failed = sync.status === 'error' || sync.status === 'failed';
+    return {
+      text: [timestamp ? `数据同步截至 ${timestamp}` : '尚未完成完整同步', '手动同步',
+        sync.indexPending ? '索引更新尚未完成' : '', failed ? '最近同步未完成' : ''].filter(Boolean).join(' · '),
+      connected: timestamp && !sync.indexPending && !failed ? true : null,
+    };
+  }
   const provider = String(sync.displayName || sync.label || sync.provider || sync.type || '').trim();
   const rawState = String(sync.status || sync.state || '').trim();
   const connected = typeof sync.connected === 'boolean'

@@ -279,6 +279,14 @@ test('router task snapshot delegates to an index generation snapshot during same
         assertHeld();
         return { query, options, generation: pinned };
       },
+      listDocuments: () => {
+        assertHeld();
+        return [{ path: 'dated.md', hash: `hash-${pinned}`, size: 100 }];
+      },
+      readDocument: async (relative) => {
+        assertHeld();
+        return { path: relative, hash: `hash-${pinned}`, text: `Version ${pinned}` };
+      },
       release: () => { released = true; },
     };
   };
@@ -302,7 +310,11 @@ test('router task snapshot delegates to an index generation snapshot during same
     range: { startMs: 1, endMs: 2 },
   })).generation, 1);
   assert.equal((await router.search('live')).generation, 2);
+  assert.equal(snapshot.listDocuments()[0].hash, 'hash-1');
+  assert.equal((await snapshot.readDocument('dated.md')).text, 'Version 1');
   snapshot.release();
+  assert.throws(() => snapshot.listDocuments(), (error) => error.code === 'INDEX_SNAPSHOT_RELEASED');
+  assert.throws(() => snapshot.readDocument('dated.md'), (error) => error.code === 'INDEX_SNAPSHOT_RELEASED');
 });
 
 test('public descriptor and status never return endpoint or API key fields', async (t) => {

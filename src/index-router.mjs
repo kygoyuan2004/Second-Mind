@@ -273,6 +273,20 @@ export class IndexRouter {
         }
         return pinnedIndex.temporalInventory(...args);
       },
+      listDocuments: (...args) => {
+        assertHeld();
+        if (typeof pinnedIndex.listDocuments !== 'function') {
+          throw new IndexRouterError('The active index does not expose document snapshots.', 'INDEX_DOCUMENT_SNAPSHOT_UNAVAILABLE', 503);
+        }
+        return pinnedIndex.listDocuments(...args);
+      },
+      readDocument: (...args) => {
+        assertHeld();
+        if (typeof pinnedIndex.readDocument !== 'function') {
+          throw new IndexRouterError('The active index does not expose document snapshots.', 'INDEX_DOCUMENT_SNAPSHOT_UNAVAILABLE', 503);
+        }
+        return pinnedIndex.readDocument(...args);
+      },
       release: () => {
         if (released) return;
         released = true;

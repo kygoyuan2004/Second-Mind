@@ -151,11 +151,11 @@ async function fixture(t, { temporalAvailable = true } = {}) {
   return { manager, conversations, calls };
 }
 
-test('Deep personal learning inventory uses one complete mtime scan and never WebSearch', async (t) => {
+test('Deep modified learning notes inventory uses one complete mtime scan and never WebSearch', async (t) => {
   const value = await fixture(t);
   const created = await value.manager.createTask('admin', {
     kind: 'qa',
-    prompt: '这两周我都学习了哪些内容',
+    prompt: '这两周我的知识库中修改了哪些学习笔记',
     taskMode: 'deep',
     model: 'fixture',
     effort: 'default',
@@ -198,7 +198,7 @@ test('an older or mock index without temporal metadata fails closed with an expl
   const value = await fixture(t, { temporalAvailable: false });
   const created = await value.manager.createTask('admin', {
     kind: 'qa',
-    prompt: '这两周我都学习了哪些内容',
+    prompt: '这两周我的知识库中修改了哪些学习笔记',
     taskMode: 'normal',
     model: 'fixture',
     effort: 'default',

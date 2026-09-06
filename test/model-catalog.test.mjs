@@ -229,7 +229,7 @@ test('model catalog revision contract accepts current or omitted guards and reje
 
   assert.equal(status.taskContractVersion, 2);
   assert.equal(status.capabilities.modelCatalogRevision, true);
-  assert.equal(status.buildRevision, 'knowledge-ui-2.1.6');
+  assert.equal(status.buildRevision, 'knowledge-ui-2.1.7');
   assert.match(revision, /^[0-9a-f]{64}$/);
 
   for (const invalid of [null, 7, '', 'a'.repeat(63), 'a'.repeat(65), 'g'.repeat(64)]) {

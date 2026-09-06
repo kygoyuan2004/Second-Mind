@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { markPublicMessage } from './public-errors.mjs';
+import { normalizeLearningReview } from './learning-review.mjs';
 
 const STORE_VERSION = 2;
 const MAX_FORK_TURNS = 5;
@@ -162,6 +163,7 @@ function normalizeResearchContext(value) {
     .filter(Boolean)
     .slice(0, MAX_RESEARCH_ITEMS);
   const pendingClarification = normalizePendingClarification(value.pendingClarification);
+  const learningReview = normalizeLearningReview(value.learningReview);
   const context = {
     subject,
     requiredAnchors: boundedStringList(value.requiredAnchors, { maxItems: 20, maxLength: 240 }),
@@ -172,10 +174,11 @@ function normalizeResearchContext(value) {
     citedSources,
   };
   if (pendingClarification) context.pendingClarification = pendingClarification;
+  if (learningReview) context.learningReview = learningReview;
   const hasContent = subject.name || subject.type || subject.aliases.length
     || context.requiredAnchors.length || intent.label || intent.terms.length
     || temporal.mode || temporal.asOf || context.lastStandaloneQuestion
-    || verifiedClaims.length || citedSources.length || pendingClarification;
+    || verifiedClaims.length || citedSources.length || pendingClarification || learningReview;
   return hasContent ? context : null;
 }
 

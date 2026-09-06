@@ -161,3 +161,44 @@ Do not use an untested network filesystem whose rename, consistency, locking, in
 Self-hosted LiveSync is not implemented. The repository has no CouchDB service, LiveSync credential loader, Setup URI handler, or supported materializer that turns its database into the ordinary per-base filesystem contract.
 
 Adding it would require a separate reviewed materializer with isolated credentials, encryption handling, conflict/delete/attachment tests, and a prohibition on concurrent sync engines for the same Vault. The existence of a community project must not be presented as Second Mind support.
+
+## Manual working copy beside a fixed benchmark
+
+Use an independent working copy when the application needs current notes while a benchmark directory must stay frozen. `scripts/sync-vault-copy.mjs` is an offline, manually invoked source-to-copy publisher. It does not run Obsidian, a sync engine, a timer, or an embedding provider. It copies all ordinary files, including hidden ordinary files and attachments, and preserves file modification times. Hidden sync configuration is only copied as inert data; do not start another sync client on the copy. Any symbolic link, special file, read failure, or source change detected during staging stops publication.
+
+Choose three disjoint directories: the read-only source Vault, a **new** working-copy path, and a private replica state directory outside all Vaults. Keep the fixed benchmark separate. Stop the Second Mind instance and every other writer of the working copy before each invocation; the publication replaces the complete target directory, so open filesystem watchers must also be restarted.
+
+```bash
+node scripts/sync-vault-copy.mjs \
+  --source /srv/notes/source-vault \
+  --target /srv/notes/working-copy \
+  --state-dir /srv/second-mind/data/replica
+
+node scripts/sync-vault-copy.mjs \
+  --state-dir /srv/second-mind/data/replica --status
+```
+
+The first copy requires an absent target. Subsequent invocations require the same source, target, and state directory. Each update stages and hashes the complete source, checks the source a second time, verifies staged content, and checks that the target has not changed locally. Source additions, edits and deletions are published together. If the copy contains a locally added, modified or deleted file, **the whole update stops** with `REPLICA_LOCAL_CONFLICT` and relative paths; it never silently discards application-authored notes. Back up and reconcile those local changes explicitly before retrying. A successful replacement preserves the previous copy in a sibling `.working-copy.replica-recovery-*` directory outside the active Vault. Keep that directory until the new copy and index pass acceptance checks.
+
+The private `vault-replica.json` manifest contains the source and target binding, per-file SHA-256 values, original modification times, the published version and last successful update time. `--status` returns only the public version, time, file count and index status. Application integrations must call `inspectVaultReplica({ stateDir, targetRoot: currentKnowledgeBaseRoot })`: a different target returns an unconfigured status with no version or timestamp, so a globally configured state directory cannot leak one knowledge base's replica status into another. Handle unreadable or invalid state as unavailable sync information without failing the knowledge-base status endpoint. A stopped or failed copy leaves the previous successful version unchanged. An abrupt process stop can leave `vault-replica.lock` and `vault-replica-pending.json`; keep the application stopped, inspect the private journal, and restore the journal's recovery directory and matching manifest backup before clearing these recovery markers. Do not delete markers and rerun without reconciling the target and manifest.
+
+### Switch the application and rebuild its active index
+
+Set `SYNC_REPLICA_STATE_DIR` to the matching private `--state-dir`. The authenticated knowledge status endpoint and page footer then show the last successful full copy time and whether that copy still needs indexing. A filesystem connection or a successful file copy alone is not evidence that retrieval is current. Refreshes are manual; this option does not install a timer or start an Obsidian client.
+
+Back up the exact instance's runtime data, deployment settings, index slots, active embedding manifest and conversations before changing its Vault root. In a direct single-Vault deployment, retain the conversation/data paths and model configuration, then change only the private Vault setting to the working copy. Historical citations use relative paths and remain available. Pending drafts still compare their source hash before saving and can require regeneration when their source changed.
+
+Managed multiple-Vault deployments bind each `knowledgeBaseId` to its original canonical root. They must add a new knowledge-base ID and explicitly migrate the intended conversation state; do not remove the binding ledger to reuse an ID for a different root.
+
+An active embedding slot is selected by `embedding-active.json`, which may point outside the ordinary `INDEX_DIR`. **`npm run index` currently rebuilds the configured base `INDEX_DIR`; it does not resolve the active slot manifest.** Merely restarting an activated slot also does not guarantee an immediate full rebuild. Resolve the active profile through `resolveActiveEmbedding`, open its returned `indexDir` against the new working-copy root, and explicitly await `index.rebuild({ verifyHashes: true })`, or use the existing managed validate/build/activate workflow. The former reuses unchanged file vectors; a fresh managed candidate may embed all files. Do not rebuild the wrong index and then mark the replica ready.
+
+Before opening the application to traffic, compare its actual root and indexed paths against the published copy, confirm its generation, and test recent note reads, search and restored conversation citations. Then acknowledge the **exact** published version and verified generation:
+
+```bash
+node scripts/sync-vault-copy.mjs \
+  --state-dir /srv/second-mind/data/replica \
+  --version PUBLISHED_SHA256_VERSION \
+  --index-generation VERIFIED_INDEX_GENERATION
+```
+
+Until this acknowledgement, the copy reports `indexPending: true`. A version mismatch refuses acknowledgement. This workflow is manual; the last successful update time is a snapshot time and must not be presented as live synchronization.

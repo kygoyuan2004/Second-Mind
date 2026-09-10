@@ -4,7 +4,7 @@
   </a>
 </p>
 
-<p align="center"><em>项目插画，不是产品界面截图。</em></p>
+<p align="center"><em>。</em></p>
 
 <h1 align="center">Second-Mind</h1>
 

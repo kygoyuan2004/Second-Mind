@@ -50,6 +50,11 @@ async function main(extraArguments = process.argv.slice(2)) {
     '--import', preload,
     '--test',
     '--test-reporter=spec',
+    ...(continuousIntegration ? [
+      '--test-reporter-destination=stdout',
+      `--test-reporter=${fileURLToPath(new URL('./ci-test-reporter.mjs', import.meta.url))}`,
+      '--test-reporter-destination=stderr',
+    ] : []),
     '--test-concurrency=1',
     '--test-timeout=60000',
     ...extraArguments,

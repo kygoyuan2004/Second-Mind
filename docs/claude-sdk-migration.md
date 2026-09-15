@@ -1,6 +1,6 @@
 # Claude Agent SDK 迁移记录
 
-状态：隔离迁移与核心验收已完成；Linux 安装器完整验收已完成；8788 部署通过；GitHub 发布仍在进行。基准日期：2026-09-15。
+状态：原版 SDK 迁移、8788 部署、Linux 安装器验收、三平台 CI、双架构镜像与 Pages 发布已完成。基准日期：2026-09-15；发布验收：2026-09-16（北京时间）。实际验证边界见下方矩阵。
 
 ## 基准与边界
 
@@ -29,7 +29,7 @@
 | 视频 | lib/knowledge-video.mjs、两个视频脚本 | src/original/、src/scripts/ | 上传 / URL、关键帧、转写、草稿、取消 | 同容器上传视频、关键帧、真实转写、SDK 模拟上游草稿及清理通过 |
 | 完整配置页 | 目标项目 public/admin-config.* 与配置接口 | 保留并接入 SDK | Provider、密钥保留 / 清除、连接验证、保存、重载、名称 | 两家真实浏览器录入/连接/保存/重载通过；其他配置自动化覆盖 |
 | 多知识库 | 目标项目 knowledge-base-registry / hub | 同模块与原版运行时 | 索引、任务、会话、草稿、引用、写入隔离 | 完整 SDK 应用双 Vault 浏览器来源、会话、草稿写入隔离通过 |
-| Docker / 安装器 | 目标 Dockerfile、Compose、install.sh、install.ps1 | 同入口与 SDK / 媒体依赖适配 | 三平台真实流程及两种 Linux 容器架构 | linux/amd64 SDK 与媒体实测通过；Linux 完整安装生命周期通过；其余平台/架构待 CI，支持范围保留 |
+| Docker / 安装器 | 目标 Dockerfile、Compose、install.sh、install.ps1 | 同入口与 SDK / 媒体依赖适配 | 平台 CI、Linux 完整安装流程及两种 Linux 容器架构 | 两种容器架构的 SDK 工具循环、媒体导入与 ffmpeg 通过；实际 Whisper 音视频和完整安装生命周期在 linux/amd64 验证；Mac/Windows Docker Desktop 未实测 |
 
 ## 必要工程适配
 
@@ -53,12 +53,12 @@
 
 ## 验收层次与当前范围
 
-| 层次 | 已完成 | 待完成 |
+| 层次 | 已完成 | 验证边界 |
 | --- | --- | --- |
-| 静态 / 自动化 | 本地完整回归 393 项：391 通过、2 项按条件跳过，包含原版 47 项；Linux/macOS 完整 CI 与 Windows 可移植 CI 通过 | 发布产物最终核验 |
-| 浏览器 | SDK 完整应用的登录、配置保存、刷新历史、来源预览、双库隔离与确认保存；8788 切换后桌面/窄屏回归通过 | 发布后的 Pages 站点 |
+| 静态 / 自动化 | 本地完整回归 393 项：391 通过、2 项按条件跳过，包含原版 47 项；Linux/macOS 完整 CI 与 Windows 可移植 CI 通过 | 条件媒体套件在单独容器门禁执行；真实模型与模拟上游结果分开记录 |
+| 浏览器 | SDK 完整应用的登录、配置保存、刷新历史、来源预览、双库隔离与确认保存；8788 切换后桌面/窄屏回归通过 | 公开演示库；不代表私人全库质量 |
 | 真实模型 | 百炼 6 个任务、DeepSeek 4 个任务，共 25 次任务 Messages 请求；另有两家基础及配置页连接检查 | 其他 Provider 凭据及实际平台验证 |
-| 部署 | 私有备份、隔离应用、只读容器内 SDK 与实际音视频 | GitHub CI、镜像和 Pages 发布核验 |
+| 部署 | 私有备份、隔离应用、只读容器内 SDK 与实际音视频 | 完整宿主安装实测限 Linux amd64；其他宿主范围见矩阵 |
 
 真实任务 SDK 汇总用量（包含多轮和缓存）：百炼 input 1,348、cache creation 45,366、cache read 77,242、output 11,440；DeepSeek input 7,897、cache read 19,968、output 1,821。SDK 的 USD cost 字段是 SDK 估算，不是百炼或 DeepSeek 账单，故不作为实际费用报告。首轮/追问耗时分别约为百炼 11.6/3.6 秒、DeepSeek 6.5/2.0 秒。连接检查和其他后续测试另行计数，不包含在上述任务用量中。
 
@@ -77,10 +77,10 @@
 | 支持项 | 当前实测环境 / 结果 |
 | --- | --- |
 | Docker linux/amd64 | Linux x86_64，read-only 容器；实际 SDK 工具/流式、Python/Whisper/ffmpeg 视频链路通过 |
-| Docker linux/arm64 | 支持保留；构建和运行验证待完成 |
-| Linux amd64 / arm64 安装器 | Linux x86_64 + Docker Engine 实测：安装、管理员登录、名称配置持久化、重启、状态、日志、更新前备份和旧镜像保留、独立恢复、保留数据卸载后再次启动；中文与空格路径通过。arm64 主机安装待验 |
-| macOS Intel / Apple Silicon | macos-latest 的 Node 22 完整回归和共享安装器逻辑通过；实际 Docker Desktop 安装与宿主生命周期未实测 |
-| Windows 10/11 + Docker Desktop Linux 容器 | windows-latest 的 Node 22 可移植套件、PowerShell 5.1/7 语法检查通过；实际 Docker Desktop 安装与宿主生命周期未实测 |
+| Docker linux/arm64 | GitHub Ubuntu x64 runner + QEMU：构建、五种 Provider 的真实 SDK 二进制读工具循环、Python 媒体依赖导入与 ffmpeg 启动通过；真实 Whisper 转写与 arm64 宿主安装未实测 |
+| Linux amd64 / arm64 安装器 | Linux x86_64（内核 6.11.0-29、Docker Engine 27.3.1）实测：安装、管理员登录、名称配置持久化、重启、状态、日志、更新前备份和旧镜像保留、独立恢复、保留数据卸载后再次启动；中文与空格路径通过。arm64 主机安装待验 |
+| macOS Intel / Apple Silicon | macOS 26 / arm64 runner（Darwin 25.6.0、Node 22.23.2）的完整回归和共享安装器逻辑通过；实际 Docker Desktop 安装与宿主生命周期未实测 |
+| Windows 10/11 + Docker Desktop Linux 容器 | Windows x64 runner（win25-vs2026、10.0.26100、Node 22.23.2）的可移植套件、PowerShell 5.1/7 语法检查通过；实际 Docker Desktop 安装与宿主生命周期未实测 |
 
 ## 数据、截图与回退
 
@@ -96,7 +96,13 @@
 
 部署前另使用生产模型配置副本（qwen3.8-max-0902 / XHigh）在公开小库完成真实 SDK 读工具问答，SDK 记录两个成功的 Messages 响应。原部署代码、依赖和私有状态均保留，回滚脚本与前后服务单元位于仓库外；回滚只切换目标实例，不回写 Vault 或删除 SDK 状态。原版两项服务仍保持原 PID 与启动时间。
 
-GitHub 提交、CI、双架构镜像与 Pages 发布状态待后续记录。
+## 发布记录
+
+运行代码的发布验收基准为 `befb71e8fe53c4ae09c71e4a1f92f55d241aa38e`，已正常推送主分支。[CI 与双架构发布](https://github.com/kygoyuan2004/Second-Mind/actions/runs/34991793584) 和 [Pages](https://github.com/kygoyuan2004/Second-Mind/actions/runs/34991790985) 均成功。该版本镜像索引摘要为 `sha256:a6d1a71c94ea334ffd8d12d45c94f158617ab31cf89584b24b996a4e5a7468ea`，包含 linux/amd64 与 linux/arm64。后续文档提交的最新状态可在 [Actions](https://github.com/kygoyuan2004/Second-Mind/actions) 查询。
+
+发布后实际浏览器检查了中英文页面的桌面、移动和深色模式：无横向溢出、坏图或缺失锚点，菜单及安装选项卡通过。正式 linux/amd64 镜像完成匿名完整拉取，其全部层通过真实凭据精确匹配扫描。
+
+镜像先发布候选摘要，再分别拉取并运行两个架构，全部通过后才更新正式标签。构建缓存导出后释放临时空间，每个架构验证后移除该临时镜像；失败会附带阶段和脱敏错误信息。首次运行门禁曾因 Docker 启动退出码 125 阻止发布，调整上述 CI 生命周期后完整门禁通过，没有跳过架构验证。
 
 安装器恢复使用新实例、新空目录和新数据卷，并验证三份 SHA-256 清单。配置、会话、待确认草稿及源文件完整性另有自动化覆盖。Windows/macOS 的共享 Node 初始化、路径、备份恢复与安全拒绝逻辑在对应 CI 执行；这不等于完成当地 Docker Desktop 安装实测。
 

@@ -25,6 +25,7 @@ export const WINDOWS_CONTAINER_SECURITY_SUITES = Object.freeze([
   'sdk-multi-knowledge-base-browser.test.mjs',
   'sdk-production.test.mjs',
   'sdk-provider-matrix.test.mjs',
+  'server.test.mjs',
   'vault-replica.test.mjs',
 ]);
 

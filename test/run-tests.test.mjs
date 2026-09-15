@@ -22,6 +22,7 @@ test('test runner keeps POSIX container guarantees explicit on Windows', () => {
     'sdk-multi-knowledge-base-browser.test.mjs',
     'sdk-production.test.mjs',
     'sdk-provider-matrix.test.mjs',
+    'server.test.mjs',
     'vault-replica.test.mjs',
   ]);
   const fixtures = [

@@ -48,22 +48,26 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 backup
 powershell -ExecutionPolicy Bypass -File .\install.ps1 update
 ```
 
-`doctor` 检查 Docker/Compose、Linux container 模式、CPU 架构、目录、数据卷、端口、磁盘用量、健康端点与 PDF sandbox 状态。标准镜像不包含 `bwrap`/`pdftotext`，因此网页 PDF 读取默认关闭；不会回退到无 sandbox 执行。确认后的 PDF 附件仍可持久化，但这不代表应用理解其内容。
+`doctor` 检查 Docker、目录、数据卷、端口、健康状态与媒体依赖。图片和 PDF 附件通过支持该能力的模型与 Agent SDK 读取；语音和视频依赖容器中的 Python、FFmpeg 和语音模型，首次使用需要下载模型。
 
-`backup` 生成带 SHA-256 清单的实时副本。它不是卷与 Vault 的原子时间点快照；需要严格一致性时，应先暂停外部同步与写入。备份含凭据与私人内容，应加密保管；它不会自动包含独立同步器的账号、链接、私有卷或远端状态。
+## 更新、重启、恢复与卸载
 
-## 更新、恢复与卸载
+```powershell
+.\install.ps1 update
+.\install.ps1 restart
+.\install.ps1 backup
+.\install.ps1 restore --instance SOURCE_INSTANCE_ID --backup BACKUP_DIRECTORY_NAME --vault "C:\Notes\恢复 Vault" --port 8789 --non-interactive
+.\install.ps1 uninstall
+```
 
-先备份，再执行 `update`。安装器优先拉取适配架构的 GHCR 镜像，拉取失败时使用当前源码构建，并保留原实例的数据卷和配置。它不会在新镜像未就绪时自动回滚；关键部署应保留上一镜像并固定经过审查的 tag 或 digest。
+- `update` 先备份并保留旧镜像，再更新选中的实例。凭据和数据卷保留；失败会明确报错，不会静默回退数据。
+- `restart` 使用本地镜像重新创建并启动容器。
+- `backup` 含配置、凭据、运行数据和 Vault，以及三份 SHA-256 清单。它是实时复制，需要严格一致性时先暂停写入与同步；不含独立同步器的账号和远端状态。
+- `restore` 要求新的空目录和不同端口，校验备份后创建独立实例。原实例、原卷和笔记保留；使用备份时的管理员密码登录核验。
+- `uninstall` 只移除选中实例的容器和网络，保留 Vault、凭据、数据卷、配置和备份。随后可用 `restart` 再启动。
 
-当前版本不提供自动恢复。应停止本实例，在隔离目录检查备份和清单，再人工恢复 Vault、私有配置与数据卷。
+多个实例时使用 `--instance INSTANCE_ID`。恢复失败时保留原实例和恢复现场，不要把两套运行数据合并。
 
-卸载容器时，根据安装器显示的精确实例信息运行对应 `docker compose down`，不要带 `--volumes`。默认保留 Vault、凭据、会话、索引和备份。永久删除前必须再次核对具体配置目录和命名卷；不要对用户目录或 Vault 做递归批量删除。
+镜像回退、恢复限制及完整命令见 [部署说明](deployment.md)。平台和架构的实测结果见 [迁移验收报告](claude-sdk-migration.md)；支持范围不等于已经完成该平台 Docker Desktop 实测。
 
-## 边界
-
-- 不安装 Windows Service，也不集成 Credential Manager。
-- 使用 Linux containers；Windows containers 不受支持。
-- 默认只绑定本机回环地址。远程访问应放在受审查的 HTTPS 或私有网络入口后。
-
-继续阅读：[部署说明](deployment.md) · [配置说明](configuration.md) · [网络访问](networking.md)
+默认只绑定本机回环地址。继续阅读：[配置说明](configuration.md) · [网络访问](networking.md) · [同步边界](sync.md)。

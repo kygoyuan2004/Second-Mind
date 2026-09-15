@@ -11,7 +11,7 @@ jobs:
   publish:
     name: Publish linux/amd64 and linux/arm64
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -36,16 +36,43 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=sha-
             type=ref,event=tag
-      - name: Build and publish the allowlisted context
+      - name: Build candidate image from the allowlisted context
+        id: image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.metadata.outputs.tags }}
+          tags: ghcr.io/kygoyuan2004/second-mind:candidate-${{ github.sha }}
           labels: ${{ steps.metadata.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
+      - name: Verify SDK and media on both container architectures
+        env:
+          CANDIDATE: ghcr.io/kygoyuan2004/second-mind@${{ steps.image.outputs.digest }}
+        run: |
+          set -Eeuo pipefail
+          for platform in linux/amd64 linux/arm64; do
+            docker run --rm --platform "$platform" --read-only \
+              --tmpfs /tmp:rw,nosuid,size=768m \
+              --mount type=bind,source="$GITHUB_WORKSPACE/test",target=/app/test,readonly \
+              --env KNOWLEDGE_BASE_ALLOWED_ROOTS= --workdir /app \
+              "$CANDIDATE" node --test test/sdk-provider-matrix.test.mjs
+            docker run --rm --platform "$platform" --read-only "$CANDIDATE" \
+              /opt/media/bin/python -c 'import av, ctranslate2, faster_whisper, yt_dlp; print("media imports passed")'
+            docker run --rm --platform "$platform" --read-only "$CANDIDATE" ffmpeg -version
+          done
+      - name: Promote the verified digest to release tags
+        env:
+          CANDIDATE: ghcr.io/kygoyuan2004/second-mind@${{ steps.image.outputs.digest }}
+          RELEASE_TAGS: ${{ steps.metadata.outputs.tags }}
+        run: |
+          set -Eeuo pipefail
+          tags=()
+          while IFS= read -r tag; do
+            [[ -z "$tag" ]] || tags+=(--tag "$tag")
+          done <<< "$RELEASE_TAGS"
+          docker buildx imagetools create "${tags[@]}" "$CANDIDATE"

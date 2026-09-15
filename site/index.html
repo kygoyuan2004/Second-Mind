@@ -53,18 +53,17 @@
     <section class="hero shell" aria-labelledby="hero-title">
       <div class="hero-copy">
         <p class="eyebrow">自托管知识工作台</p>
-        <h1 id="hero-title">让私人知识成为可核验的工作上下文</h1>
+        <h1 id="hero-title">读懂笔记，找到依据</h1>
         <p class="lede">在自己的基础设施中检索 Obsidian、追溯来源，并在明确确认后写回。</p>
         <div class="hero-actions">
           <a class="button button-primary" href="#quickstart">查看快速安装</a>
           <a class="text-link" href="https://github.com/kygoyuan2004/Second-Mind">浏览 GitHub <span aria-hidden="true">↗</span></a>
         </div>
-        <p class="hero-note">MIT 开源 · Docker-first · 单管理员</p>
       </div>
       <figure class="hero-figure asset-figure">
         <img src="/Second-Mind/assets/second-mind-qa.png" width="1440" height="1050" alt="Second Mind 使用本地笔记回答问题并列出可核验来源" fetchpriority="high">
         <p class="asset-pending" hidden>产品界面截图未能加载。</p>
-        <figcaption>答案与来源并排呈现，让结论回到原始笔记。</figcaption>
+        <figcaption>点击回答中的来源，即可预览原始笔记。</figcaption>
       </figure>
     </section>
 
@@ -88,37 +87,32 @@
     <section class="section shell" id="capabilities" aria-labelledby="capabilities-title" data-sync-key="capabilities">
       <div class="section-heading offset-heading">
         <p class="eyebrow">核心能力</p>
-        <h2 id="capabilities-title">不是聊天窗口的包装，而是一条可检查的知识链路</h2>
+        <h2 id="capabilities-title">查原文，理清进展，写下下一步</h2>
         <p>从问题、检索和模型会话，到来源预览与写入确认，每一步都保留足够上下文。</p>
       </div>
       <div class="capability-layout">
         <article class="capability-primary">
-          <div class="capability-index" aria-hidden="true">01</div>
           <div>
             <h3>可溯源问答与研究过程</h3>
-            <p>Normal 与 Deep 由嵌入式 Pi Agent 在当前知识库和快照范围内调用受限读取工具。普通问答优先使用 Vault 内容，深度任务展示查询、检索、来源选择、模型生成和完成状态，便于判断答案来自哪里。</p>
+            <p>Claude Agent SDK 在选定的知识库中检索、读取原文并回答。普通任务最多 20 轮、10 分钟；深度任务最多 50 轮、30 分钟，并按需使用最多两个只读子 Agent。界面实时展示工具调用和输出。</p>
           </div>
           <figure class="asset-figure">
             <img src="/Second-Mind/assets/second-mind-execution.png" width="1440" height="1050" alt="Second Mind 展示研究任务的检索、来源选择和生成执行过程" loading="lazy">
             <p class="asset-pending" hidden>执行过程界面截图未能加载。</p>
-            <figcaption>执行过程呈现任务阶段，而不是装饰性进度条。</figcaption>
+            <figcaption>展开执行过程，查看检索和原文读取。</figcaption>
           </figure>
         </article>
         <ol class="capability-list" aria-label="更多核心能力">
           <li>
-            <span aria-hidden="true">02</span>
             <div><h3>原文核验</h3><p>从引用片段直接打开对应的本地文件上下文。</p></div>
           </li>
           <li>
-            <span aria-hidden="true">03</span>
             <div><h3>确认后写入</h3><p>日记、计划和随手记先生成草稿，只有管理员确认后才保存。</p></div>
           </li>
           <li>
-            <span aria-hidden="true">04</span>
-            <div><h3>会话连续性</h3><p>保留私人会话和任务状态，刷新后仍能继续当前工作。</p></div>
+            <div><h3>会话连续性</h3><p>刷新后可从历史列表重新打开会话，继续追问。</p></div>
           </li>
           <li>
-            <span aria-hidden="true">05</span>
             <div><h3>限定范围的学习回顾</h3><p>固定日期范围和日期记录清单，分批核验原文并明确报告覆盖缺口。</p></div>
           </li>
         </ol>
@@ -134,12 +128,12 @@
       <div class="shell split-intro">
         <div class="section-heading">
           <p class="eyebrow">多知识库</p>
-          <h2 id="knowledge-bases-title">一个服务，多个彼此隔离的知识上下文</h2>
+          <h2 id="knowledge-bases-title">在不同知识库之间切换</h2>
         </div>
         <div class="section-copy">
-          <p>从允许的宿主机父目录发现一个根 Vault 或其直接子 Vault。每个注册目录都必须是含实际、非符号链接 <code>.obsidian</code> 目录的 Vault 根。每个知识库拥有独立的索引命名空间、任务上下文和写入边界。</p>
-          <p>稳定 ID 永久绑定首次规范化的 Vault 路径，即使删除注册项或重启也不会释放。另一套 Vault 必须使用新 ID，包括宿主机在相同路径替换内容的情况。</p>
-          <p class="boundary-note">当前限制：一次任务只绑定一个知识库，不提供跨库联合检索，也不是任意文件浏览器。</p>
+          <p>在配置页注册本机或挂载目录中的 Obsidian Vault，再从知识库页面切换。索引、会话、任务、草稿和写入分别归属各自的知识库。</p>
+          <p>每个库有稳定标识，历史记录与来源始终指向原来的库。迁移目录和删除注册前，应按部署文档备份。</p>
+
         </div>
       </div>
       <div class="shell kb-workbench" role="group" aria-label="多知识库隔离流程">
@@ -168,7 +162,7 @@
             <li>静态站点没有统计脚本、Cookie 或远程字体</li>
             <li>Vault 文件与索引保存在你管理的主机和 Docker 卷中</li>
           </ul>
-          <p class="boundary-note">自托管不代表所有操作始终仅在本地。当你启用外部模型、嵌入、网页搜索或页面读取时，受限工具结果中的所选文本、查询或公开 URL 会发往对应服务。联网工具只在问答会话明确启用时提供，并且必须先于 Vault 读取；任何 Vault 工具返回结果后，本任务的搜索出口永久关闭。学习回顾不提供联网工具。要求内容绝不出站时，只从本机浏览器访问，只使用在同一主机运行的兼容 Provider，禁用联网与远端同步，并把备份留在受控本地存储。部署前请检查数据流说明与提供商政策。</p>
+          <p class="boundary-note">模型会收到问题、附件和工具读取的笔记片段。启用语义检索时，文本会发送给 Embedding 服务；启用联网补充时，查询会发送给搜索服务。学习回顾仅使用本库资料。请按资料敏感程度选择服务，并检查各提供商的数据政策。</p>
           <a class="text-link" href="https://github.com/kygoyuan2004/Second-Mind/blob/main/docs/data-flow.md">阅读数据流说明 <span aria-hidden="true">↗</span></a>
         </div>
         <figure class="provider-figure asset-figure">
@@ -183,7 +177,7 @@
       <div class="shell architecture-intro">
         <div class="section-heading">
           <p class="eyebrow">架构</p>
-          <h2 id="architecture-title">边界清楚，比一张复杂拓扑图更重要</h2>
+          <h2 id="architecture-title">从你的问题，到有来源的回答</h2>
         </div>
         <p>浏览器只连接自托管应用。应用在认证后编排本地检索与可选外部提供商，并把所有文件访问限制在已注册知识库内。</p>
       </div>
@@ -206,39 +200,39 @@
     <section class="section shell" id="screenshots" aria-labelledby="screenshots-title" data-sync-key="screenshots">
       <div class="section-heading offset-heading">
         <p class="eyebrow">真实产品截图</p>
-        <h2 id="screenshots-title">六个生产前端工作场景，不做概念界面</h2>
-        <p>六张图均在隔离回环服务中加载当前生产前端，并连接截图脚本提供的确定性合成 fixture API。它们不来自完整生产服务实例，不读取真实 Vault，也不调用真实 Provider；可见示例数据经过隐私检查，不含私人笔记或凭据。</p>
+        <h2 id="screenshots-title">在演示知识库中实际运行</h2>
+        <p>这些截图来自完整应用和真实 Claude Agent SDK 任务，使用独立公开演示资料。问答、学习回顾、日记与计划由百炼 Qwen 3.8 Max 生成。日记与计划通过原有编辑器去除了额外说明；截图不包含私人知识库。</p>
       </div>
       <div class="screenshot-ledger">
         <figure class="shot shot-wide asset-figure">
           <img src="/Second-Mind/assets/second-mind-qa.png" width="1440" height="1050" alt="可溯源问答展示回答、引用与原始笔记入口" loading="lazy">
           <p class="asset-pending" hidden>问答界面截图未能加载。</p>
-          <figcaption><span>01</span><strong>问答与来源</strong><small>从结论回到笔记</small></figcaption>
+          <figcaption><strong>问答与来源</strong><small>从结论回到笔记</small></figcaption>
         </figure>
         <figure class="shot asset-figure">
           <img src="/Second-Mind/assets/second-mind-execution.png" width="1440" height="1050" alt="研究执行过程展示查询、检索与生成阶段" loading="lazy">
           <p class="asset-pending" hidden>执行过程界面截图未能加载。</p>
-          <figcaption><span>02</span><strong>执行过程</strong><small>检查任务阶段的呈现</small></figcaption>
+          <figcaption><strong>执行过程</strong><small>检查任务阶段的呈现</small></figcaption>
         </figure>
         <figure class="shot asset-figure">
           <img src="/Second-Mind/assets/second-mind-provider-config.png" width="1440" height="1050" alt="管理员提供商配置展示独立的服务设置" loading="lazy">
           <p class="asset-pending" hidden>提供商配置界面截图未能加载。</p>
-          <figcaption><span>03</span><strong>提供商配置</strong><small>自带密钥，分别管理</small></figcaption>
+          <figcaption><strong>提供商配置</strong><small>自带密钥，分别管理</small></figcaption>
         </figure>
         <figure class="shot shot-tall asset-figure">
           <img src="/Second-Mind/assets/second-mind-mobile.png" width="360" height="800" alt="Second Mind 在窄屏手机上的问答与导航布局" loading="lazy">
           <p class="asset-pending" hidden>移动界面截图未能加载。</p>
-          <figcaption><span>04</span><strong>移动阅读</strong><small>窄屏保留来源上下文</small></figcaption>
+          <figcaption><strong>移动阅读</strong><small>窄屏保留来源上下文</small></figcaption>
         </figure>
         <figure class="shot asset-figure">
           <img src="/Second-Mind/assets/second-mind-diary.png" width="1280" height="960" alt="日记草稿展示写入前预览和确认步骤" loading="lazy">
           <p class="asset-pending" hidden>日记界面截图未能加载。</p>
-          <figcaption><span>05</span><strong>日记草稿</strong><small>写入之前先审核</small></figcaption>
+          <figcaption><strong>日记草稿</strong><small>写入之前先审核</small></figcaption>
         </figure>
         <figure class="shot shot-wide asset-figure">
           <img src="/Second-Mind/assets/second-mind-plan.png" width="1280" height="960" alt="计划草稿展示结构化内容与目标文件路径" loading="lazy">
           <p class="asset-pending" hidden>计划界面截图未能加载。</p>
-          <figcaption><span>06</span><strong>计划草稿</strong><small>内容与目标路径一起确认</small></figcaption>
+          <figcaption><strong>计划草稿</strong><small>内容与目标路径一起确认</small></figcaption>
         </figure>
       </div>
     </section>
@@ -279,10 +273,10 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre>
       </div>
       <div class="shell operations-strip" role="group" aria-label="安装后运维命令">
         <span>安装后使用同一个入口：</span>
-        <code>doctor</code><code>status</code><code>logs</code><code>update</code><code>backup</code>
+        <code>doctor</code><code>status</code><code>logs</code><code>update</code><code>restart</code><code>backup</code><code>restore</code><code>uninstall</code>
       </div>
       <div class="shell">
-        <p class="boundary-note"><strong>运维边界：</strong><code>backup</code> 是含凭据的实时副本，不是应用与同步器的原子快照，也不自动收集独立同步器状态。恢复需要人工验证；<code>update</code> 没有自动镜像回滚；当前也没有永久卸载命令。停止服务时只针对精确实例执行 <code>docker compose down</code>，不要带 <code>--volumes</code>。详见 <a href="https://github.com/kygoyuan2004/Second-Mind/blob/main/docs/deployment.md">部署文档</a>。</p>
+        <p class="boundary-note"><strong>备份与恢复：</strong><code>update</code> 先备份并保留旧镜像；<code>restore</code> 校验备份后创建独立实例；<code>uninstall</code> 保留笔记、凭据和数据卷。备份是实时副本，严格一致性需要暂停同步与写入。平台实测范围和回退步骤见 <a href="https://github.com/kygoyuan2004/Second-Mind/blob/main/docs/deployment.md">部署文档</a>。</p>
       </div>
     </section>
 
@@ -293,9 +287,9 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre>
       </div>
       <dl class="limits-list">
         <div><dt>适合</dt><dd>一个可信管理员在自己控制的设备或私有网络中管理个人或小团队知识库。</dd></div>
-        <div><dt>尚不提供</dt><dd>多租户账号体系、细粒度团队权限、跨知识库联合检索和托管云服务。</dd></div>
+        <div><dt>尚不提供</dt><dd>多租户账号体系、细粒度团队权限、跨库联合检索和托管云服务。</dd></div>
         <div><dt>网络责任</dt><dd>默认保持本机或私有网络访问。如需公网入口，请自行配置 TLS、访问控制和备份。</dd></div>
-        <div><dt>PDF 读取</dt><dd>标准镜像不包含 <code>bwrap</code> 和 <code>pdftotext</code>，因此网页 PDF 读取默认不可用，也不会回退到无 sandbox 解析。确认后的 PDF 附件持久化不等于 PDF 内容理解。</dd></div>
+        <div><dt>附件与媒体</dt><dd>Qwen 3.8 Max 支持图片与 PDF 附件；其他模型按实际能力限制。语音和视频处理依赖容器中的媒体工具及首次下载的语音模型。</dd></div>
         <div><dt>平台集成</dt><dd>不安装 Windows Service 或 macOS LaunchDaemon，也不集成 Credential Manager 或 Keychain。</dd></div>
       </dl>
     </section>

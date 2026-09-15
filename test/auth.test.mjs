@@ -43,10 +43,20 @@ test('write guard requires a custom header and same origin', () => {
     origin: 'https://vault.test',
     'x-vaultmind-request': '1',
   })));
+  assert.doesNotThrow(() => requireWriteGuard(request({
+    host: 'vault.test',
+    origin: 'https://vault.test',
+    'x-yuan-knowledge-request': '1',
+  })));
   assert.throws(() => requireWriteGuard(request({
     host: 'vault.test',
     origin: 'https://evil.test',
     'x-vaultmind-request': '1',
+  })), { code: 'ORIGIN_DENIED' });
+  assert.throws(() => requireWriteGuard(request({
+    host: 'vault.test',
+    origin: 'https://evil.test',
+    'x-yuan-knowledge-request': '1',
   })), { code: 'ORIGIN_DENIED' });
 });
 

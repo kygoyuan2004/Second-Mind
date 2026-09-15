@@ -31,7 +31,13 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
-RUN mkdir -p /app/data /vaults && chown -R node:node /app /vaults
+COPY requirements-media.txt /tmp/requirements-media.txt
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 python3-venv ffmpeg ca-certificates libgomp1 ripgrep \
+    && python3 -m venv /opt/media \
+    && /opt/media/bin/pip install --no-cache-dir -r /tmp/requirements-media.txt \
+    && rm -rf /var/lib/apt/lists/* /tmp/requirements-media.txt \
+    && mkdir -p /app/data /vaults && chown -R node:node /app /vaults
 
 COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
 # Copy only runtime code and browser assets. In particular, the optional

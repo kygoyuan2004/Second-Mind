@@ -28,24 +28,24 @@ const CONNECTION_PRESETS = Object.freeze({
   }),
   deepseek: Object.freeze({
     id: 'deepseek', label: 'DeepSeek 官网',
-    defaultApiBase: 'https://api.deepseek.com',
-    defaultProtocol: 'openai-chat-completions', authMode: 'bearer',
-    requestProfile: 'deepseek-openai', efforts: ['low', 'high', 'max'], defaultEffort: 'high',
+    defaultApiBase: 'https://api.deepseek.com/anthropic',
+    defaultProtocol: 'anthropic-messages', authMode: 'x-api-key',
+    requestProfile: 'anthropic-standard', efforts: ['low', 'high', 'max'], defaultEffort: 'high',
     docsUrl: 'https://api-docs.deepseek.com/zh-cn/',
   }),
   glm: Object.freeze({
     id: 'glm', label: 'GLM / 智谱官网',
-    defaultApiBase: 'https://open.bigmodel.cn/api/paas/v4',
-    defaultProtocol: 'openai-chat-completions', authMode: 'bearer',
-    requestProfile: 'glm-openai', efforts: ['low', 'high'], defaultEffort: 'high',
-    docsUrl: 'https://docs.bigmodel.cn/cn/guide/develop/openai/introduction',
+    defaultApiBase: 'https://open.bigmodel.cn/api/anthropic',
+    defaultProtocol: 'anthropic-messages', authMode: 'x-api-key',
+    requestProfile: 'anthropic-standard', efforts: ['default'], defaultEffort: 'default',
+    docsUrl: 'https://docs.bigmodel.cn/cn/guide/develop/claude/introduction',
   }),
   kimi: Object.freeze({
     id: 'kimi', label: 'Kimi / Moonshot 官网',
-    defaultApiBase: 'https://api.moonshot.cn/v1',
-    defaultProtocol: 'openai-chat-completions', authMode: 'bearer',
-    requestProfile: 'default', efforts: ['default'], defaultEffort: 'default',
-    docsUrl: 'https://platform.moonshot.cn/docs/',
+    defaultApiBase: 'https://api.moonshot.cn/anthropic',
+    defaultProtocol: 'anthropic-messages', authMode: 'bearer',
+    requestProfile: 'anthropic-standard', efforts: ['default'], defaultEffort: 'default',
+    docsUrl: 'https://platform.kimi.com/docs/guide/claude-code-kimi',
   }),
   custom: Object.freeze({
     id: 'custom', label: '自定义兼容服务', defaultApiBase: '',
@@ -769,6 +769,7 @@ function providerProtocol(card) {
   if (id === 'bailian' && /\/compatible-mode\/v1(?:\/chat\/completions)?\/?$/iu.test(apiBase)) {
     return 'openai-chat-completions';
   }
+  if (['deepseek', 'glm', 'kimi'].includes(id)) return /\/anthropic(?:\/|$)/u.test(apiBase) ? 'anthropic-messages' : 'openai-chat-completions';
   return providerOption(id).defaultProtocol || CONNECTION_PRESETS[id]?.defaultProtocol || 'openai-chat-completions';
 }
 
@@ -816,7 +817,7 @@ function syncProviderCard(card, { applyDefaults = false } = {}) {
   }
   if (providerId !== 'custom') {
     protocol.value = providerProtocol(card);
-    authMode.value = protocol.value === 'anthropic-messages' ? 'x-api-key' : 'bearer';
+    authMode.value = providerId === 'kimi' ? 'bearer' : protocol.value === 'anthropic-messages' ? 'x-api-key' : 'bearer';
     if (applyDefaults || !label.value.trim()) label.value = option.label || fallback.label;
     advanced.hidden = true;
     advanced.open = false;
@@ -1020,13 +1021,19 @@ function deleteConnection(card) {
   }
 }
 
+function hasUnsupportedModelSuffix(model, connectionId) {
+  const connection = connectionOptions().find((item) => item.id === connectionId);
+  if (connection?.protocol === 'anthropic-messages' && /\[(?:1m|200k)\]$/iu.test(model || '')) return false;
+  return /\[[^\]]+\]$/u.test(model || '');
+}
+
 function suggestedProfile(connectionId) {
   const connection = connectionOptions().find((item) => item.id === connectionId);
   if (!connection) return 'default';
   const card = connectionCards().find((item) => connectionField(item, 'id').value.trim() === connectionId);
   const providerId = card ? providerIdForCard(card) : 'custom';
   if (providerId === 'bailian') return connection.protocol === 'anthropic-messages' ? 'anthropic-standard' : 'bailian-openai';
-  if (providerId === 'deepseek') return 'deepseek-openai';
+  if (providerId === 'deepseek') return connection.protocol === 'anthropic-messages' ? 'anthropic-standard' : 'deepseek-openai';
   if (providerId === 'glm') return 'glm-openai';
   return 'default';
 }
@@ -1057,7 +1064,7 @@ function renderModel(model, { persisted = true } = {}) {
   const providerCard = connectionCards().find((card) => (
     connectionField(card, 'id').value.trim() === modelField(row, 'connectionId').value
   ));
-  const clientAlias = providerCard && providerIdForCard(providerCard) !== 'custom' && /\[[^\]]+\]$/u.test(model.actualModel || '');
+  const clientAlias = providerCard && providerIdForCard(providerCard) !== 'custom' && hasUnsupportedModelSuffix(model.actualModel, modelField(row, 'connectionId').value);
   setModelCheckState(
     row,
     clientAlias ? '需改为直连模型 ID' : persisted ? '已加载 · 保存时实测' : '待检查',
@@ -1546,7 +1553,7 @@ function collectModels(connections) {
     const actualModel = modelField(row, 'actualModel').value.trim();
     if (!actualModel || /\s/u.test(actualModel)) throw new Error(`模型 ${id} 的真实模型 ID 不能为空且不能包含空白。`);
     const card = connectionCards().find((item) => connectionField(item, 'id').value.trim() === connectionId);
-    if (card && providerIdForCard(card) !== 'custom' && /\[[^\]]+\]$/u.test(actualModel)) {
+    if (card && providerIdForCard(card) !== 'custom' && hasUnsupportedModelSuffix(actualModel, connectionId)) {
       throw new Error(`模型 ${actualModel} 看起来包含客户端别名；请填写供应商直连接口的真实模型 ID。`);
     }
     const displayName = modelField(row, 'displayName').value.trim() || actualModel;
@@ -1591,7 +1598,7 @@ function collectProviderConfigPayload() {
       throw new Error('真实模型 ID 不能为空且不能包含空白或控制字符。');
     }
     const card = connectionCards().find((item) => connectionField(item, 'id').value.trim() === connectionId);
-    if (card && providerIdForCard(card) !== 'custom' && /\[[^\]]+\]$/u.test(actualModel)) {
+    if (card && providerIdForCard(card) !== 'custom' && hasUnsupportedModelSuffix(actualModel, connectionId)) {
       throw new Error(`模型 ${actualModel} 看起来包含客户端别名；请填写供应商直连接口的真实模型 ID。`);
     }
     if (modelField(row, 'enabled').checked) enabledModels += 1;

@@ -95,8 +95,9 @@
                 <input id="branding-app-name" maxlength="120" placeholder="Second Mind" required>
               </label>
               <label class="field">
-                <span>知识库名称</span>
+                <span>默认知识库名称（兼容旧配置）</span>
                 <input id="branding-vault-label" maxlength="120" placeholder="我的知识库" required>
+                <small>启用知识库注册表时，各库显示名称请在上方“知识库注册表”中修改并保存。</small>
               </label>
             </div>
 
@@ -406,6 +407,6 @@
     </template>
 
     <div id="admin-toast" class="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./admin-config.js?v=2.1.6"></script>
+    <script type="module" src="./admin-config.js?v=2.1.7"></script>
   </body>
 </html>

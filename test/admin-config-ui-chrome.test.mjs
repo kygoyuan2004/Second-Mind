@@ -81,7 +81,7 @@ function publicConfig(overrides = {}) {
       models: [{
         id: 'qwen-main',
         displayName: 'Qwen Main',
-        actualModel: 'qwen3.8-max-0902',
+        actualModel: 'qwen3.8-max[1M]',
         enabled: true,
         reasoningMapping: { mode: 'auto' },
         effortMapping: { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'xhigh' },
@@ -614,7 +614,7 @@ test('headless Chrome validates a simplified Provider candidate then commits onl
     && document.querySelectorAll('[data-model-row]').length === 1`, 'initial Provider config');
   assert.equal(await cdp.evaluate(
     `document.querySelector('[data-model-field="actualModel"]')?.value`,
-  ), 'qwen3.8-max-0902');
+  ), 'qwen3.8-max[1M]');
   assert.deepEqual(await cdp.evaluate(`({
     visibleKeyActionSelects: document.querySelectorAll('select[data-connection-key-action], select[data-web-key-action], select#embedding-key-action').length,
     providerKeyVisible: !document.querySelector('[data-connection-key-field]').hidden,

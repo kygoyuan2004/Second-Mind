@@ -82,7 +82,7 @@ runtime_gid=$(id -g)
 command_name=init
 if (($# > 0)) && [[ $1 != --* ]]; then command_name=$1; fi
 case "$command_name" in
-  init|doctor|status|logs|update|backup) ;;
+  init|doctor|status|logs|update|backup|restart|restore|uninstall) ;;
   *) die "Unsupported command: $command_name" ;;
 esac
 
@@ -142,6 +142,12 @@ knowledge_base=${preflight_result#VAULT_PATH=}
 host_paths_are_separate "$knowledge_base" \
   || die 'Installer state and knowledge-base paths are not safely separated.'
 if [[ $command_name == init ]]; then probe_knowledge_base_path "$knowledge_base"; fi
+if [[ $command_name == restore ]]; then
+  run_docker run --rm --user "$runtime_uid:$runtime_gid" \
+    --mount "type=bind,source=$repo_root,target=/workspace,readonly" \
+    --mount "type=bind,source=$knowledge_base,target=/probe" "$installer_image" \
+    node /workspace/scripts/install.mjs internal-probe-empty --source /probe
+fi
 
 installer_arguments=("$command_name" "${installer_options[@]}" --expected-vault "$knowledge_base")
 password_stdin=false
@@ -280,8 +286,7 @@ wait_until_ready() {
 }
 
 check_pdf_runtime() {
-  run_compose exec -T app node -e \
-    "const fs=require('node:fs');const required=['/usr/bin/bwrap','/usr/bin/pdftotext'];const missing=required.filter(p=>{try{fs.accessSync(p,fs.constants.X_OK);return false}catch{return true}});const enabled=/^(1|true|yes|on)$/i.test(process.env.PDF_ENABLED||'');console.log('PDF sandbox: '+(missing.length?'unavailable ('+missing.join(', ')+')':'available')+(enabled?' [enabled]':' [disabled]'));if(enabled&&missing.length)process.exit(1)"
+  run_compose exec -T app /opt/media/bin/python -c 'import av, ctranslate2, faster_whisper, yt_dlp; print("Speech/video dependencies available; PDF reading uses the Agent SDK.")'
 }
 
 run_doctor() {
@@ -360,8 +365,53 @@ case "$command_name" in
     [[ $follow == true ]] && log_arguments+=(--follow)
     run_compose "${log_arguments[@]}"
     ;;
+  restart)
+    check_compose
+    probe_knowledge_base
+    prepare_volume
+    run_compose up -d --no-build --force-recreate
+    wait_until_ready
+    ;;
+  uninstall)
+    check_compose
+    run_compose down
+    note 'Application removed. Vault, runtime volume, credentials, configuration and backups are retained. Use restart to start it again.'
+    ;;
+  restore)
+    check_compose
+    probe_port || die "Recovery port $port is unavailable."
+    restore_source=$(read_value "$operation_root/restoreSource")
+    run_docker volume inspect "$volume" >/dev/null 2>&1 && die 'Recovery volume already exists; nothing was replaced.'
+    run_docker volume create "$volume" >/dev/null
+    for component in data vault; do
+      if [[ $component == data ]]; then
+        destination_mount="type=volume,source=$volume,target=/destination"
+      else
+        destination_mount="type=bind,source=$knowledge_base,target=/destination"
+      fi
+      run_docker run --rm \
+        --mount "type=bind,source=$repo_root,target=/workspace,readonly" \
+        --mount "type=bind,source=$restore_source,target=/backup,readonly" \
+        --mount "$destination_mount" "$installer_image" \
+        node /workspace/scripts/install.mjs internal-restore-tree \
+        --source "/backup/$component" --destination /destination \
+        --output-uid "$runtime_uid" --output-gid "$runtime_gid"
+    done
+    prepare_volume
+    prepare_application_image
+    run_compose up -d --no-build
+    wait_until_ready
+    note "Recovered as $instance_id. The source instance and backup remain intact."
+    ;;
   update)
     check_compose
+    "$repo_root/install.sh" backup --instance "$instance_id" --non-interactive
+    container_id=$(run_compose ps -q app)
+    if [[ -n $container_id ]]; then
+      previous_image=$(run_docker inspect --format '{{.Image}}' "$container_id")
+      run_docker tag "$previous_image" "second-mind-rollback:$instance_id"
+      note "Previous image retained: second-mind-rollback:$instance_id"
+    fi
     probe_knowledge_base
     probe_port || die "Port $port is unavailable; no existing process was stopped. Choose another with: ./install.sh init --port PORT"
     prepare_volume

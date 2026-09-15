@@ -109,14 +109,6 @@ jobs:
       - name: Audit production dependencies
         if: runner.os == 'Linux'
         run: npm audit --omit=dev --audit-level=high
-      - name: Evaluate synthetic lexical retrieval
-        if: runner.os == 'Linux'
-        run: >-
-          npm run eval --
-          --vault examples/demo-vault
-          --index "${{ runner.temp }}/second-mind-eval-index"
-          --k 3
-          --min-recall 1
 
   history:
     name: Full-history secret scan
@@ -136,9 +128,9 @@ jobs:
         run: npm run security:history
 
   container:
-    name: Compose build and isolated health smoke
+    name: Docker SDK and installer lifecycle
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -206,6 +198,14 @@ jobs:
             -f compose.yaml -f compose.secrets.yaml config --quiet
           docker compose --project-name second-mind-ci --env-file "$COMPOSE_ENV" \
             -f compose.yaml -f compose.secrets.yaml build --pull app
+      - name: Exercise actual Linux installer lifecycle with Unicode paths
+        run: node scripts/test-installer-docker.mjs
+      - name: Run full SDK binary against isolated mock upstream inside the runtime image
+        run: |
+          docker run --rm --read-only --tmpfs /tmp:rw,nosuid,size=768m \
+            --mount type=bind,source="$GITHUB_WORKSPACE/test",target=/app/test,readonly \
+            --workdir /app --env KNOWLEDGE_BASE_ALLOWED_ROOTS= \
+            second-mind:ci node --test test/sdk-provider-matrix.test.mjs
       - name: Start and verify live container
         env:
           COMPOSE_ENV: ${{ steps.fixture.outputs.env_file }}

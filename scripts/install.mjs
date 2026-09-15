@@ -20,7 +20,7 @@ const STATE_MARKER_CONTENT = 'second-mind-installer-state-v1\n';
 const RUNTIME_VOLUME_MARKER = '.second-mind-volume';
 const RUNTIME_VOLUME_MARKER_CONTENT = 'second-mind-runtime-volume-v1\n';
 const INSTANCE_PATTERN = /^second-mind-[a-z0-9][a-z0-9-]{5,48}[a-z0-9]$/u;
-const COMMANDS = new Set(['init', 'doctor', 'status', 'logs', 'update', 'backup']);
+const COMMANDS = new Set(['init', 'doctor', 'status', 'logs', 'update', 'backup', 'restart', 'restore', 'uninstall']);
 const INTERNAL_COMMANDS = new Set([
   'internal-preflight',
   'internal-probe-path',
@@ -28,6 +28,8 @@ const INTERNAL_COMMANDS = new Set([
   'internal-copy-tree',
   'internal-finalize-backup',
   'internal-own-tree',
+  'internal-restore-tree',
+  'internal-probe-empty',
 ]);
 const BOOLEAN_OPTIONS = new Set([
   'admin-password-stdin',
@@ -37,6 +39,7 @@ const BOOLEAN_OPTIONS = new Set([
   'non-interactive',
 ]);
 const VALUE_OPTIONS = new Set([
+  'backup',
   'backup-root',
   'destination',
   'expected-vault',
@@ -494,6 +497,7 @@ async function writeOperation(paths, metadata, command, options = {}) {
     follow: options.follow === false ? 'false' : 'true',
     backup: options.backupHostPath || '',
     backupName: options.backupName || '',
+    restoreSource: options.restoreSource || '',
   };
   for (const [name, value] of Object.entries(values)) {
     await atomicWrite(path.join(paths.operation, name), `${value}\n`);
@@ -754,6 +758,14 @@ export async function preflightInstaller(options = {}) {
   if (!COMMANDS.has(operation)) fail(`Unsupported installer operation: ${operation}`, 'INVALID_OPERATION');
   const roots = resolveRoots(options);
   await inspectStateRoot(roots, options);
+  if (operation === 'restore') {
+    if (!options.vault || !options.port || !options.backup) {
+      fail('Restore requires --backup NAME, --vault NEW_EMPTY_DIRECTORY and --port NEW_PORT.', 'RESTORE_ARGUMENTS_REQUIRED');
+    }
+    const knowledgeBasePath = normalizeKnowledgeBaseHostPath(options.vault, roots, options);
+    await assertKnowledgeBaseSeparation(knowledgeBasePath, roots);
+    return { requiresVault: false, knowledgeBasePath };
+  }
   const selected = operation === 'init' && options.newInstance
     ? ''
     : options.instance || await currentInstanceId(roots.stateRoot);
@@ -1240,6 +1252,102 @@ export async function ownRuntimeTree(targetInput, options = {}) {
   }
 }
 
+async function inventoryTree(root) {
+  const entries = [];
+  async function visit(relative = '') {
+    const filename = path.join(root, relative);
+    const stat = await fsp.lstat(filename);
+    const record = { path: relativeArchivePath(relative || '.') };
+    if (stat.isDirectory()) {
+      entries.push({ ...record, type: 'directory' });
+      for (const name of (await fsp.readdir(filename)).sort()) await visit(path.join(relative, name));
+    } else if (stat.isFile()) {
+      const hash = createHash('sha256');
+      for await (const chunk of createReadStream(filename)) hash.update(chunk);
+      entries.push({ ...record, type: 'file', bytes: stat.size, sha256: hash.digest('hex') });
+    } else if (stat.isSymbolicLink() && relative) {
+      entries.push({ ...record, type: 'symlink', target: await fsp.readlink(filename) });
+    } else fail('Backup contains an unsupported file.', 'BACKUP_SPECIAL_FILE');
+  }
+  await visit();
+  return entries;
+}
+
+export async function verifyBackupTree(root) {
+  const inventory = await readJson(`${root}.inventory.json`);
+  if (!Array.isArray(inventory?.entries)) fail('Backup inventory is missing.', 'BACKUP_INVENTORY_MISSING');
+  const normalize = (entries) => entries.map(({ path: p, type, bytes, sha256, target }) =>
+    ({ path: p, type, ...(type === 'file' ? { bytes, sha256 } : {}), ...(type === 'symlink' ? { target } : {}) }))
+    .sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+  if (JSON.stringify(normalize(await inventoryTree(root))) !== JSON.stringify(normalize(inventory.entries))) {
+    fail('Backup inventory or content has changed; restore refused.', 'BACKUP_INTEGRITY_FAILED');
+  }
+}
+
+// Recovery creates a separate instance; it never replaces an existing Vault or volume.
+export async function prepareRestore(options = {}) {
+  await preflightInstaller({ ...options, operation: 'restore' });
+  const source = await loadSelectedInstance({ ...options, expectedVault: undefined });
+  if (!/^[0-9TZ-]+-[a-f0-9]{6}$/u.test(options.backup)) fail('Invalid backup name.', 'BACKUP_NAME_INVALID');
+  const root = path.join(source.paths.backups, options.backup);
+  const manifest = await readJson(path.join(root, 'manifest.json'));
+  if (manifest?.status !== 'complete' || manifest.instanceId !== source.metadata.instanceId) {
+    fail('A complete backup of the selected source instance is required.', 'BACKUP_MANIFEST_INVALID');
+  }
+  const vault = normalizeKnowledgeBaseHostPath(options.vault, source.roots, options);
+  if (hostPathsOverlap(vault, source.metadata.knowledgeBaseHostPath, source.roots.hostOs)) {
+    fail('Recovery requires a separate empty knowledge-base directory.', 'RESTORE_TARGET_NOT_EMPTY');
+  }
+  if (parsePort(options.port) === source.metadata.port) fail('Recovery requires a separate port.', 'RESTORE_PORT_CONFLICT');
+  for (const name of ['configuration', 'data', 'vault']) await verifyBackupTree(path.join(root, name));
+  const secrets = path.join(root, 'configuration', 'secrets');
+  for (const name of REQUIRED_SECRET_FILES) {
+    if (!(await fsp.lstat(path.join(secrets, name))).isFile()) fail('Backup secrets must be regular files.', 'BACKUP_SECRET_INVALID');
+  }
+  const result = await initializeInstance({
+    ...options, instance: undefined, newInstance: true, nonInteractive: true,
+    adminPassword: await fsp.readFile(path.join(secrets, 'admin_password'), 'utf8'),
+  });
+  const restored = await loadSelectedInstance({ ...options, instance: result.instanceId });
+  for (const name of REQUIRED_SECRET_FILES) {
+    await atomicWrite(path.join(restored.paths.secrets, name), await fsp.readFile(path.join(secrets, name)));
+  }
+  // Keep user runtime settings while replacing all host-specific installer paths and identity.
+  const generated = envDocument(restored.metadata);
+  const generatedKeys = new Set([...generated.matchAll(/^([A-Z0-9_]+)=/gmu)].map((m) => m[1]));
+  const oldEnv = await fsp.readFile(path.join(root, 'configuration', '.env'), 'utf8');
+  const extras = oldEnv.split(/\r?\n/u).filter((line) => {
+    const match = /^([A-Z0-9_]+)=/u.exec(line);
+    return match && !generatedKeys.has(match[1]);
+  });
+  await atomicWrite(restored.paths.env, `${generated}${extras.join('\n')}\n`);
+  const restoreSource = hostJoin(source.metadata.hostOs, source.metadata.hostInstanceRoot, 'backups', options.backup);
+  await writeOperation(restored.paths, restored.metadata, 'restore', { restoreSource });
+  return { ...result, command: 'restore', sourceInstanceId: source.metadata.instanceId };
+}
+
+export async function restoreTree(sourceInput, destinationInput, options = {}) {
+  const source = path.resolve(assertTextPath(sourceInput, 'Restore source'));
+  const destination = path.resolve(assertTextPath(destinationInput, 'Restore destination'));
+  if (await localPathsOverlap(source, destination)) fail('Restore paths overlap.', 'RESTORE_PATH_OVERLAP');
+  await verifyBackupTree(source);
+  const stat = await fsp.lstat(destination).catch(() => null);
+  if (!stat?.isDirectory() || (await fsp.readdir(destination)).length) {
+    fail('Restore destination must be an existing empty directory.', 'RESTORE_TARGET_NOT_EMPTY');
+  }
+  const created = [];
+  try {
+    for (const name of (await fsp.readdir(source)).sort()) {
+      created.push(name);
+      await copyTreeEntry(path.join(source, name), path.join(destination, name), name, [], options);
+    }
+    return { restored: true };
+  } catch (error) {
+    for (const name of created) await fsp.rm(path.join(destination, name), { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
+}
+
 export async function finalizeBackup(rootInput) {
   const root = path.resolve(assertTextPath(rootInput, 'Backup root'));
   const manifestFile = path.join(root, 'manifest.json');
@@ -1253,6 +1361,8 @@ export async function finalizeBackup(rootInput) {
     const stat = await fsp.stat(path.join(root, name)).catch(() => null);
     if (!stat?.isFile()) fail(`Backup inventory is missing: ${name}`, 'BACKUP_INVENTORY_MISSING');
   }
+  await atomicWrite(path.join(root, 'configuration.inventory.json'), `${JSON.stringify({ entries: await inventoryTree(path.join(root, 'configuration')) }, null, 2)}\n`);
+  for (const name of ['configuration', 'data', 'vault']) await verifyBackupTree(path.join(root, name));
   const complete = { ...manifest, status: 'complete', completedAt: new Date().toISOString() };
   await atomicWrite(manifestFile, `${JSON.stringify(complete, null, 2)}\n`);
   return complete;
@@ -1300,6 +1410,7 @@ async function main(argv = process.argv.slice(2)) {
   let result;
   if (command === 'init') result = await initializeInstance(options);
   else if (command === 'backup') result = await prepareBackup(options);
+  else if (command === 'restore') result = await prepareRestore(options);
   else if (command === 'internal-preflight') {
     result = await preflightInstaller(options);
     if (options.json) process.stdout.write(`${JSON.stringify(result)}\n`);
@@ -1317,6 +1428,11 @@ async function main(argv = process.argv.slice(2)) {
     if (!options.json) {
       process.stdout.write(`Obsidian knowledge base is readable and writable; free space: ${formatBytes(result.freeBytes)}.\n`);
     }
+  } else if (command === 'internal-probe-empty') {
+    if (!(await fsp.lstat(options.source)).isDirectory() || (await fsp.readdir(options.source)).length) {
+      fail('Recovery requires an existing empty directory.', 'RESTORE_TARGET_NOT_EMPTY');
+    }
+    result = await probeWritablePath(options.source);
   } else if (command === 'internal-copy-tree') {
     result = await copyTreeForBackup(options.source, options.destination, {
       outputUid: options.outputUid,
@@ -1324,6 +1440,8 @@ async function main(argv = process.argv.slice(2)) {
     });
   } else if (command === 'internal-finalize-backup') {
     result = await finalizeBackup(options.backupRoot);
+  } else if (command === 'internal-restore-tree') {
+    result = await restoreTree(options.source, options.destination, options);
   } else if (command === 'internal-own-tree') {
     result = await ownRuntimeTree(options.source, {
       outputUid: options.outputUid,

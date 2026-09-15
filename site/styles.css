@@ -2,7 +2,7 @@
   color-scheme: light dark;
   --bg: #f2f5f7;
   --surface: #fbfcfd;
-  --surface-raised: #ffffff;
+  --surface-raised: #fdfefe;
   --surface-blue: #e8f0f7;
   --ink: #0b1b2b;
   --ink-soft: #415468;
@@ -12,18 +12,18 @@
   --accent: #075ca8;
   --accent-hover: #06477f;
   --accent-soft: #d9e9f7;
-  --deep: #081b2e;
-  --deep-raised: #0d2942;
-  --deep-ink: #f5f8fb;
-  --deep-muted: #abc0d4;
-  --signal: #55c0d2;
+  --deep: #e9f0f5;
+  --deep-raised: #dce8f1;
+  --deep-ink: #152b40;
+  --deep-muted: #4c6277;
+  --signal: #246b91;
   --focus: #f0a51b;
   --shadow: 0 20px 60px rgba(11, 27, 43, 0.12);
   --radius-sm: 4px;
   --radius: 10px;
   --radius-lg: 16px;
   --header-height: 72px;
-  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-sans: "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 }
 
@@ -154,8 +154,8 @@ a {
   width: 32px;
   height: 32px;
   place-items: center;
-  background: var(--deep);
-  color: var(--deep-ink);
+  background: #081b2e;
+  color: #f5f8fb;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: 0.7rem;
@@ -198,11 +198,11 @@ a {
 
 .hero {
   display: grid;
-  min-height: 680px;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  min-height: 640px;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
   align-items: center;
-  gap: clamp(48px, 7vw, 112px);
-  padding-block: clamp(72px, 9vw, 130px);
+  gap: 48px;
+  padding-block: 88px;
 }
 
 .hero-copy {
@@ -248,9 +248,11 @@ h3 {
 }
 
 h1 {
-  max-width: 12ch;
+  max-width: 16ch;
   margin-bottom: 26px;
-  font-size: clamp(2.7rem, 5vw, 4.5rem);
+  font-size: clamp(2.3rem, 3.8vw, 3.5rem);
+  line-height: 1.18;
+  text-wrap: balance;
 }
 
 html[lang="zh-CN"] h1 {
@@ -259,7 +261,7 @@ html[lang="zh-CN"] h1 {
 
 h2 {
   margin-bottom: 22px;
-  font-size: clamp(2rem, 3.6vw, 3.35rem);
+  font-size: clamp(1.8rem, 2.8vw, 2.7rem);
 }
 
 h3 {
@@ -358,25 +360,12 @@ h3 {
   line-height: 1.5;
 }
 
-.hero-figure {
-  position: relative;
-  margin-right: min(-5vw, -28px);
-}
+.hero-figure { position: relative; margin: 0; width: 100%; }
 
-.hero-figure::before {
-  position: absolute;
-  z-index: -1;
-  top: -28px;
-  right: 52px;
-  width: 44%;
-  height: calc(100% + 14px);
-  background: var(--accent-soft);
-  border-top: 2px solid var(--accent);
-  content: "";
-}
+.hero-figure::before { display: none; }
 
 .hero-figure img {
-  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  border-radius: var(--radius-lg);
 }
 
 .asset-pending {
@@ -391,7 +380,7 @@ h3 {
 
 .hero-figure .asset-pending {
   min-height: 420px;
-  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  border-radius: var(--radius-lg);
 }
 
 .trust-band {
@@ -1088,7 +1077,7 @@ pre {
     --deep-raised: #0b253c;
     --deep-ink: #f5f8fb;
     --deep-muted: #a8bccf;
-    --signal: #68cada;
+    --signal: #246b91;
     --focus: #ffc24b;
     --shadow: 0 20px 62px rgba(0, 0, 0, 0.34);
   }
@@ -1260,7 +1249,7 @@ pre {
   }
 
   .capability-primary {
-    grid-template-columns: 42px 1fr;
+    grid-template-columns: 1fr;
   }
 
   .diary-figure {
@@ -1394,7 +1383,7 @@ pre {
   }
 
   .capability-primary {
-    grid-template-columns: 34px 1fr;
+    grid-template-columns: 1fr;
   }
 
   .diary-figure figcaption {
@@ -1454,4 +1443,20 @@ pre {
     padding-block: 36px;
     break-inside: avoid;
   }
+}
+
+/* Preserve the brand; keep screenshots whole and page sections in the active theme. */
+.capability-primary, .capability-list li { grid-template-columns: 1fr; }
+.capability-primary > figure { grid-column: 1; }
+.shot figcaption { display: flex; gap: 10px; flex-wrap: wrap; }
+.hero-figure img { width: 100%; height: auto; }
+.trust-list > div, .kb-flow li, .kb-rail, .architecture-flow li, .site-footer { border-color: var(--line-strong); }
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; gap: 36px; padding-block: 56px; }
+  .hero-figure { width: 100%; margin: 0; }
+  .hero-copy { max-width: 660px; }
+}
+@media (max-width: 420px) {
+  h1 { font-size: 2.35rem; max-width: 15ch; }
+  h2 { font-size: 1.9rem; }
 }

@@ -7,18 +7,10 @@ import { SessionManager, requireWriteGuard } from './auth.mjs';
 import { BailianWebSearchClient } from './bailian-web-search-client.mjs';
 import { BailianResponsesExtractor } from './bailian-responses-extractor.mjs';
 import { createConfig, validateRuntimeConfig } from './config.mjs';
-import { ConversationStore } from './conversation-store.mjs';
 import { EmbeddingClient } from './embedding-client.mjs';
-import {
-  EmbeddingRuntime,
-  EmbeddingRuntimeError,
-  promotePreviousEmbedding,
-  resolveActiveEmbedding,
-} from './embedding-runtime.mjs';
-import { KnowledgeIndex } from './knowledge-index.mjs';
 import { KnowledgeBaseHub } from './knowledge-base-hub.mjs';
+import { KnowledgeBaseRegistry } from './knowledge-base-registry.mjs';
 import { createKnowledgeBaseContext } from './knowledge-base-runtime.mjs';
-import { ChatModelClient, createPinnedModelFetch } from './llm-client.mjs';
 import {
   buildRegisteredProviderConfigPatch,
   ProviderValidationStageStore,
@@ -26,13 +18,11 @@ import {
   toSimplifiedProviderConfig,
   ValidationCredentialStore,
 } from './provider-config-dto.mjs';
-import { RuntimeChatModelRouter } from './runtime-chat-model-router.mjs';
+import { SdkModelRuntime } from './sdk-runtime.mjs';
 import { isInside, mimeTypeFor } from './path-policy.mjs';
 import { markPublicMessage, publicError } from './public-errors.mjs';
 import { RuntimeWebExtractFallback, RuntimeWebSearchClient } from './runtime-services.mjs';
 import { SafeWebReader } from './safe-web-reader.mjs';
-import { TaskManager } from './task-manager.mjs';
-import { VaultStore } from './vault-store.mjs';
 
 const APP_DIR = path.dirname(fileURLToPath(import.meta.url));
 const EMBEDDING_REBUILD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -223,7 +213,9 @@ async function serveStatic(req, res, publicDir, pathname, createReadStream = fs.
   let decoded;
   try { decoded = decodeURIComponent(pathname); }
   catch { throw httpError(400, 'URL is invalid.', 'INVALID_URL'); }
-  const relative = decoded === '/' ? 'index.html' : decoded.replace(/^\/+/, '');
+  // The migrated deployment has no Yuan Drive/Home shell.  Serve the original
+  // Second Mind knowledge page directly at the service root instead.
+  const relative = decoded === '/' ? 'knowledge.html' : decoded.replace(/^\/+/, '');
   if (!relative || relative.split('/').some((part) => !part || part === '.' || part === '..' || part.startsWith('.'))) {
     throw httpError(404, 'Page not found.', 'NOT_FOUND');
   }
@@ -364,53 +356,6 @@ function sanitizedIndexStatus(index) {
   };
 }
 
-function resolvedIndexIsUsable(index, state) {
-  const status = index?.status?.() || {};
-  if (status.available !== true || status.lexicalAvailable !== true) return false;
-  // `state.generation` records the fully validated generation at activation
-  // time. Once that slot is live, file watching and reconciliation may commit
-  // newer generations inside the same KnowledgeIndex. The slot/revision and
-  // embedding signature are the durable identity; requiring generation
-  // equality here would incorrectly roll a healthy, updated index backward.
-  const expected = state.embedding || {};
-  const actual = status.embedding || {};
-  if (
-    String(actual.provider || 'disabled') !== String(expected.provider || 'disabled') ||
-    (expected.provider !== 'disabled' && (
-      String(actual.model || '') !== String(expected.model || '') ||
-      Number(actual.dimensions) !== Number(expected.dimensions)
-    ))
-  ) return false;
-  // An active slot may legitimately be degraded after a transient provider
-  // failure while indexing a newly changed Vault file. KnowledgeIndex keeps
-  // that generation for fresh lexical retrieval and exposes the semantic
-  // degradation in status. Candidate activation is still strict; restart must
-  // preserve the fresher live slot instead of rolling back user-visible data.
-  return true;
-}
-
-async function openResolvedIndex(config, state, clientOverride = null) {
-  const activeConfig = {
-    ...config,
-    indexDir: state.indexDir,
-    embedding: state.embedding,
-  };
-  const client = clientOverride || new EmbeddingClient(state.embedding);
-  const index = new KnowledgeIndex(activeConfig, {
-    client,
-    // Committed slots were completely built and validated before their
-    // pointer became active. Restarting must never mutate one in place.
-    autoBuild: state.selection === 'base',
-  });
-  try {
-    await index.ready;
-    return { client, index };
-  } catch (error) {
-    await Promise.resolve(index.close?.()).catch(() => {});
-    throw error;
-  }
-}
-
 async function runtimeConfigurationResponse(runtimeConfig, index) {
   const snapshot = await runtimeConfig.refresh();
   const indexStatus = sanitizedIndexStatus(index);
@@ -532,7 +477,31 @@ export async function createApp(configInput, dependencies = {}) {
   const createReadStream = dependencies.createReadStream || fs.createReadStream;
   const runtimeConfig = dependencies.runtimeConfig || null;
   const runtimeOptions = dependencies.embeddingRuntimeOptions || {};
-  const knowledgeBaseRegistry = dependencies.knowledgeBaseRegistry || null;
+  let knowledgeBaseRegistry = dependencies.knowledgeBaseRegistry || null;
+  // Custom systemd launchers can provide managed models without going through
+  // bootstrap.mjs. Give those deployments the same registry while retaining
+  // the existing singleton's exact data, index, profile and conversation paths.
+  if (!knowledgeBaseRegistry && runtimeConfig && config.runtimeManagedProviders === true) {
+    const allowedRoots = String(process.env.KNOWLEDGE_BASE_ALLOWED_ROOTS || config.vaultPath)
+      .split(path.delimiter).filter(Boolean)
+      .map((root, index) => ({ id: `vaults-${index + 1}`, path: root, label: `知识库目录 ${index + 1}` }));
+    knowledgeBaseRegistry = new KnowledgeBaseRegistry({
+      managedFile: path.join(config.dataDir, 'runtime', 'knowledge-bases.json'),
+      stateDir: config.dataDir, allowedRoots,
+      privateStatePaths: [runtimeConfig.managedFile, runtimeConfig.settingsFile,
+        runtimeOptions.activeProfileFile, runtimeOptions.slotsRoot].filter(Boolean),
+      legacy: {
+        knowledgeBaseId: config.knowledgeBaseId || 'default', name: config.vaultLabel,
+        vaultPath: config.vaultPath, dataDir: config.dataDir, indexDir: config.indexDir,
+        draftDir: config.draftDir, recoveryDir: config.recoveryDir,
+        conversationFile: config.conversationFile, auditFile: config.auditFile,
+        piSessionDir: config.pi?.sessionDir,
+        embeddingProfileFile: runtimeOptions.activeProfileFile,
+        embeddingSlotsRoot: runtimeOptions.slotsRoot,
+      },
+    });
+    await knowledgeBaseRegistry.ready;
+  }
   const privateStatePaths = [
     runtimeConfig?.settingsFile,
     runtimeConfig?.managedFile,
@@ -544,16 +513,11 @@ export async function createApp(configInput, dependencies = {}) {
   ];
   if (!knowledgeBaseRegistry) await assertStateOutsideVault(config, privateStatePaths);
   if (runtimeConfig?.ready) await runtimeConfig.ready;
-  const llm = dependencies.llm || new ChatModelClient(config.llm, {
-    fetch: createPinnedModelFetch({
-      allowInsecureHttp: config.llm?.allowInsecureHttp === true,
-    }),
-  });
   const llmRouter = dependencies.llmRouter || (
     runtimeConfig
-      ? new RuntimeChatModelRouter({
+      ? new SdkModelRuntime({
           registry: runtimeConfig,
-          baseConfig: config.llm,
+          stateDir: path.join(config.dataDir, 'sdk-validation'),
           ...(dependencies.runtimeLlmOptions || {}),
         })
       : null
@@ -599,7 +563,6 @@ export async function createApp(configInput, dependencies = {}) {
         {
           ...dependencies,
           runtimeConfig,
-          llm,
           llmRouter,
           webSearch,
           webReader,
@@ -616,82 +579,13 @@ export async function createApp(configInput, dependencies = {}) {
       const context = knowledgeBaseHub.resolve(preferred.knowledgeBaseId);
       ({ embedding, index, embeddingRuntime, store, conversations, manager } = context);
     }
-  } else {
-    if (!index) {
-      if (runtimeConfig && runtimeOptions?.activeProfileFile && runtimeOptions?.slotsRoot) {
-        let activeState = await resolveActiveEmbedding(config, runtimeOptions);
-        let opened;
-        try {
-          opened = await openResolvedIndex(config, activeState, embedding);
-          if (activeState.selection !== 'base' && !resolvedIndexIsUsable(opened.index, activeState)) {
-            throw new EmbeddingRuntimeError(
-              'The committed embedding index does not match its active profile.',
-              'ACTIVE_EMBEDDING_INDEX_INVALID',
-              503,
-            );
-          }
-        } catch (currentError) {
-          if (activeState.selection === 'base') throw currentError;
-          await Promise.resolve(opened?.index?.close?.()).catch(() => {});
-          let previousState;
-          let previousOpened;
-          try {
-            previousState = await resolveActiveEmbedding(config, {
-              ...runtimeOptions,
-              selection: 'previous',
-            });
-            previousOpened = await openResolvedIndex(config, previousState);
-            if (!resolvedIndexIsUsable(previousOpened.index, previousState)) {
-              throw new EmbeddingRuntimeError(
-                'The previous embedding index does not match its saved profile.',
-                'ACTIVE_EMBEDDING_PREVIOUS_INVALID',
-                503,
-              );
-            }
-            await promotePreviousEmbedding({
-              activeProfileFile: runtimeOptions.activeProfileFile,
-              expectedCurrentRevision: activeState.revision,
-            });
-            activeState = previousState;
-            opened = previousOpened;
-          } catch (previousError) {
-            await Promise.resolve(previousOpened?.index?.close?.()).catch(() => {});
-            throw new EmbeddingRuntimeError(
-              'Neither the current nor previous embedding index could be opened safely.',
-              'ACTIVE_EMBEDDING_INDEX_UNAVAILABLE',
-              503,
-              { cause: previousError, currentError },
-            );
-          }
-        }
-        embedding = opened.client;
-        const activeIndex = opened.index;
-        embeddingRuntime = new EmbeddingRuntime({
-          registry: runtimeConfig,
-          baseConfig: config,
-          activeProfileFile: runtimeOptions.activeProfileFile,
-          slotsRoot: runtimeOptions.slotsRoot,
-          activeState,
-          activeIndex,
-          lookup: runtimeOptions.lookup,
-          embeddingFetch: runtimeOptions.embeddingFetch,
-          httpsRequest: runtimeOptions.httpsRequest || runtimeOptions.request,
-          embeddingClientFactory: runtimeOptions.embeddingClientFactory,
-          indexFactory: runtimeOptions.indexFactory,
-        });
-        index = embeddingRuntime.index;
-      } else {
-        embedding ||= new EmbeddingClient(config.embedding);
-        index = new KnowledgeIndex(config, { client: embedding });
-      }
-    }
-    store ||= new VaultStore(config, { policy: index.policy, index });
-    conversations ||= new ConversationStore(config.conversationFile);
-    manager ||= new TaskManager(config, {
-      index, store, llm, llmRouter, webSearch, webReader, responsesExtractor, conversations,
-      runtimeConfig,
-      allowLegacyTestEngine: dependencies.allowLegacyTestEngine === true,
-    });
+  } else if (!manager || !store || !index) {
+    const context = await createKnowledgeBaseContext(config, {
+      knowledgeBaseId: config.knowledgeBaseId || 'default', revision: 'default',
+      name: config.vaultLabel, rootPath: config.vaultPath,
+      state: { ...config },
+    }, { ...dependencies, runtimeConfig });
+    ({ embedding, index, embeddingRuntime, store, conversations, manager } = context);
   }
   const sessions = dependencies.sessions || new SessionManager(config.auth);
   const initialization = { ready: false, error: null };
@@ -1301,13 +1195,15 @@ export async function createApp(configInput, dependencies = {}) {
         if (!['keyword', 'semantic', 'hybrid'].includes(mode)) {
           throw httpError(400, 'Search mode is invalid.', 'INVALID_SEARCH_MODE');
         }
-        const result = await context.index.search(url.searchParams.get('q') || '', {
-          route: mode,
-          limit: url.searchParams.get('limit') || 30,
-        });
-        if (mode === 'semantic' && result.route !== 'semantic') {
-          throw httpError(503, 'Semantic search is unavailable. Configure and build an embedding index.', 'SEMANTIC_SEARCH_UNAVAILABLE');
-        }
+        const query = url.searchParams.get('q') || '';
+        const searchOptions = { limit: url.searchParams.get('limit') || 30, taskMode: 'normal' };
+        const result = mode === 'keyword'
+          ? { route: 'keyword', query: query.trim(),
+              results: await context.store.keywordSearch(query, searchOptions),
+              diagnostics: { liveScan: true, embeddingUsed: false, rerankerUsed: false } }
+          : mode === 'semantic'
+            ? await context.store.semanticSearch(query, searchOptions)
+            : await context.store.hybridSearch(query, searchOptions);
         return json(res, 200, {
           ...result,
           ...contextIdentity(context),
@@ -1426,10 +1322,23 @@ export async function createApp(configInput, dependencies = {}) {
           ));
         }
       }
+      if (pathname === '/api/knowledge/video-uploads' && req.method === 'POST') {
+        const context = resolveKnowledgeContext(requestKnowledgeBaseId(url));
+        return json(res, 201, withContextIdentity(await context.manager.uploadVideo(userId, req, {
+          name: url.searchParams.get('name') || '',
+          type: url.searchParams.get('type') || req.headers['content-type'] || '',
+        }), context));
+      }
+      const videoUploadMatch = /^\/api\/knowledge\/video-uploads\/([^/]+)$/.exec(pathname);
+      if (videoUploadMatch && req.method === 'DELETE') {
+        const context = resolveKnowledgeContext(requestKnowledgeBaseId(url));
+        return json(res, 200, withContextIdentity(
+          await context.manager.deleteVideoUpload(userId, videoUploadMatch[1]), context));
+      }
       if (pathname === '/api/knowledge/transcribe' && req.method === 'POST') {
         const body = await readJson(req, config.limits.jsonBodyBytes);
-        resolveKnowledgeContext(requestKnowledgeBaseId(url, body));
-        throw httpError(503, 'Server-side speech transcription is not enabled in this release.', 'TRANSCRIPTION_UNAVAILABLE');
+        const context = resolveKnowledgeContext(requestKnowledgeBaseId(url, body));
+        return json(res, 200, withContextIdentity(await context.manager.transcribeAudio(userId, body), context));
       }
       if (pathname.startsWith('/api/')) throw httpError(404, 'API route not found.', 'NOT_FOUND');
       if (!['GET', 'HEAD'].includes(req.method)) throw httpError(405, 'Method not allowed.', 'METHOD_NOT_ALLOWED');
@@ -1482,21 +1391,38 @@ const MAX_SAFE_DRAFT_BODY = 600 * 1024;
 
 export async function startServer(options = {}) {
   const config = validateRuntimeConfig(options.config || createConfig());
-  const app = await createApp(config, options.dependencies);
+  // Bind health endpoints before a large initial index finishes. Every other
+  // route remains unavailable until the complete authenticated app is ready.
+  const initializing = (req, res) => {
+    const live = req.method === 'GET' && req.url?.split('?')[0] === '/health/live';
+    securityHeaders(res);
+    return json(res, live ? 200 : 503, live ? { ok: true, status: 'starting' }
+      : { error: 'INITIALIZING', message: 'Second Mind is initializing.' });
+  };
+  const server = http.createServer(initializing);
   await new Promise((resolve, reject) => {
-    app.server.once('error', reject);
-    app.server.listen(config.port, config.host, resolve);
+    server.once('error', reject);
+    server.listen(config.port, config.host, resolve);
   });
-  const address = app.server.address();
+  let app;
+  try {
+    app = await createApp(config, options.dependencies);
+    server.removeListener('request', initializing);
+    for (const listener of app.server.listeners('request')) server.on('request', listener);
+  } catch (error) {
+    await new Promise((resolve) => server.close(resolve));
+    throw error;
+  }
+  const address = server.address();
   const port = typeof address === 'object' && address ? address.port : config.port;
   console.log(`${config.appName} listening on http://${config.host}:${port}`);
   console.log(`Vault: ${config.vaultLabel} (${config.sync.displayName})`);
-  return { ...app, host: config.host, port };
+  return { ...app, server, host: config.host, port };
 }
 
 const launchedDirectly = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 if (launchedDirectly) {
-  startServer().then((app) => {
+  import('./bootstrap.mjs').then(({ startApplication }) => startApplication()).then((app) => {
     const close = async () => {
       if (app.knowledgeBaseHub) await app.knowledgeBaseHub.close();
       else await app.manager.close();
@@ -1520,7 +1446,6 @@ export const serverInternals = {
   streamFileResponse,
   securityHeaders,
   assertStateOutsideVault,
-  resolvedIndexIsUsable,
   requireEmbeddingRebuildId,
   safeModelValidationResults,
 };

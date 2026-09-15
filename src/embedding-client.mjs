@@ -1,7 +1,8 @@
-const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_BATCH_SIZE = 16;
+const DEFAULT_TIMEOUT_MS = 12_000;
+const DEFAULT_BATCH_SIZE = 20;
 const DASHSCOPE_EMBEDDING_PATH =
   '/api/v1/services/embeddings/text-embedding/text-embedding';
+const DASHSCOPE_RERANK_PATH = '/compatible-api/v1/reranks';
 
 export class EmbeddingClientError extends Error {
   constructor(message, code, options = {}) {
@@ -278,6 +279,15 @@ export class EmbeddingClient {
         this.allowInsecureHttp,
       )
       : '';
+    this.rerankEndpoint = this.enabled && this.provider === 'dashscope'
+      ? assertSafeEmbeddingUrl(
+        String(embeddingConfig.rerankEndpoint || '').trim() ||
+          `${this.apiBase}${DASHSCOPE_RERANK_PATH}`,
+        this.allowInsecureHttp,
+      )
+      : '';
+    this.rerankModel = String(embeddingConfig.rerankModel || 'qwen3-rerank').trim();
+    this.rerankTimeoutMs = positiveInteger(embeddingConfig.rerankTimeoutMs, 20_000);
     this.apiKey = String(embeddingConfig.apiKey || '');
     this.model = String(embeddingConfig.model || '').trim();
     this.embeddingModel = this.model;
@@ -412,6 +422,83 @@ export class EmbeddingClient {
       output.push(...await this.request(batch, options));
     }
     return output;
+  }
+
+  async rerank(queryInput, documentsInput, options = {}) {
+    const query = String(queryInput || '').trim();
+    const documents = (Array.isArray(documentsInput) ? documentsInput : [])
+      .map((document) => String(document || ''));
+    if (!query || !documents.length) {
+      throw new EmbeddingClientError(
+        'Reranking requires a query and at least one candidate document.',
+        'KNOWLEDGE_RERANK_INPUT_REQUIRED',
+      );
+    }
+    if (!this.rerankEndpoint || !this.apiKey) {
+      throw new EmbeddingClientError('Reranking is unavailable.', 'KNOWLEDGE_RERANK_NOT_CONFIGURED');
+    }
+    const topN = Math.max(1, Math.min(
+      documents.length,
+      positiveInteger(options.topN, documents.length),
+    ));
+    const controller = new AbortController();
+    let timedOut = false;
+    const relayAbort = () => controller.abort(options.signal?.reason);
+    if (options.signal?.aborted) controller.abort(options.signal.reason);
+    else options.signal?.addEventListener('abort', relayAbort, { once: true });
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, this.rerankTimeoutMs);
+    timer.unref?.();
+    try {
+      const response = await this.fetchFn(this.rerankEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
+        body: JSON.stringify({
+          model: this.rerankModel,
+          query,
+          documents,
+          top_n: topN,
+          instruct: 'Given a knowledge-base question, retrieve passages that directly answer the question.',
+        }),
+        signal: controller.signal,
+      });
+      const raw = await readLimitedText(response, controller.signal, 2 * 1024 * 1024);
+      const payload = parseJson(raw, this.apiKey);
+      if (!response.ok || payload?.error || payload?.code) {
+        const detail = redact(providerMessage(payload), this.apiKey).slice(0, 300);
+        throw new EmbeddingClientError(
+          `Reranking provider request failed (HTTP ${response.status})${detail ? `: ${detail}` : '.'}`,
+          'KNOWLEDGE_RERANK_API_ERROR',
+          { status: response.status },
+        );
+      }
+      const rows = Array.isArray(payload?.results)
+        ? payload.results
+        : Array.isArray(payload?.output?.results) ? payload.output.results : [];
+      const parsed = rows.map((row) => ({
+        index: Number(row?.index), score: Number(row?.relevance_score),
+      })).filter((row) => (
+        Number.isSafeInteger(row.index) && row.index >= 0 && row.index < documents.length &&
+        Number.isFinite(row.score)
+      ));
+      if (!parsed.length) {
+        throw new EmbeddingClientError('Reranking returned no usable result.', 'KNOWLEDGE_RERANK_EMPTY');
+      }
+      return parsed.slice(0, topN);
+    } catch (error) {
+      if (error?.name === 'AbortError' || controller.signal.aborted) {
+        if (options.signal?.aborted && !timedOut) throw options.signal.reason || error;
+        throw new EmbeddingClientError('Reranking request timed out.', 'KNOWLEDGE_RERANK_TIMEOUT');
+      }
+      if (error instanceof EmbeddingClientError) throw error;
+      throw new EmbeddingClientError(
+        `Reranking request failed: ${redact(error?.message || 'network error', this.apiKey).slice(0, 300)}`,
+        'KNOWLEDGE_RERANK_NETWORK_ERROR',
+      );
+    } finally {
+      clearTimeout(timer);
+      options.signal?.removeEventListener('abort', relayAbort);
+      if (!controller.signal.aborted) controller.abort();
+    }
   }
 
   async detectDimensions(options = {}) {

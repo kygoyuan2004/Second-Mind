@@ -133,7 +133,9 @@ export class SessionManager {
 }
 
 export function requireWriteGuard(req) {
-  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.headers['x-vaultmind-request'] !== '1') {
+  const verifiedWrite = req.headers['x-vaultmind-request'] === '1' ||
+    req.headers['x-yuan-knowledge-request'] === '1';
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !verifiedWrite) {
     throw authError(403, 'Request verification failed. Refresh and try again.', 'CSRF_GUARD_REQUIRED');
   }
   const origin = req.headers.origin;

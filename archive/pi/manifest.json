@@ -1,0 +1,365 @@
+{
+  "reason": "Replaced by original Claude Agent SDK runtime; retained for historical review, excluded from production and active test runner.",
+  "files": [
+    {
+      "previous": "docs/README.zh-CN.md",
+      "archive": "archive/pi/docs/README.zh-CN.md"
+    },
+    {
+      "previous": "docs/architecture.md",
+      "archive": "archive/pi/docs/architecture.md"
+    },
+    {
+      "previous": "docs/claude-code-install.md",
+      "archive": "archive/pi/docs/claude-code-install.md"
+    },
+    {
+      "previous": "docs/configuration.md",
+      "archive": "archive/pi/docs/configuration.md"
+    },
+    {
+      "previous": "docs/data-flow.md",
+      "archive": "archive/pi/docs/data-flow.md"
+    },
+    {
+      "previous": "docs/learning-review.md",
+      "archive": "archive/pi/docs/learning-review.md"
+    },
+    {
+      "previous": "docs/pi-agent-migration.md",
+      "archive": "archive/pi/docs/pi-agent-migration.md"
+    },
+    {
+      "previous": "docs/resume.md",
+      "archive": "archive/pi/docs/resume.md"
+    },
+    {
+      "previous": "docs/security.md",
+      "archive": "archive/pi/docs/security.md"
+    },
+    {
+      "previous": "docs/validation-2026-09-07.md",
+      "archive": "archive/pi/docs/validation-2026-09-07.md"
+    },
+    {
+      "previous": "scripts/benchmark-adjudicate.mjs",
+      "archive": "archive/pi/scripts/benchmark-adjudicate.mjs"
+    },
+    {
+      "previous": "scripts/benchmark-approve.mjs",
+      "archive": "archive/pi/scripts/benchmark-approve.mjs"
+    },
+    {
+      "previous": "scripts/benchmark-compare.mjs",
+      "archive": "archive/pi/scripts/benchmark-compare.mjs"
+    },
+    {
+      "previous": "scripts/capture-screenshots.mjs",
+      "archive": "archive/pi/scripts/capture-screenshots.mjs"
+    },
+    {
+      "previous": "scripts/evaluate-completeness-30.mjs",
+      "archive": "archive/pi/scripts/evaluate-completeness-30.mjs"
+    },
+    {
+      "previous": "scripts/evaluate-retrieval.mjs",
+      "archive": "archive/pi/scripts/evaluate-retrieval.mjs"
+    },
+    {
+      "previous": "scripts/lib/benchmark-adjudication.mjs",
+      "archive": "archive/pi/scripts/lib/benchmark-adjudication.mjs"
+    },
+    {
+      "previous": "scripts/lib/benchmark-approval.mjs",
+      "archive": "archive/pi/scripts/lib/benchmark-approval.mjs"
+    },
+    {
+      "previous": "scripts/lib/benchmark-blind-scoring.mjs",
+      "archive": "archive/pi/scripts/lib/benchmark-blind-scoring.mjs"
+    },
+    {
+      "previous": "scripts/lib/benchmark-chrome-pdf.mjs",
+      "archive": "archive/pi/scripts/lib/benchmark-chrome-pdf.mjs"
+    },
+    {
+      "previous": "scripts/lib/benchmark-cloud-executor.mjs",
+      "archive": "archive/pi/scripts/lib/benchmark-cloud-executor.mjs"
+    },
+    {
+      "previous": "scripts/lib/benchmark-core.mjs",
+      "archive": "archive/pi/scripts/lib/benchmark-core.mjs"
+    },
+    {
+      "previous": "scripts/lib/benchmark-production-guard.mjs",
+      "archive": "archive/pi/scripts/lib/benchmark-production-guard.mjs"
+    },
+    {
+      "previous": "scripts/lib/benchmark-report-renderer.mjs",
+      "archive": "archive/pi/scripts/lib/benchmark-report-renderer.mjs"
+    },
+    {
+      "previous": "scripts/lib/benchmark-runtime.mjs",
+      "archive": "archive/pi/scripts/lib/benchmark-runtime.mjs"
+    },
+    {
+      "previous": "scripts/lib/benchmark-scheduler.mjs",
+      "archive": "archive/pi/scripts/lib/benchmark-scheduler.mjs"
+    },
+    {
+      "previous": "scripts/lib/benchmark-systems.mjs",
+      "archive": "archive/pi/scripts/lib/benchmark-systems.mjs"
+    },
+    {
+      "previous": "scripts/lib/completeness-eval.mjs",
+      "archive": "archive/pi/scripts/lib/completeness-eval.mjs"
+    },
+    {
+      "previous": "src/conversation-store.mjs",
+      "archive": "archive/pi/src/conversation-store.mjs"
+    },
+    {
+      "previous": "src/knowledge-index.mjs",
+      "archive": "archive/pi/src/knowledge-index.mjs"
+    },
+    {
+      "previous": "src/learning-review-runner.mjs",
+      "archive": "archive/pi/src/learning-review-runner.mjs"
+    },
+    {
+      "previous": "src/learning-review.mjs",
+      "archive": "archive/pi/src/learning-review.mjs"
+    },
+    {
+      "previous": "src/llm-client.mjs",
+      "archive": "archive/pi/src/llm-client.mjs"
+    },
+    {
+      "previous": "src/pi-agent-runtime.mjs",
+      "archive": "archive/pi/src/pi-agent-runtime.mjs"
+    },
+    {
+      "previous": "src/pi-agent-tools.mjs",
+      "archive": "archive/pi/src/pi-agent-tools.mjs"
+    },
+    {
+      "previous": "src/pi-context-policy.mjs",
+      "archive": "archive/pi/src/pi-context-policy.mjs"
+    },
+    {
+      "previous": "src/pi-generation-executor.mjs",
+      "archive": "archive/pi/src/pi-generation-executor.mjs"
+    },
+    {
+      "previous": "src/pi-model-adapter.mjs",
+      "archive": "archive/pi/src/pi-model-adapter.mjs"
+    },
+    {
+      "previous": "src/research-pipeline.mjs",
+      "archive": "archive/pi/src/research-pipeline.mjs"
+    },
+    {
+      "previous": "src/review-json.mjs",
+      "archive": "archive/pi/src/review-json.mjs"
+    },
+    {
+      "previous": "src/runtime-chat-model-router.mjs",
+      "archive": "archive/pi/src/runtime-chat-model-router.mjs"
+    },
+    {
+      "previous": "src/task-manager.mjs",
+      "archive": "archive/pi/src/task-manager.mjs"
+    },
+    {
+      "previous": "src/task-modes.mjs",
+      "archive": "archive/pi/src/task-modes.mjs"
+    },
+    {
+      "previous": "src/temporal-query.mjs",
+      "archive": "archive/pi/src/temporal-query.mjs"
+    },
+    {
+      "previous": "test/benchmark-adjudication.test.mjs",
+      "archive": "archive/pi/test/benchmark-adjudication.test.mjs"
+    },
+    {
+      "previous": "test/benchmark-approval.test.mjs",
+      "archive": "archive/pi/test/benchmark-approval.test.mjs"
+    },
+    {
+      "previous": "test/benchmark-blind-scoring.test.mjs",
+      "archive": "archive/pi/test/benchmark-blind-scoring.test.mjs"
+    },
+    {
+      "previous": "test/benchmark-chrome-pdf.test.mjs",
+      "archive": "archive/pi/test/benchmark-chrome-pdf.test.mjs"
+    },
+    {
+      "previous": "test/benchmark-cloud-executor.test.mjs",
+      "archive": "archive/pi/test/benchmark-cloud-executor.test.mjs"
+    },
+    {
+      "previous": "test/benchmark-core.test.mjs",
+      "archive": "archive/pi/test/benchmark-core.test.mjs"
+    },
+    {
+      "previous": "test/benchmark-production-guard.test.mjs",
+      "archive": "archive/pi/test/benchmark-production-guard.test.mjs"
+    },
+    {
+      "previous": "test/benchmark-report-renderer.test.mjs",
+      "archive": "archive/pi/test/benchmark-report-renderer.test.mjs"
+    },
+    {
+      "previous": "test/benchmark-runtime.test.mjs",
+      "archive": "archive/pi/test/benchmark-runtime.test.mjs"
+    },
+    {
+      "previous": "test/benchmark-scheduler.test.mjs",
+      "archive": "archive/pi/test/benchmark-scheduler.test.mjs"
+    },
+    {
+      "previous": "test/benchmark-systems.test.mjs",
+      "archive": "archive/pi/test/benchmark-systems.test.mjs"
+    },
+    {
+      "previous": "test/completeness-eval.test.mjs",
+      "archive": "archive/pi/test/completeness-eval.test.mjs"
+    },
+    {
+      "previous": "test/config-research.test.mjs",
+      "archive": "archive/pi/test/config-research.test.mjs"
+    },
+    {
+      "previous": "test/conversation-store.test.mjs",
+      "archive": "archive/pi/test/conversation-store.test.mjs"
+    },
+    {
+      "previous": "test/deep-mode.test.mjs",
+      "archive": "archive/pi/test/deep-mode.test.mjs"
+    },
+    {
+      "previous": "test/knowledge-index.test.mjs",
+      "archive": "archive/pi/test/knowledge-index.test.mjs"
+    },
+    {
+      "previous": "test/learning-review-retry.test.mjs",
+      "archive": "archive/pi/test/learning-review-retry.test.mjs"
+    },
+    {
+      "previous": "test/learning-review-supplement.test.mjs",
+      "archive": "archive/pi/test/learning-review-supplement.test.mjs"
+    },
+    {
+      "previous": "test/learning-review-task.test.mjs",
+      "archive": "archive/pi/test/learning-review-task.test.mjs"
+    },
+    {
+      "previous": "test/learning-review.test.mjs",
+      "archive": "archive/pi/test/learning-review.test.mjs"
+    },
+    {
+      "previous": "test/llm-client.test.mjs",
+      "archive": "archive/pi/test/llm-client.test.mjs"
+    },
+    {
+      "previous": "test/model-catalog.test.mjs",
+      "archive": "archive/pi/test/model-catalog.test.mjs"
+    },
+    {
+      "previous": "test/multi-knowledge-base-ui-chrome.test.mjs",
+      "archive": "archive/pi/test/multi-knowledge-base-ui-chrome.test.mjs"
+    },
+    {
+      "previous": "test/original-parity.test.mjs",
+      "archive": "archive/pi/test/original-parity.test.mjs"
+    },
+    {
+      "previous": "test/pi-agent-runtime.test.mjs",
+      "archive": "archive/pi/test/pi-agent-runtime.test.mjs"
+    },
+    {
+      "previous": "test/pi-agent-tools.test.mjs",
+      "archive": "archive/pi/test/pi-agent-tools.test.mjs"
+    },
+    {
+      "previous": "test/pi-generation-executor.test.mjs",
+      "archive": "archive/pi/test/pi-generation-executor.test.mjs"
+    },
+    {
+      "previous": "test/pi-model-adapter.test.mjs",
+      "archive": "archive/pi/test/pi-model-adapter.test.mjs"
+    },
+    {
+      "previous": "test/pi-task-manager.test.mjs",
+      "archive": "archive/pi/test/pi-task-manager.test.mjs"
+    },
+    {
+      "previous": "test/provider-config-api.test.mjs",
+      "archive": "archive/pi/test/provider-config-api.test.mjs"
+    },
+    {
+      "previous": "test/research-audit-lifecycle.test.mjs",
+      "archive": "archive/pi/test/research-audit-lifecycle.test.mjs"
+    },
+    {
+      "previous": "test/research-multiturn-api.test.mjs",
+      "archive": "archive/pi/test/research-multiturn-api.test.mjs"
+    },
+    {
+      "previous": "test/research-pipeline.test.mjs",
+      "archive": "archive/pi/test/research-pipeline.test.mjs"
+    },
+    {
+      "previous": "test/research-resilience.test.mjs",
+      "archive": "archive/pi/test/research-resilience.test.mjs"
+    },
+    {
+      "previous": "test/review-json.test.mjs",
+      "archive": "archive/pi/test/review-json.test.mjs"
+    },
+    {
+      "previous": "test/runtime-chat-model-router.test.mjs",
+      "archive": "archive/pi/test/runtime-chat-model-router.test.mjs"
+    },
+    {
+      "previous": "test/runtime-v2-integration.test.mjs",
+      "archive": "archive/pi/test/runtime-v2-integration.test.mjs"
+    },
+    {
+      "previous": "test/server.test.mjs",
+      "archive": "archive/pi/test/server.test.mjs"
+    },
+    {
+      "previous": "test/task-manager-fork.test.mjs",
+      "archive": "archive/pi/test/task-manager-fork.test.mjs"
+    },
+    {
+      "previous": "test/task-manager-usage.test.mjs",
+      "archive": "archive/pi/test/task-manager-usage.test.mjs"
+    },
+    {
+      "previous": "test/task-manager-web-session-reuse.test.mjs",
+      "archive": "archive/pi/test/task-manager-web-session-reuse.test.mjs"
+    },
+    {
+      "previous": "test/task-manager.test.mjs",
+      "archive": "archive/pi/test/task-manager.test.mjs"
+    },
+    {
+      "previous": "test/temporal-inventory-task.test.mjs",
+      "archive": "archive/pi/test/temporal-inventory-task.test.mjs"
+    },
+    {
+      "previous": "test/temporal-query.test.mjs",
+      "archive": "archive/pi/test/temporal-query.test.mjs"
+    },
+    {
+      "previous": "test/ui-session-continuity-chrome.test.mjs",
+      "archive": "archive/pi/test/ui-session-continuity-chrome.test.mjs"
+    },
+    {
+      "previous": "test/web-search-task.test.mjs",
+      "archive": "archive/pi/test/web-search-task.test.mjs"
+    }
+  ]
+}

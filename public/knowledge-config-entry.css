@@ -1,0 +1,4 @@
+.knowledge-base-control { display: inline-flex; align-items: center; gap: 8px; margin-left: 16px; font-size: 13px; }
+.knowledge-base-control[hidden] { display: none; }
+.knowledge-base-control select { max-width: 220px; padding: 5px 9px; border: 1px solid #d5d9e1; border-radius: 8px; color: inherit; background: #fff; font: inherit; }
+@media (max-width: 600px) { .knowledge-base-control { margin-left: 8px; } .knowledge-base-control select { max-width: 140px; } }

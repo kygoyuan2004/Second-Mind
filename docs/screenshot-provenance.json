@@ -1,0 +1,55 @@
+{
+  "sdkVersion": "0.3.247",
+  "privateEvidence": "Raw task outputs, SDK sessions and capture cookies are retained privately and are not published.",
+  "images": [
+    {
+      "file": "second-mind-diary.png",
+      "sha256": "6d770bc71b4a4fd2998c9c3239baf7ae858d6fdcf33bc71572af2d16201617f9",
+      "source": "full application with public demo Vault",
+      "generatedOutput": "real Bailian Qwen3.8 Max SDK task",
+      "editorNote": "Original draft editor used to remove explanation/code fences before preview and confirmation."
+    },
+    {
+      "file": "second-mind-execution.png",
+      "sha256": "2e4bed6f1eef2f932e9db914473b31919b2f3da811a3d1b24a2336803d6c8e81",
+      "source": "full application with public demo Vault",
+      "generatedOutput": "real Bailian Qwen3.8 Max SDK task",
+      "editorNote": null
+    },
+    {
+      "file": "second-mind-hero.png",
+      "sha256": "87a96c2d7cf7ef33d69481401d08d083c809cf9dd89b0dc20946f99705e99d3b",
+      "source": "auxiliary illustration, not a product screenshot",
+      "generatedOutput": null,
+      "editorNote": null
+    },
+    {
+      "file": "second-mind-mobile.png",
+      "sha256": "a4b5c13510e08587cc1525c60a745eb4c8a165b69a2a6166e0ca9a2e944e6094",
+      "source": "full application with public demo Vault",
+      "generatedOutput": "real Bailian Qwen3.8 Max SDK task",
+      "editorNote": null
+    },
+    {
+      "file": "second-mind-plan.png",
+      "sha256": "c606cd957c5b3cd06c80663b6fa8e748780a8585f10fd1d55dd822205bffb738",
+      "source": "full application with public demo Vault",
+      "generatedOutput": "real Bailian Qwen3.8 Max SDK task",
+      "editorNote": "Original draft editor used to remove explanation/code fences before preview and confirmation."
+    },
+    {
+      "file": "second-mind-provider-config.png",
+      "sha256": "e54d205b16d6552a96ec2e52ca4befa52223c5e67bdaff1b527592e4eb6f9198",
+      "source": "full application with public demo Vault",
+      "generatedOutput": null,
+      "editorNote": null
+    },
+    {
+      "file": "second-mind-qa.png",
+      "sha256": "8162507800b3783cbe839a59a6ed1ceb631fc8b1b7495555281c21ee56452e0a",
+      "source": "full application with public demo Vault",
+      "generatedOutput": "real Bailian Qwen3.8 Max SDK task",
+      "editorNote": null
+    }
+  ]
+}

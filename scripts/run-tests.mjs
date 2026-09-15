@@ -11,22 +11,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // durability guarantees that NTFS/libuv cannot represent faithfully. Linux and
 // macOS still run the complete suite; Windows runs every portable suite.
 export const WINDOWS_CONTAINER_SECURITY_SUITES = Object.freeze([
-  'benchmark-adjudication.test.mjs',
-  'benchmark-approval.test.mjs',
-  'benchmark-cloud-executor.test.mjs',
-  'benchmark-core.test.mjs',
-  'benchmark-systems.test.mjs',
-  'completeness-eval.test.mjs',
   'embedding-runtime.test.mjs',
   'knowledge-base-registry.test.mjs',
   'multi-knowledge-base-api.test.mjs',
-  'provider-config-api.test.mjs',
   'runtime-admin-api.test.mjs',
   'runtime-admin-v2-security.test.mjs',
   'runtime-bootstrap.test.mjs',
   'runtime-config-registry-boundaries.test.mjs',
   'runtime-config-registry.test.mjs',
-  'runtime-v2-integration.test.mjs',
   'vault-replica.test.mjs',
 ]);
 
@@ -40,7 +32,7 @@ export function selectTestFiles(files, platform = process.platform) {
 async function main(extraArguments = process.argv.slice(2)) {
   const continuousIntegration = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
   const testRoot = fileURLToPath(new URL('../test/', import.meta.url));
-  const files = (await fsp.readdir(testRoot))
+  const files = (await fsp.readdir(testRoot, { recursive: true }))
     .filter((filename) => filename.endsWith('.test.mjs'))
     .map((filename) => path.join(testRoot, filename));
   const available = new Set(files.map((filename) => path.basename(filename)));

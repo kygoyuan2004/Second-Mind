@@ -37,18 +37,18 @@ export const PROVIDER_CONFIG_PRESETS = Object.freeze({
     authMode: 'x-api-key', requestProfile: 'anthropic-standard',
   }),
   deepseek: Object.freeze({
-    label: 'DeepSeek 官网', protocol: 'openai-chat-completions',
-    apiBase: 'https://api.deepseek.com', authMode: 'bearer',
-    requestProfile: 'deepseek-openai',
+    label: 'DeepSeek 官网', protocol: 'anthropic-messages',
+    apiBase: 'https://api.deepseek.com/anthropic', authMode: 'x-api-key',
+    requestProfile: 'anthropic-standard',
   }),
   zhipu: Object.freeze({
-    label: '智谱 GLM', protocol: 'openai-chat-completions',
-    apiBase: 'https://open.bigmodel.cn/api/paas/v4', authMode: 'bearer',
-    requestProfile: 'glm-openai',
+    label: '智谱 GLM', protocol: 'anthropic-messages',
+    apiBase: 'https://open.bigmodel.cn/api/anthropic', authMode: 'x-api-key',
+    requestProfile: 'anthropic-standard',
   }),
   moonshot: Object.freeze({
-    label: 'Moonshot / Kimi', protocol: 'openai-chat-completions',
-    apiBase: 'https://api.moonshot.cn', authMode: 'bearer', requestProfile: 'default',
+    label: 'Moonshot / Kimi', protocol: 'anthropic-messages',
+    apiBase: 'https://api.moonshot.cn/anthropic', authMode: 'bearer', requestProfile: 'anthropic-standard',
   }),
   'custom-openai': Object.freeze({
     label: 'OpenAI-compatible', protocol: 'openai-chat-completions', apiBase: '',

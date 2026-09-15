@@ -43,10 +43,6 @@ const MODEL_REQUEST_PROFILES = new Set([
 const MODEL_PROVIDER_IDS = new Set(['bailian', 'deepseek', 'glm', 'kimi', 'custom']);
 const WEB_SEARCH_PROVIDERS = new Set(['bailian-mcp', 'tavily-rest']);
 const SECRET_ACTIONS = new Set(['keep', 'replace', 'clear']);
-const LEGACY_DIRECT_MODEL_ALIASES = Object.freeze(new Map([
-  ['qwen3.8-max-0902[1M]', 'qwen3.8-max-0902'],
-  ['kimi-k3[1M]', 'kimi-k3'],
-]));
 const MODEL_SLOTS = Object.freeze([
   Object.freeze({
     id: 'qwen',
@@ -228,6 +224,8 @@ function normalizeEfforts(input, slot) {
   return efforts;
 }
 
+
+
 function normalizeDefaultModels(modelCatalog = []) {
   if (!Array.isArray(modelCatalog) || modelCatalog.length > MAX_DYNAMIC_MODELS) {
     fail('modelCatalog defaults must be an array.', 'INVALID_RUNTIME_CONFIG', 500);
@@ -251,9 +249,10 @@ function normalizeDefaultModels(modelCatalog = []) {
       defaultEfforts: Object.freeze(['default']),
       defaultEffort: 'default',
     };
-    const actualModel = input.actualModel === undefined
+    const configuredModel = input.actualModel === undefined
       ? ''
       : modelValue(input.actualModel, `models.${slot.id}.actualModel`);
+    const actualModel = configuredModel;
     const efforts = normalizeEfforts(input.efforts, slot);
     const defaultEffort = String(input.defaultEffort || slot.defaultEffort).trim().toLowerCase();
     if (!efforts.includes(defaultEffort)) {
@@ -490,14 +489,15 @@ function normalizeDynamicModel(value, position, connectionsById) {
     fail(`models[${position}].defaultEffort must occur in efforts.`,
       'INVALID_RUNTIME_CONFIG', 400);
   }
-  const actualModel = modelValue(value.actualModel, `models[${position}].actualModel`);
+  const configuredModel = modelValue(value.actualModel, `models[${position}].actualModel`);
+  const actualModel = configuredModel;
   let reasoningMapping;
   try {
     const adapter = resolveModelProvider({
       providerId: connection.providerId || identifyModelProvider(connection),
       apiBase: connection.apiBase,
-      protocol: connection.providerId === 'custom' ? connection.protocol : undefined,
-      authMode: connection.providerId === 'custom' ? connection.authMode : undefined,
+      protocol: connection.protocol,
+      authMode: connection.authMode,
     });
     reasoningMapping = resolveModelReasoningPolicy(
       adapter,
@@ -632,17 +632,6 @@ function normalizeManagedDocumentV2(value) {
       authMode: connection.authMode,
       actualModel: model.actualModel,
     });
-    // Claude Code model aliases are not valid direct DashScope model IDs. Only
-    // repair the two exact aliases imported by older 8788 launchers, and only
-    // on the official DashScope Anthropic gateway. Arbitrary Custom Provider
-    // identifiers (including identifiers containing brackets) remain intact.
-    let connectionUrl;
-    try { connectionUrl = new URL(connection.apiBase); } catch {}
-    const isImportedDashScopeAnthropic = connection.protocol === 'anthropic-messages' &&
-      connectionUrl?.hostname === 'dashscope.aliyuncs.com' &&
-      /^\/apps\/anthropic(?:\/|$)/u.test(connectionUrl.pathname);
-    const legacyReplacement = LEGACY_DIRECT_MODEL_ALIASES.get(model.actualModel);
-    if (isImportedDashScopeAnthropic && legacyReplacement) model.actualModel = legacyReplacement;
     const expectedEfforts = JSON.stringify(registered.efforts);
     let submittedEfforts = JSON.stringify(model.efforts);
     // Runtime/public snapshots expose the five stable application tiers. The
@@ -2001,7 +1990,6 @@ export const runtimeConfigInternals = Object.freeze({
   DYNAMIC_REGISTRY_VERSION,
   MAX_MODEL_CONNECTIONS,
   MAX_DYNAMIC_MODELS,
-  LEGACY_DIRECT_MODEL_ALIASES,
   MODEL_SLOTS,
   MODEL_PROTOCOLS,
   MODEL_AUTH_MODES,

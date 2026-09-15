@@ -390,7 +390,7 @@ $CommandName = 'init'
 if ($InstallerArguments.Count -gt 0 -and -not $InstallerArguments[0].StartsWith('--')) {
     $CommandName = $InstallerArguments[0]
 }
-if ($CommandName -notin @('init', 'doctor', 'status', 'logs', 'update', 'backup')) {
+if ($CommandName -notin @('init', 'doctor', 'status', 'logs', 'update', 'backup', 'restart', 'restore', 'uninstall')) {
     throw "Unsupported command: $CommandName"
 }
 $InstallerOptions = @($InstallerArguments)
@@ -471,6 +471,12 @@ if ($CommandName -eq 'init') {
     Test-KnowledgeBaseAccess
 } else {
     Test-HostPathsAreSeparate
+}
+if ($CommandName -eq 'restore') {
+    Invoke-Docker @('run', '--rm', '--user', "${RuntimeUid}:$RuntimeGid",
+        '--mount', "type=bind,source=$RepoRoot,target=/workspace,readonly",
+        '--mount', "type=bind,source=$KnowledgeBase,target=/probe", $InstallerImage,
+        'node', '/workspace/scripts/install.mjs', 'internal-probe-empty', '--source', '/probe')
 }
 Protect-StateDirectory $StateRoot
 
@@ -611,13 +617,14 @@ function Test-RuntimeVolume {
 }
 
 $HealthScript = "Promise.all(['/health/live','/health/ready'].map(async p=>{const r=await fetch('http://127.0.0.1:8787'+p,{signal:AbortSignal.timeout(5000)});if(!r.ok)throw new Error(p+' returned '+r.status)})).catch(e=>{console.error(e.message);process.exit(1)})"
-$PdfScript = "const fs=require('node:fs');const required=['/usr/bin/bwrap','/usr/bin/pdftotext'];const missing=required.filter(p=>{try{fs.accessSync(p,fs.constants.X_OK);return false}catch{return true}});const enabled=/^(1|true|yes|on)$/i.test(process.env.PDF_ENABLED||'');console.log('PDF sandbox: '+(missing.length?'unavailable ('+missing.join(', ')+')':'available')+(enabled?' [enabled]':' [disabled]'));if(enabled&&missing.length)process.exit(1)"
+$PdfScript = "console.log('PDF reading uses the Agent SDK; speech/video dependencies are bundled.')"
 
 function Test-AppHealth {
     return (Test-ComposeCommand @('exec', '-T', 'app', 'node', '-e', $HealthScript))
 }
 
 function Show-PdfRuntime {
+    Invoke-Compose @('exec', '-T', 'app', '/opt/media/bin/python', '-c', 'import av, ctranslate2, faster_whisper, yt_dlp')
     Invoke-Compose @('exec', '-T', 'app', 'node', '-e', $PdfScript)
 }
 
@@ -726,8 +733,53 @@ switch ($CommandName) {
         if ($Follow -eq 'true') { $LogArgs += '--follow' }
         Invoke-Compose $LogArgs
     }
+    'restart' {
+        Test-ComposeConfiguration
+        Test-KnowledgeBaseAccess
+        Initialize-RuntimeVolume
+        Invoke-Compose @('up', '-d', '--no-build', '--force-recreate')
+        Wait-UntilReady
+    }
+    'uninstall' {
+        Test-ComposeConfiguration
+        Invoke-Compose @('down')
+        Write-Note 'Application removed. Vault, runtime volume, credentials, configuration and backups are retained. Use restart to start it again.'
+    }
+    'restore' {
+        Test-ComposeConfiguration
+        if (-not (Test-PortAvailable)) { throw "Recovery port $Port is unavailable." }
+        $RestoreSource = Read-Value (Join-Path $OperationRoot 'restoreSource')
+        if (Test-DockerCommand @('volume', 'inspect', $Volume)) {
+            throw 'Recovery volume already exists; nothing was replaced.'
+        }
+        Invoke-Docker @('volume', 'create', $Volume) -Quiet
+        foreach ($Component in @('data', 'vault')) {
+            $DestinationMount = if ($Component -eq 'data') {
+                "type=volume,source=$Volume,target=/destination"
+            } else { "type=bind,source=$KnowledgeBase,target=/destination" }
+            Invoke-Docker @('run', '--rm',
+                '--mount', "type=bind,source=$RepoRoot,target=/workspace,readonly",
+                '--mount', "type=bind,source=$RestoreSource,target=/backup,readonly",
+                '--mount', $DestinationMount, $InstallerImage,
+                'node', '/workspace/scripts/install.mjs', 'internal-restore-tree',
+                '--source', "/backup/$Component", '--destination', '/destination',
+                '--output-uid', $RuntimeUid, '--output-gid', $RuntimeGid) -Quiet
+        }
+        Initialize-RuntimeVolume
+        Initialize-ApplicationImage
+        Invoke-Compose @('up', '-d', '--no-build')
+        Wait-UntilReady
+        Write-Note "Recovered as $InstanceId. The source instance and backup remain intact."
+    }
     'update' {
         Test-ComposeConfiguration
+        & (Join-Path $RepoRoot 'install.ps1') backup --instance $InstanceId --non-interactive
+        $ContainerId = Get-ComposeText @('ps', '-q', 'app')
+        if (-not [string]::IsNullOrWhiteSpace($ContainerId)) {
+            $PreviousImage = Get-DockerText @('inspect', '--format', '{{.Image}}', $ContainerId)
+            Invoke-Docker @('tag', $PreviousImage, "second-mind-rollback:$InstanceId")
+            Write-Note "Previous image retained: second-mind-rollback:$InstanceId"
+        }
         Test-KnowledgeBaseAccess
         if (-not (Test-PortAvailable)) {
             throw "Port $Port is unavailable; no existing process was stopped. Choose another with: .\install.ps1 init --port PORT"

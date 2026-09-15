@@ -41,18 +41,26 @@ cd Second-Mind
 
 安装配置默认位于 `~/Library/Application Support/Second Mind`，每个实例有独立 Compose project、配置目录和数据卷。不要将这里的凭据或备份提交到 Git。
 
-标准镜像在 Linux container 中运行，但没有内置可验证的 `bwrap` 与 `pdftotext` 组合，因此网页 PDF 读取默认关闭。`doctor` 会显示真实能力，不会静默执行无 sandbox 的 PDF 解析。确认后的 PDF 附件仍可持久化，但这不代表应用理解其内容。
+标准镜像在 Linux container 中运行，但没有内置可验证的 `bwrap` 与 `pdftotext` 组合，因此网页 PDF 读取默认关闭。`doctor` 检查 Docker、目录、数据卷、端口、健康状态与媒体依赖。图片和 PDF 附件通过支持该能力的模型与 Agent SDK 读取；语音和视频依赖容器中的 Python、FFmpeg 和语音模型，首次使用需要下载模型。
 
-## 更新、恢复与卸载
+## 更新、重启、恢复与卸载
 
-更新前先备份。`update` 保留数据和配置，但不会在新镜像未就绪时自动回滚；关键部署应保留上一镜像并固定经过审查的 tag 或 digest。`backup` 是带内容哈希清单的实时复制；需要严格一致性时先暂停外部同步。它不会自动包含独立同步器的账号、链接、私有卷或远端状态。当前版本的恢复是人工流程：停止本实例，在隔离位置核对备份，再恢复 Vault、配置和数据卷。
+```bash
+./install.sh update
+./install.sh restart
+./install.sh backup
+./install.sh restore --instance SOURCE_INSTANCE_ID --backup BACKUP_DIRECTORY_NAME --vault "/path/to/恢复 Vault" --port 8789 --non-interactive
+./install.sh uninstall
+```
 
-卸载容器时，用安装器显示的精确实例配置运行 `docker compose down`，不要使用 `--volumes`。这样保留 Vault、凭据、会话、索引和备份。永久清理必须先列出并二次核对具体配置目录和命名卷；不要把 Vault 目录包含在批量删除中。
+- `update` 先备份并保留旧镜像，再更新选中的实例。凭据和数据卷保留；失败会明确报错，不会静默回退数据。
+- `restart` 使用本地镜像重新创建并启动容器。
+- `backup` 含配置、凭据、运行数据和 Vault，以及三份 SHA-256 清单。它是实时复制，需要严格一致性时先暂停写入与同步；不含独立同步器的账号和远端状态。
+- `restore` 要求新的空目录和不同端口，校验备份后创建独立实例。原实例、原卷和笔记保留；使用备份时的管理员密码登录核验。
+- `uninstall` 只移除选中实例的容器和网络，保留 Vault、凭据、数据卷、配置和备份。随后可用 `restart` 再启动。
 
-## 边界
+多个实例时使用 `--instance INSTANCE_ID`。恢复失败时保留原实例和恢复现场，不要把两套运行数据合并。
 
-- 不安装 LaunchDaemon，也不集成 macOS Keychain。
-- 应用默认只监听 `127.0.0.1`；不要为了远程访问直接公开端口。
-- 远程模型和 Embedding 服务会接收完成其功能所需的选定内容，详见[安全边界](security.md)。
+镜像回退、恢复限制及完整命令见 [部署说明](deployment.md)。平台和架构的实测结果见 [迁移验收报告](claude-sdk-migration.md)；支持范围不等于已经完成该平台 Docker Desktop 实测。
 
-继续阅读：[部署说明](deployment.md) · [配置说明](configuration.md) · [网络访问](networking.md)
+默认只绑定本机回环地址。继续阅读：[配置说明](configuration.md) · [网络访问](networking.md) · [同步边界](sync.md)。

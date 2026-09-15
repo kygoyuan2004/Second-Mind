@@ -6,7 +6,7 @@ import { isIP } from 'node:net';
 import path from 'node:path';
 import { EmbeddingClient } from './embedding-client.mjs';
 import { IndexRouter, IndexRouterError } from './index-router.mjs';
-import { KnowledgeIndex } from './knowledge-index.mjs';
+import { SdkKnowledgeIndex as KnowledgeIndex } from './sdk-knowledge-index.mjs';
 import { runtimeConfigInternals } from './runtime-config-registry.mjs';
 import { isPublicAddress } from './safe-web-reader.mjs';
 
@@ -48,8 +48,8 @@ function normalizePrivateEmbedding(value = {}) {
     apiKey: String(value.apiKey || ''),
     model: String(value.model || '').trim(),
     dimensions: Math.max(0, Number(value.dimensions) || 0),
-    batchSize: Math.min(100, Math.max(1, Number(value.batchSize) || 16)),
-    timeoutMs: Math.min(300_000, Math.max(1_000, Number(value.timeoutMs) || 30_000)),
+    batchSize: Math.min(100, Math.max(1, Number(value.batchSize) || 20)),
+    timeoutMs: Math.min(300_000, Math.max(1_000, Number(value.timeoutMs) || 12_000)),
     allowInsecureHttp: false,
   };
   if (provider !== 'disabled' && (

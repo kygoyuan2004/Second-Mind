@@ -51,41 +51,41 @@ const DEFINITIONS = deepFreeze({
   deepseek: {
     id: 'deepseek',
     label: 'DeepSeek 官网',
-    defaultApiBase: 'https://api.deepseek.com',
-    protocols: ['openai-chat-completions'],
-    defaultProtocol: 'openai-chat-completions',
-    authByProtocol: { 'openai-chat-completions': 'bearer' },
-    reasoningByProtocol: { 'openai-chat-completions': 'deepseek-reasoning' },
-    legacyProfileByProtocol: { 'openai-chat-completions': 'deepseek-openai' },
+    defaultApiBase: 'https://api.deepseek.com/anthropic',
+    protocols: ['anthropic-messages', 'openai-chat-completions'],
+    defaultProtocol: 'anthropic-messages',
+    authByProtocol: { 'openai-chat-completions': 'bearer', 'anthropic-messages': 'x-api-key' },
+    reasoningByProtocol: { 'openai-chat-completions': 'deepseek-reasoning', 'anthropic-messages': 'deepseek-reasoning' },
+    legacyProfileByProtocol: { 'openai-chat-completions': 'deepseek-openai', 'anthropic-messages': 'anthropic-standard' },
     docsUrl: 'https://api-docs.deepseek.com/zh-cn/',
     defaultSafeOutputTokens: 8_192,
   },
   glm: {
     id: 'glm',
     label: 'GLM / 智谱官网',
-    defaultApiBase: 'https://open.bigmodel.cn/api/paas/v4',
-    protocols: ['openai-chat-completions'],
-    defaultProtocol: 'openai-chat-completions',
-    authByProtocol: { 'openai-chat-completions': 'bearer' },
-    reasoningByProtocol: { 'openai-chat-completions': 'thinking-toggle' },
-    legacyProfileByProtocol: { 'openai-chat-completions': 'glm-openai' },
-    docsUrl: 'https://docs.bigmodel.cn/cn/guide/develop/openai/introduction',
+    defaultApiBase: 'https://open.bigmodel.cn/api/anthropic',
+    protocols: ['anthropic-messages', 'openai-chat-completions'],
+    defaultProtocol: 'anthropic-messages',
+    authByProtocol: { 'openai-chat-completions': 'bearer', 'anthropic-messages': 'x-api-key' },
+    reasoningByProtocol: { 'openai-chat-completions': 'thinking-toggle', 'anthropic-messages': 'none' },
+    legacyProfileByProtocol: { 'openai-chat-completions': 'glm-openai', 'anthropic-messages': 'anthropic-standard' },
+    docsUrl: 'https://docs.bigmodel.cn/cn/guide/develop/claude/introduction',
     defaultSafeOutputTokens: 4_095,
   },
   kimi: {
     id: 'kimi',
     label: 'Kimi / Moonshot 官网',
-    defaultApiBase: 'https://api.moonshot.cn/v1',
-    protocols: ['openai-chat-completions'],
-    defaultProtocol: 'openai-chat-completions',
-    authByProtocol: { 'openai-chat-completions': 'bearer' },
+    defaultApiBase: 'https://api.moonshot.cn/anthropic',
+    protocols: ['anthropic-messages', 'openai-chat-completions'],
+    defaultProtocol: 'anthropic-messages',
+    authByProtocol: { 'openai-chat-completions': 'bearer', 'anthropic-messages': 'bearer' },
     // Kimi model families do not share one provider-wide reasoning switch.
     // The wire adapter is available here, while providerModelReasoningPolicy
     // decides whether the selected model is one of the explicitly supported
     // K3 identifiers before any non-default value can reach it.
-    reasoningByProtocol: { 'openai-chat-completions': 'kimi-reasoning' },
-    legacyProfileByProtocol: { 'openai-chat-completions': 'kimi-openai' },
-    docsUrl: 'https://platform.moonshot.cn/docs/',
+    reasoningByProtocol: { 'openai-chat-completions': 'kimi-reasoning', 'anthropic-messages': 'kimi-reasoning' },
+    legacyProfileByProtocol: { 'openai-chat-completions': 'kimi-openai', 'anthropic-messages': 'anthropic-standard' },
+    docsUrl: 'https://platform.kimi.com/docs/guide/claude-code-kimi',
     defaultSafeOutputTokens: 8_192,
   },
   custom: {
@@ -114,15 +114,6 @@ const DEFINITIONS = deepFreeze({
 });
 
 const ORDER = Object.freeze(['bailian', 'deepseek', 'glm', 'kimi', 'custom']);
-
-// Exact, provider-scoped migrations for identifiers that were previously
-// imported from a compatibility launcher. Do not apply these aliases by model
-// name alone: another provider is allowed to use the same opaque identifier.
-const MODEL_ID_ALIASES = deepFreeze({
-  deepseek: {
-    'deepseek-v4-pro-0813': 'deepseek-v4-pro',
-  },
-});
 
 export class ModelProviderRegistryError extends Error {
   constructor(message, code = 'MODEL_PROVIDER_REGISTRY_ERROR', status = 400) {
@@ -216,6 +207,8 @@ function normalizedProtocol(definition, input, apiBase) {
   const explicit = String(input.protocol || '').trim().toLowerCase();
   const protocol = definition.id === 'bailian'
     ? bailianProtocol(apiBase)
+    : ['deepseek', 'glm', 'kimi'].includes(definition.id)
+      ? (new URL(apiBase).pathname.includes('/anthropic') ? 'anthropic-messages' : 'openai-chat-completions')
     : explicit || definition.defaultProtocol;
   if (!PROTOCOLS.has(protocol) || !definition.protocols.includes(protocol)) {
     fail('The protocol is not supported by this model provider.', 'MODEL_PROVIDER_PROTOCOL_UNSUPPORTED');
@@ -499,16 +492,15 @@ export function resolveModelProvider(input = {}) {
  * byte so a vendor-specific alias cannot be rewritten across trust boundaries.
  */
 export function normalizeProviderModelId(adapterInput, modelInput = '') {
-  const adapter = adapterValue(adapterInput);
-  const model = String(modelInput || '').trim();
-  return MODEL_ID_ALIASES[adapter.id]?.[model] || model;
+  adapterValue(adapterInput);
+  return String(modelInput || '').trim();
 }
 
 export function providerModelOutputLimit(adapterInput, modelInput = '') {
   const adapter = adapterValue(adapterInput);
   const model = normalizeProviderModelId(adapter, modelInput).toLowerCase();
   let maximum = adapter.outputPolicy.applicationSafetyMaximumTokens;
-  if (adapter.id === 'bailian' && /^qwen3\.8-max(?:-|$)/u.test(model)) {
+  if (adapter.id === 'bailian' && /^qwen3\.8-max(?:-|\[|$)/u.test(model)) {
     maximum = APPLICATION_MAX_OUTPUT_TOKENS;
   } else if (adapter.id === 'deepseek' && /^deepseek-v4(?:-|$)/u.test(model)) {
     maximum = APPLICATION_MAX_OUTPUT_TOKENS;
@@ -526,16 +518,16 @@ export function providerModelReasoningPolicy(adapterInput, modelInput = '') {
   const adapter = adapterValue(adapterInput);
   const model = normalizeProviderModelId(adapter, modelInput).toLowerCase();
   if (
-    adapter.id === 'kimi' && adapter.protocol === 'openai-chat-completions' &&
-    /^kimi-k3(?:-|$)/u.test(model)
+    adapter.id === 'kimi' &&
+    /^kimi-k3(?:-|\[|$)/u.test(model)
   ) {
     return { efforts: ['low', 'high', 'max'], defaultEffort: 'max' };
   }
   if (adapter.id === 'bailian' && adapter.protocol === 'anthropic-messages') {
-    if (/^qwen3\.8-max(?:-|$)/u.test(model)) {
+    if (/^qwen3\.8-max(?:-|\[|$)/u.test(model)) {
       return { efforts: ['low', 'medium', 'xhigh'], defaultEffort: 'xhigh' };
     }
-    if (/^kimi-k3(?:-|$)/u.test(model)) {
+    if (/^kimi-k3(?:-|\[|$)/u.test(model)) {
       return { efforts: ['low', 'medium', 'high', 'xhigh', 'max'], defaultEffort: 'medium' };
     }
     if (/^deepseek-v4(?:-|$)/u.test(model)) {
@@ -552,7 +544,7 @@ export function providerModelCapabilities(adapterInput, modelInput = '') {
   const adapter = adapterValue(adapterInput);
   const model = normalizeProviderModelId(adapter, modelInput).toLowerCase();
   const kimiK3OpenAi = adapter.id === 'kimi' &&
-    adapter.protocol === 'openai-chat-completions' && /^kimi-k3(?:-|$)/u.test(model);
+    adapter.protocol === 'openai-chat-completions' && /^kimi-k3(?:-|\[|$)/u.test(model);
   const deepseekOpenAi = adapter.id === 'deepseek' &&
     adapter.protocol === 'openai-chat-completions';
   const requiresCompleteAssistantReplay = kimiK3OpenAi || deepseekOpenAi;

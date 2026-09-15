@@ -122,7 +122,7 @@ async function legacyRegistryFixture(t) {
   return { managedFile, registry };
 }
 
-test('legacy direct aliases migrate only for exact IDs on the DashScope Anthropic gateway', () => {
+test('runtime config preserves exact model IDs and SDK context suffixes', () => {
   const managed = runtimeConfigInternals.normalizeManagedDocumentV2(dynamicDocument({
     connections: [
       connection(
@@ -154,8 +154,8 @@ test('legacy direct aliases migrate only for exact IDs on the DashScope Anthropi
   }));
   const actual = new Map(managed.models.map((entry) => [entry.id, entry.actualModel]));
 
-  assert.equal(actual.get('legacy-qwen'), 'qwen3.8-max-0902');
-  assert.equal(actual.get('legacy-kimi'), 'kimi-k3');
+  assert.equal(actual.get('legacy-qwen'), 'qwen3.8-max-0902[1M]');
+  assert.equal(actual.get('legacy-kimi'), 'kimi-k3[1M]');
   assert.equal(actual.get('case-sensitive-near-match'), 'QWEN3.8-max-0902[1M]');
   assert.equal(actual.get('different-bracket-alias'), 'qwen3.8-max-0902[2M]');
   assert.equal(actual.get('dashscope-openai-alias'), 'qwen3.8-max-0902[1M]');

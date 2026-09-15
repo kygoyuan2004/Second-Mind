@@ -309,6 +309,14 @@ export class IndexRouter {
     }
   }
 
+  async updatePaths(paths) {
+    this.assertOpen();
+    const slot = this._active;
+    const held = this.acquireSnapshot();
+    try { return await slot.index.updatePaths(paths); }
+    finally { held.release(); }
+  }
+
   async temporalInventory(...args) {
     const snapshot = this.acquireSnapshot();
     try {

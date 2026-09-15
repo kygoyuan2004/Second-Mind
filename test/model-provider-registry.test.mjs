@@ -56,16 +56,16 @@ test('built-in providers resolve protocol, endpoint, authentication, and legacy 
     {
       input: { providerId: 'deepseek' },
       expected: {
-        protocol: 'openai-chat-completions',
-        endpoint: 'https://api.deepseek.com/chat/completions',
-        authMode: 'bearer',
-        requestProfile: 'deepseek-openai',
+        protocol: 'anthropic-messages',
+        endpoint: 'https://api.deepseek.com/anthropic/v1/messages',
+        authMode: 'x-api-key',
+        requestProfile: 'anthropic-standard',
         efforts: ['low', 'high', 'max'],
         defaultEffort: 'high',
       },
     },
     {
-      input: { providerId: 'glm' },
+      input: { providerId: 'glm', apiBase: 'https://open.bigmodel.cn/api/paas/v4', protocol: 'openai-chat-completions' },
       expected: {
         protocol: 'openai-chat-completions',
         endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
@@ -76,7 +76,7 @@ test('built-in providers resolve protocol, endpoint, authentication, and legacy 
       },
     },
     {
-      input: { providerId: 'kimi' },
+      input: { providerId: 'kimi', apiBase: 'https://api.moonshot.cn/v1', protocol: 'openai-chat-completions' },
       expected: {
         protocol: 'openai-chat-completions',
         endpoint: 'https://api.moonshot.cn/v1/chat/completions',
@@ -142,7 +142,7 @@ test('authentication headers use only the registered scheme and validate credent
   const anthropic = resolveModelProvider({ providerId: 'bailian' });
   const deepseek = resolveModelProvider({ providerId: 'deepseek' });
   assert.deepEqual(providerAuthHeaders(anthropic, API_KEY), { 'x-api-key': API_KEY });
-  assert.deepEqual(providerAuthHeaders(deepseek, API_KEY), { Authorization: `Bearer ${API_KEY}` });
+  assert.deepEqual(providerAuthHeaders(deepseek, API_KEY), { 'x-api-key': API_KEY });
 
   const noAuth = resolveModelProvider({
     providerId: 'custom',
@@ -154,7 +154,7 @@ test('authentication headers use only the registered scheme and validate credent
   assert.throws(() => providerAuthHeaders(deepseek, ''), { code: 'MODEL_PROVIDER_KEY_REQUIRED' });
   assert.throws(() => providerAuthHeaders(deepseek, 'bad\nkey'), { code: 'MODEL_PROVIDER_KEY_REQUIRED' });
   assert.throws(
-    () => resolveModelProvider({ providerId: 'deepseek', authMode: 'x-api-key' }),
+    () => resolveModelProvider({ providerId: 'deepseek', authMode: 'bearer' }),
     { code: 'MODEL_PROVIDER_AUTH_CONFLICT' },
   );
 });
@@ -173,7 +173,7 @@ test('reasoning parameters are provider-controlled and unknown custom models sta
   assert.deepEqual(providerReasoningFields(bailianOpenAi, 'low'), { enable_thinking: false });
 
   for (const providerId of ['deepseek', 'glm']) {
-    const adapter = resolveModelProvider({ providerId });
+    const adapter = resolveModelProvider(providerId === 'glm' ? { providerId, apiBase: 'https://open.bigmodel.cn/api/paas/v4', protocol: 'openai-chat-completions' } : { providerId });
     if (providerId === 'deepseek') {
       assert.deepEqual(providerReasoningFields(adapter, 'max'), {
         thinking: { type: 'enabled' }, reasoning_effort: 'max',
@@ -188,7 +188,7 @@ test('reasoning parameters are provider-controlled and unknown custom models sta
   }
 
   assert.deepEqual(
-    providerReasoningFields(resolveModelProvider({ providerId: 'kimi' }), 'max'),
+    providerReasoningFields(resolveModelProvider({ providerId: 'kimi', apiBase: 'https://api.moonshot.cn/v1', protocol: 'openai-chat-completions' }), 'max'),
     { reasoning_effort: 'max' },
   );
 
@@ -215,15 +215,15 @@ test('reasoning parameters are provider-controlled and unknown custom models sta
 
 test('reasoning providers identify product histories that cannot replay visible assistant text alone', () => {
   assert.deepEqual(
-    providerModelCapabilities(resolveModelProvider({ providerId: 'kimi' }), 'kimi-k3'),
+    providerModelCapabilities(resolveModelProvider({ providerId: 'kimi', apiBase: 'https://api.moonshot.cn/v1', protocol: 'openai-chat-completions' }), 'kimi-k3'),
     { requiresCompleteAssistantReplay: true, assistantReasoningField: 'reasoning_content' },
   );
   assert.deepEqual(
-    providerModelCapabilities(resolveModelProvider({ providerId: 'deepseek' }), 'deepseek-reasoner'),
+    providerModelCapabilities(resolveModelProvider({ providerId: 'deepseek', protocol: 'openai-chat-completions', apiBase: 'https://api.deepseek.com' }), 'deepseek-reasoner'),
     { requiresCompleteAssistantReplay: true, assistantReasoningField: 'reasoning_content' },
   );
   assert.deepEqual(
-    providerModelCapabilities(resolveModelProvider({ providerId: 'glm' }), 'glm-4.7'),
+    providerModelCapabilities(resolveModelProvider({ providerId: 'glm', apiBase: 'https://open.bigmodel.cn/api/paas/v4', protocol: 'openai-chat-completions' }), 'glm-4.7'),
     { requiresCompleteAssistantReplay: false, assistantReasoningField: '' },
   );
 });
@@ -233,16 +233,19 @@ test('registered model families derive their selectable reasoning policy server-
   assert.deepEqual(providerModelReasoningPolicy(bailian, 'qwen3.8-max-0902'), {
     efforts: ['low', 'medium', 'xhigh'], defaultEffort: 'xhigh',
   });
+  assert.deepEqual(providerModelReasoningPolicy(bailian, 'qwen3.8-max[1M]'), {
+    efforts: ['low', 'medium', 'xhigh'], defaultEffort: 'xhigh',
+  });
   assert.deepEqual(providerModelReasoningPolicy(bailian, 'kimi-k3'), {
     efforts: ['low', 'medium', 'high', 'xhigh', 'max'], defaultEffort: 'medium',
   });
   assert.deepEqual(providerModelReasoningPolicy(bailian, 'deepseek-v4-pro-0813'), {
     efforts: ['high', 'max'], defaultEffort: 'high',
   });
-  assert.deepEqual(providerModelReasoningPolicy(resolveModelProvider({ providerId: 'kimi' }), 'kimi-k3'), {
+  assert.deepEqual(providerModelReasoningPolicy(resolveModelProvider({ providerId: 'kimi', apiBase: 'https://api.moonshot.cn/v1', protocol: 'openai-chat-completions' }), 'kimi-k3'), {
     efforts: ['low', 'high', 'max'], defaultEffort: 'max',
   });
-  assert.deepEqual(providerModelReasoningPolicy(resolveModelProvider({ providerId: 'kimi' }), 'moonshot-v1'), {
+  assert.deepEqual(providerModelReasoningPolicy(resolveModelProvider({ providerId: 'kimi', apiBase: 'https://api.moonshot.cn/v1', protocol: 'openai-chat-completions' }), 'moonshot-v1'), {
     efforts: ['default'], defaultEffort: 'default',
   });
 });
@@ -264,7 +267,7 @@ test('all providers expose five stable tiers with deterministic effective mappin
     low: 'low', medium: 'high', high: 'high', xhigh: 'max', max: 'max',
   });
   const glm = providerUniversalReasoningPolicy(
-    resolveModelProvider({ providerId: 'glm' }),
+    resolveModelProvider({ providerId: 'glm', apiBase: 'https://open.bigmodel.cn/api/paas/v4', protocol: 'openai-chat-completions' }),
     'glm-5',
   );
   assert.deepEqual(glm.effortMapping, {
@@ -278,7 +281,7 @@ test('all providers expose five stable tiers with deterministic effective mappin
     low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max',
   });
   const directKimi = providerUniversalReasoningPolicy(
-    resolveModelProvider({ providerId: 'kimi' }),
+    resolveModelProvider({ providerId: 'kimi', apiBase: 'https://api.moonshot.cn/v1', protocol: 'openai-chat-completions' }),
     'kimi-k3',
   );
   assert.deepEqual(directKimi.effortMapping, {
@@ -298,7 +301,7 @@ test('all providers expose five stable tiers with deterministic effective mappin
 
 test('manual five-tier reasoning mappings are projected through provider capabilities', () => {
   const policy = resolveModelReasoningPolicy(
-    resolveModelProvider({ providerId: 'kimi' }),
+    resolveModelProvider({ providerId: 'kimi', apiBase: 'https://api.moonshot.cn/v1', protocol: 'openai-chat-completions' }),
     'kimi-k3',
     {
       mode: 'manual',
@@ -311,13 +314,13 @@ test('manual five-tier reasoning mappings are projected through provider capabil
     low: 'default', medium: 'low', high: 'high', xhigh: 'max', max: 'max',
   });
   assert.throws(() => resolveModelReasoningPolicy(
-    resolveModelProvider({ providerId: 'kimi' }),
+    resolveModelProvider({ providerId: 'kimi', apiBase: 'https://api.moonshot.cn/v1', protocol: 'openai-chat-completions' }),
     'kimi-k3',
     { mode: 'manual', tiers: { low: 'low' } },
   ), { code: 'MODEL_PROVIDER_EFFORT_MAPPING_INVALID' });
 });
 
-test('DeepSeek legacy model alias is exact and scoped to the DeepSeek adapter', () => {
+test('model identifiers are never silently rewritten by any adapter', () => {
   const deepseek = resolveModelProvider({ providerId: 'deepseek' });
   const bailian = resolveModelProvider({ providerId: 'bailian' });
   const custom = resolveModelProvider({
@@ -325,7 +328,7 @@ test('DeepSeek legacy model alias is exact and scoped to the DeepSeek adapter', 
   });
   assert.equal(
     normalizeProviderModelId(deepseek, 'deepseek-v4-pro-0813'),
-    'deepseek-v4-pro',
+    'deepseek-v4-pro-0813',
   );
   assert.equal(
     normalizeProviderModelId(bailian, 'deepseek-v4-pro-0813'),
@@ -344,12 +347,13 @@ test('DeepSeek legacy model alias is exact and scoped to the DeepSeek adapter', 
 test('output tokens are bounded by an application safety ceiling, not advertised as model capability', () => {
   const bailian = resolveModelProvider({ providerId: 'bailian' });
   const deepseek = resolveModelProvider({ providerId: 'deepseek' });
-  const glm = resolveModelProvider({ providerId: 'glm' });
-  const kimi = resolveModelProvider({ providerId: 'kimi' });
+  const glm = resolveModelProvider({ providerId: 'glm', apiBase: 'https://open.bigmodel.cn/api/paas/v4', protocol: 'openai-chat-completions' });
+  const kimi = resolveModelProvider({ providerId: 'kimi', apiBase: 'https://api.moonshot.cn/v1', protocol: 'openai-chat-completions' });
   const custom = resolveModelProvider({
     providerId: 'custom', apiBase: 'https://models.example.com/v1',
   });
   assert.equal(providerModelOutputLimit(bailian, 'qwen3.8-max-0902'), 131_072);
+  assert.equal(providerModelOutputLimit(bailian, 'qwen3.8-max[1M]'), 131_072);
   assert.equal(providerModelOutputLimit(deepseek, 'deepseek-v4-pro-0813'), 131_072);
   assert.equal(providerModelOutputLimit(glm, 'glm-5'), 131_072);
   assert.equal(providerModelOutputLimit(glm, 'glm-4.5'), 98_304);

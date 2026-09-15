@@ -13,7 +13,7 @@ test('simplified Provider page uses a matching cache revision and caps the visib
   const [html, source] = await assets();
 
   assert.match(html, /admin-config\.css\?v=2\.1\.6/);
-  assert.match(html, /admin-config\.js\?v=2\.1\.6/);
+  assert.match(html, /admin-config\.js\?v=2\.1\.7/);
   assert.match(source, /const PROVIDER_SCHEMA_VERSION = 1/);
   assert.match(source, /const MAX_MODELS = 3/);
   assert.match(html, /最多三个/);
@@ -47,7 +47,7 @@ test('ordinary Provider UI exposes supplier, endpoint, Key state and real model 
   assert.match(html, /Custom 高级选项/);
   assert.match(html, /Key 传递方式/);
   assert.match(source, /advanced\.hidden = true/);
-  assert.match(source, /requestProfile: 'deepseek-openai', efforts: \['low', 'high', 'max'\]/);
+  assert.match(source, /requestProfile: 'anthropic-standard', efforts: \['low', 'high', 'max'\]/);
   assert.doesNotMatch(html, />稳定模型 ID</);
   assert.doesNotMatch(html, />请求 Profile</);
   assert.doesNotMatch(html, />短名称</);

@@ -92,6 +92,9 @@ function createContextFactory() {
     };
     const store = {
       ready: Promise.resolve(),
+      keywordSearch: async (query, options) => (await index.search(query, options)).results,
+      semanticSearch: (query, options) => index.search(query, options),
+      hybridSearch: (query, options) => index.search(query, options),
       resolveSource: (reference) => resolveSource(reference, {
         existingFile: (filename) => sourcePolicy.existingFile(filename),
         walk: () => sourcePolicy.walk(),

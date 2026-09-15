@@ -1,0 +1,116 @@
+{
+  "baseline": "2026-09-15",
+  "sdkVersion": "0.3.247",
+  "files": [
+    {
+      "source": "lib/knowledge-agent.mjs",
+      "target": "src/original/knowledge-agent.mjs",
+      "sha256": "fc4cadec10e1a907d44ba9b7dfa52e804f39a36f8d317e6c8987ab8ea2898781"
+    },
+    {
+      "source": "lib/knowledge-store.mjs",
+      "target": "src/original/knowledge-store.mjs",
+      "sha256": "cf58b40e714ef3fc647fafd2c214e849a794995b7b51bcf26e96d7fea41cd851"
+    },
+    {
+      "source": "lib/knowledge-index.mjs",
+      "target": "src/original/knowledge-index.mjs",
+      "sha256": "d4bbed1e34799398c4c2fabd862657a23f438ebeb462381d0be8bcf98326cd1b"
+    },
+    {
+      "source": "lib/knowledge-search-mcp.mjs",
+      "target": "src/original/knowledge-search-mcp.mjs",
+      "sha256": "15c74f2f147c9ebfec08739d6ff4b914f1fc62be7e4ae8ef39cd7e407b388655"
+    },
+    {
+      "source": "lib/bailian-retrieval.mjs",
+      "target": "src/original/bailian-retrieval.mjs",
+      "sha256": "805a5113f2ac24c9ee5b4714b94ffbae7fdf953f47998e9439c4a1c3fa50d342"
+    },
+    {
+      "source": "lib/bailian-web-search.mjs",
+      "target": "src/original/bailian-web-search.mjs",
+      "sha256": "277bf489a0aa38afccfcd8c0fa25f147217e3bbb7ba7600e4ad010288e50db5c"
+    },
+    {
+      "source": "lib/tavily-mcp.mjs",
+      "target": "src/original/tavily-mcp.mjs",
+      "sha256": "c9cc249faff80fd91d4d9088522f6fc8f277197a8cba7001250987c6583b7829"
+    },
+    {
+      "source": "lib/model-catalog.mjs",
+      "target": "src/original/model-catalog.mjs",
+      "sha256": "1b55599e8da63b06fa50bb61ce7a98f54d04781c1f703fedeedf64f0c3b5a27e"
+    },
+    {
+      "source": "lib/task-modes.mjs",
+      "target": "src/original/task-modes.mjs",
+      "sha256": "b5083cf5d15b1ec817d9909370b5f25c6b9317fb26e6a6588c4bafeb42bc6890"
+    },
+    {
+      "source": "lib/subagent-policy.mjs",
+      "target": "src/original/subagent-policy.mjs",
+      "sha256": "ecc61adf1678e2448e3fc803fde78b4b8e1ad5f45cc997d25ec03d7235914d30"
+    },
+    {
+      "source": "lib/learning-review.mjs",
+      "target": "src/original/learning-review.mjs",
+      "sha256": "8dfa90545c47d505c6014b3b78a78900da2a2b8f203abb1f2a5a9f8bb2558d95"
+    },
+    {
+      "source": "lib/source-resolver.mjs",
+      "target": "src/original/source-resolver.mjs",
+      "sha256": "0557456cb21ef90fc506610a3bab8fc950531ec5c56b658949d24ac49ad45807"
+    },
+    {
+      "source": "lib/knowledge-transcriber.mjs",
+      "target": "src/original/knowledge-transcriber.mjs",
+      "sha256": "0244b5ffe4f8ba9e63631b4a7261d211e5f26c36ad1ba412710e6e3daee0a1f3"
+    },
+    {
+      "source": "lib/knowledge-video.mjs",
+      "target": "src/original/knowledge-video.mjs",
+      "sha256": "511cf1f843e943935c400b1d83ca51fa839376669f5953c1c74a0dadb31aaba7"
+    },
+    {
+      "source": "public/knowledge.html",
+      "target": "public/knowledge.html",
+      "sha256": "d28295e384b2500c49b5ef0aacd1f3e899827b4941330ab0ee170039abe9bd9e"
+    },
+    {
+      "source": "public/knowledge.js",
+      "target": "public/knowledge.js",
+      "sha256": "8757559fe71ea3db2fe58631472021a4f0fff2a37ba668146d8995d6db1a18c4"
+    },
+    {
+      "source": "public/knowledge.css",
+      "target": "public/knowledge.css",
+      "sha256": "68bbe51823a58d59ced3d06ce98377bf65ad0108a8bacfe74d0fa96c109a25c7"
+    },
+    {
+      "source": "public/knowledge-clipboard.js",
+      "target": "public/knowledge-clipboard.js",
+      "sha256": "ccfe24630719aa4eb53cfdbc9e02307460a99880cb47fa72178accfd08a1c7ba"
+    },
+    {
+      "source": "public/knowledge-sources.js",
+      "target": "public/knowledge-sources.js",
+      "sha256": "f1d8332e3b65e957fcb975de963c9d17c4cecfdd41a50d25e1b70613580bbd59"
+    },
+    {
+      "source": "public/agent-render.js",
+      "target": "public/agent-render.js",
+      "sha256": "3deb0296a4e9bb82452bc9d042ecb7e286fbd10966b200f789edf04e8c6792d4"
+    },
+    {
+      "source": "public/styles.css",
+      "target": "public/styles.css",
+      "sha256": "ceb4dec0923ed35aaca27ad60382a6d7d9eb4a1e14203485147488eb6bfbba42"
+    },
+    {
+      "source": "public/overrides.css",
+      "target": "public/overrides.css",
+      "sha256": "9fb8002b068d4bd4b73bb464e8b580682237ea8883b7495562865ec3ed2642c0"
+    }
+  ]
+}

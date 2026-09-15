@@ -2,6 +2,7 @@ const ERROR_CODE = /^[A-Z][A-Z0-9_]{0,99}$/u;
 const SENSITIVE_MESSAGE = /(?:https?:\/\/|file:\/\/|(?:^|[\s("'`])(?:(?:\/(?:[^/\s]+\/)*[^/\s]+)|(?:[A-Za-z]:[\\/]))|\bBearer\s+\S{8,}|\bsk-[A-Za-z0-9._-]{8,}|(?:api[-_ ]?key|authorization|credential)\s*[:=]\s*\S+)/iu;
 
 const PROVIDER_MESSAGES = Object.freeze({
+  REVIEW_EXTRACTION_FAILED: '本次证据抽取全部失败，未生成回顾结论。请检查模型配置后重试。',
   LLM_AUTH_FAILED: 'Model provider authentication failed. Check the API Key in Settings.',
   LLM_PAYMENT_REQUIRED: 'The model provider account has insufficient balance or requires payment.',
   LLM_MODEL_NOT_FOUND: 'The configured model ID does not exist or is unavailable to this account.',

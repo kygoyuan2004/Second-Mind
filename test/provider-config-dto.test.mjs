@@ -101,9 +101,9 @@ test('DTO mapping preserves existing stable IDs and generates server-owned IDs f
   assert.equal(result.patch.connections[0].id, 'primary-provider');
   assert.equal(result.patch.models[0].id, 'main-model');
   assert.equal(result.patch.models[0].actualModel, 'provider-model-v2');
-  assert.equal(result.patch.connections[1].protocol, 'openai-chat-completions');
-  assert.equal(result.patch.connections[1].apiBase, 'https://open.bigmodel.cn/api/paas/v4');
-  assert.equal(result.patch.models[2].requestProfile, 'glm-openai');
+  assert.equal(result.patch.connections[1].protocol, 'anthropic-messages');
+  assert.equal(result.patch.connections[1].apiBase, 'https://open.bigmodel.cn/api/anthropic');
+  assert.equal(result.patch.models[2].requestProfile, 'anthropic-standard');
   assert.deepEqual(result.idAssignments, {
     providers: [{ index: 1, id: 'provider-generated-2' }],
     models: [
@@ -322,7 +322,7 @@ test('registered provider identity survives a compatible proxy API Base', () => 
   assert.equal(result.patch.connections[0].apiBase, 'https://deepseek-proxy.example.com/v1');
 });
 
-test('DeepSeek provider DTO normalizes its exact legacy alias without rewriting custom models', () => {
+test('Provider DTO preserves exact model IDs for official and custom models', () => {
   const current = snapshot();
   current.connections[0].providerId = 'deepseek';
   current.connections[0].apiBase = 'https://api.deepseek.com';
@@ -334,7 +334,7 @@ test('DeepSeek provider DTO normalizes its exact legacy alias without rewriting 
   current.models[0].defaultEffort = 'high';
 
   const dto = toSimplifiedProviderConfig(current);
-  assert.equal(dto.providers[0].models[0].actualModel, 'deepseek-v4-pro');
+  assert.equal(dto.providers[0].models[0].actualModel, 'deepseek-v4-pro-0813');
   const normalized = buildRegisteredProviderConfigPatch({
     schemaVersion: 1,
     expectedRevision: REVISION,
@@ -346,7 +346,7 @@ test('DeepSeek provider DTO normalizes its exact legacy alias without rewriting 
       }],
     }],
   }, current);
-  assert.equal(normalized.patch.models[0].actualModel, 'deepseek-v4-pro');
+  assert.equal(normalized.patch.models[0].actualModel, 'deepseek-v4-pro-0813');
 
   const custom = snapshot();
   const untouched = buildRegisteredProviderConfigPatch({

@@ -1,6 +1,5 @@
 import path from 'node:path';
 
-import { ConversationStore } from './conversation-store.mjs';
 import { EmbeddingClient } from './embedding-client.mjs';
 import {
   EmbeddingRuntime,
@@ -8,9 +7,11 @@ import {
   promotePreviousEmbedding,
   resolveActiveEmbedding,
 } from './embedding-runtime.mjs';
-import { KnowledgeIndex } from './knowledge-index.mjs';
-import { TaskManager } from './task-manager.mjs';
-import { VaultStore } from './vault-store.mjs';
+import { SdkKnowledgeIndex as KnowledgeIndex } from './sdk-knowledge-index.mjs';
+import { SdkKnowledgeManager } from './sdk-knowledge-manager.mjs';
+import { SdkKnowledgeStore } from './sdk-knowledge-store.mjs';
+import { createSdkWebServer } from './sdk-web-search.mjs';
+import { migrateSdkState } from './sdk-state-migration.mjs';
 
 function disabledEmbedding(config = {}) {
   return {
@@ -127,12 +128,19 @@ async function dynamicIndex(config, entry, runtimeConfig, options = {}) {
     embeddingFetch: runtimeOptions.embeddingFetch,
     httpsRequest: runtimeOptions.httpsRequest,
     embeddingClientFactory: runtimeOptions.embeddingClientFactory,
-    indexFactory: runtimeOptions.indexFactory,
+    indexFactory: runtimeOptions.indexFactory || ((cfg, opts) => new KnowledgeIndex(cfg, opts)),
   });
   return { index: embeddingRuntime.index, embedding: opened.client, embeddingRuntime };
 }
 
 export async function createKnowledgeBaseContext(baseConfig, entry, dependencies = {}) {
+  // The previous engine's state is preserved in place. New-format state uses
+  // separate paths until the explicit, backed-up migration has completed.
+  const legacyState = {
+    conversationFile: path.join(entry.state.dataDir, 'conversations.json'),
+    draftDir: path.join(entry.state.dataDir, 'drafts'), ...entry.state,
+  };
+  const sdkDataDir = path.join(entry.state.dataDir, 'sdk-v1');
   const config = {
     ...baseConfig,
     knowledgeBaseId: entry.knowledgeBaseId,
@@ -140,11 +148,17 @@ export async function createKnowledgeBaseContext(baseConfig, entry, dependencies
     vaultLabel: entry.name,
     vaultPath: entry.rootPath,
     ...entry.state,
-    pi: {
-      ...(baseConfig.pi || {}),
-      sessionDir: entry.state.piSessionDir || path.join(entry.state.dataDir, 'pi-sessions'),
-    },
+    dataDir: sdkDataDir,
+    indexDir: path.join(sdkDataDir, 'index'),
+    draftDir: path.join(sdkDataDir, 'drafts'),
+    conversationFile: path.join(sdkDataDir, 'conversations.json'),
+    auditFile: path.join(sdkDataDir, 'audit.jsonl'),
   };
+  const sdkEntry = { ...entry, state: { ...entry.state,
+    embeddingProfileFile: path.join(sdkDataDir, 'embedding-active.json'),
+    embeddingSlotsRoot: path.join(sdkDataDir, 'embedding-slots'),
+  } };
+  await migrateSdkState(legacyState, config);
   let index;
   let embedding;
   let embeddingRuntime = null;
@@ -157,10 +171,15 @@ export async function createKnowledgeBaseContext(baseConfig, entry, dependencies
       index = supplied.index || supplied;
       embedding = supplied.embedding || dependencies.embedding;
       embeddingRuntime = supplied.embeddingRuntime || null;
+    } else if (dependencies.embeddingRuntime) {
+      embedding = dependencies.embedding || new EmbeddingClient(config.embedding);
+      index = dependencies.index || new KnowledgeIndex(config, { client: embedding });
+      await index.ready;
+      embeddingRuntime = dependencies.embeddingRuntime;
     } else if (dependencies.runtimeConfig) {
       ({ index, embedding, embeddingRuntime } = await dynamicIndex(
         config,
-        entry,
+        sdkEntry,
         dependencies.runtimeConfig,
         dependencies.embeddingRuntimeOptions || {},
       ));
@@ -170,24 +189,20 @@ export async function createKnowledgeBaseContext(baseConfig, entry, dependencies
     }
     store = dependencies.storeFactory
       ? await dependencies.storeFactory(entry, config, index)
-      : new VaultStore(config, { policy: index.policy, index });
-    conversations = dependencies.conversationFactory
-      ? await dependencies.conversationFactory(entry, config)
-      : new ConversationStore(config.conversationFile);
+      : new SdkKnowledgeStore(config, { ...baseConfig, ...entry.state, vaultPath: entry.rootPath }, index);
     manager = dependencies.managerFactory
       ? await dependencies.managerFactory(entry, config, { index, store, conversations })
-      : new TaskManager(config, {
+      : new SdkKnowledgeManager(config, {
           index,
           store,
-          conversations,
-          llm: dependencies.llm,
-          llmRouter: dependencies.llmRouter,
-          webSearch: dependencies.webSearch,
-          webReader: dependencies.webReader,
-          responsesExtractor: dependencies.responsesExtractor,
+          queryFn: dependencies.sdkQuery,
+          sdkFetch: dependencies.sdkFetch,
+          webFactory: dependencies.sdkWebFactory || createSdkWebServer,
           runtimeConfig: dependencies.runtimeConfig,
-          allowLegacyTestEngine: dependencies.allowLegacyTestEngine === true,
+          transcriptionOptions: { tempRoot: path.join(sdkDataDir, 'speech') },
+          videoOptions: { tempRoot: path.join(sdkDataDir, 'video') },
         });
+    conversations = manager.conversations;
     const ready = manager.ready;
     await ready;
     return Object.freeze({
@@ -218,9 +233,9 @@ export async function createKnowledgeBaseContext(baseConfig, entry, dependencies
       },
     });
   } catch (error) {
-    if (manager?.close) await manager.close().catch(() => {});
-    else await index?.close?.().catch(() => {});
-    await embeddingRuntime?.waitForMaintenance?.().catch(() => {});
+    if (manager?.close) await Promise.resolve(manager.close()).catch(() => {});
+    else await Promise.resolve(index?.close?.()).catch(() => {});
+    await Promise.resolve(embeddingRuntime?.waitForMaintenance?.()).catch(() => {});
     throw error;
   }
 }

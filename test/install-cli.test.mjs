@@ -20,6 +20,9 @@ import {
   parseArguments,
   prepareBackup,
   prepareOperation,
+  prepareRestore,
+  restoreTree,
+  verifyBackupTree,
   preflightInstaller,
   probeKnowledgeBasePath,
   probeWritablePath,
@@ -642,6 +645,43 @@ test('backup copier preserves all Vault content and creates verifiable inventori
   const complete = await finalizeBackup(backupRoot);
   assert.equal(complete.status, 'complete');
   assert.equal(JSON.parse(await fsp.readFile(path.join(backupRoot, 'manifest.json'), 'utf8')).status, 'complete');
+});
+
+test('recovery clones a verified backup without replacing source identity or data', async (t) => {
+  const setup = await initializedFixture(t, 'restore');
+  const runtime = path.join(setup.root, 'runtime source');
+  await fsp.mkdir(runtime);
+  await fsp.writeFile(path.join(runtime, 'sessions.json'), '{"public-demo":"retained"}');
+  await fsp.writeFile(path.join(setup.vault, '中文 note.md'), '# retained');
+  const prepared = await prepareBackup(setup.options);
+  const root = path.join(setup.instanceRoot, 'backups', prepared.backupName);
+  await copyTreeForBackup(runtime, path.join(root, 'data'));
+  await copyTreeForBackup(setup.vault, path.join(root, 'vault'));
+  await finalizeBackup(root);
+  const destination = path.join(setup.root, '恢复 Vault');
+  const dataDestination = path.join(setup.root, 'recovered data');
+  await fsp.mkdir(destination);
+  await fsp.mkdir(dataDestination);
+  const restored = await prepareRestore({ ...setup.options, backup: prepared.backupName, vault: destination, port: 9124 });
+  assert.notEqual(restored.instanceId, setup.result.instanceId);
+  assert.notEqual(restored.dataVolume, setup.result.dataVolume);
+  await restoreTree(path.join(root, 'vault'), destination);
+  await restoreTree(path.join(root, 'data'), dataDestination);
+  assert.equal(await fsp.readFile(path.join(destination, '中文 note.md'), 'utf8'), '# retained');
+  assert.equal(await fsp.readFile(path.join(setup.vault, '中文 note.md'), 'utf8'), '# retained');
+  assert.equal(await fsp.readFile(path.join(dataDestination, 'sessions.json'), 'utf8'), '{"public-demo":"retained"}');
+  const nextRoot = path.join(setup.stateRoot, restored.instanceId);
+  assert.deepEqual(await fsp.readFile(path.join(nextRoot, 'secrets', 'session_secret')),
+    await fsp.readFile(path.join(setup.instanceRoot, 'secrets', 'session_secret')));
+  const env = await fsp.readFile(path.join(nextRoot, '.env'), 'utf8');
+  assert.ok(env.includes(restored.dataVolume));
+  assert.ok(env.includes('VAULTMIND_PORT=9124'));
+  await assert.rejects(restoreTree(path.join(root, 'vault'), destination), { code: 'RESTORE_TARGET_NOT_EMPTY' });
+  await fsp.writeFile(path.join(root, 'vault', '中文 note.md'), 'tampered');
+  await assert.rejects(verifyBackupTree(path.join(root, 'vault')), { code: 'BACKUP_INTEGRITY_FAILED' });
+  await assert.rejects(prepareRestore({ ...setup.options, instance: setup.result.instanceId,
+    backup: prepared.backupName, vault: path.join(setup.root, 'another'), port: 9125 }), { code: 'BACKUP_INTEGRITY_FAILED' });
+  assert.equal(await fsp.readFile(path.join(destination, '中文 note.md'), 'utf8'), '# retained');
 });
 
 test('runtime ownership helper handles nested trees without following symlinks', {

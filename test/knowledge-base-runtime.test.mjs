@@ -101,7 +101,7 @@ test('fresh dynamic context builds lexical state without calling a paid embeddin
   }
 });
 
-test('each knowledge-base context overrides a shared Pi session directory', async () => {
+test('each knowledge-base context uses independent SDK state paths', async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'second-mind-kb-pi-session-'));
   try {
     const captured = [];
@@ -141,10 +141,10 @@ test('each knowledge-base context overrides a shared Pi session directory', asyn
     }
 
     assert.deepEqual(
-      captured.map((config) => config.pi.sessionDir),
-      ['alpha', 'beta'].map((id) => path.join(root, 'state', id, 'pi-sessions')),
+      captured.map((config) => path.join(config.dataDir, 'claude-sessions')),
+      ['alpha', 'beta'].map((id) => path.join(root, 'state', id, 'sdk-v1', 'claude-sessions')),
     );
-    assert.ok(captured.every((config) => config.pi.sessionDir !== baseConfig.pi.sessionDir));
+    assert.ok(captured.every((config) => path.join(config.dataDir, 'claude-sessions') !== baseConfig.pi.sessionDir));
     await Promise.all(contexts.map((context) => context.close()));
   } finally {
     await fsp.rm(root, { recursive: true, force: true });

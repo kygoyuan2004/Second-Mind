@@ -1,0 +1,6 @@
+# Versions installed in the read-only original media environment.
+faster-whisper==1.2.1
+av==18.1.0
+ctranslate2==4.8.1
+huggingface-hub==1.28.0
+yt-dlp==2026.8.19

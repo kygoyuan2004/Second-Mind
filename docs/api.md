@@ -93,7 +93,7 @@ File paths are Vault-relative and pass the same excluded-path and symbolic-link 
 | `DELETE /api/knowledge/conversations/CONVERSATION_ID?knowledgeBaseId=ID` | Delete one idle conversation |
 | `DELETE /api/knowledge/conversations?knowledgeBaseId=ID&kind=qa` | Clear idle conversations, optionally filtered by kind |
 
-A conversation with an active task cannot be deleted. Q&A conversation settings are fixed to model binding, requested effort, and WebSearch binding. To change them, create the next task with `forkFromConversationId`; do not send both `conversationId` and `forkFromConversationId`.
+A conversation with an active task cannot be deleted. Q&A conversation settings are fixed to model binding, requested effort, and WebSearch binding. To change them, start a new conversation by omitting `conversationId`. There is no Pi fork API in the current knowledge workflow.
 
 ## Tasks and SSE
 
@@ -113,9 +113,9 @@ Create a task with `POST /api/knowledge/tasks`. Example:
 }
 ```
 
-Supported `kind` values are `qa`, `diary`, `plan`, and `scratch`. `taskMode` is `normal` or, for Q&A when enabled, `deep`. Diary and plan requests may add a date. Attachments use `{name,type,data}` where `data` is the base64 payload without a data-URL prefix. Q&A accepts text attachments only; note modes may persist accepted image/PDF attachments with the confirmed draft. Server-configured count and byte limits always apply.
+Supported `kind` values are `qa`, `diary`, `plan`, `scratch`, and `video`. `taskMode` is `normal` or, for Q&A when enabled, `deep`. Diary and plan requests may add a date. Attachments use `{name,type,data}` where `data` is the base64 payload without a data-URL prefix. Q&A and note modes accept text, with image/PDF support restricted by the selected model; Qwen 3.8 Max retains the original image/PDF capability. Note attachments are persisted only with the confirmed draft. Server-configured count and byte limits always apply.
 
-Creation returns `201` with a task ID, conversation ID, status, fixed model/WebSearch binding metadata, requested/effective effort, and knowledge-base identity. If no model is configured it returns `503 LLM_NOT_CONFIGURED`; local search remains available.
+Creation returns `201` with a task ID, conversation ID, status, task mode, and knowledge-base identity. Task options and model bindings are fixed on the server. If no model is configured it returns `503 LLM_NOT_CONFIGURED`; local search remains available.
 
 | Method and route | Purpose |
 |---|---|
@@ -123,15 +123,15 @@ Creation returns `201` with a task ID, conversation ID, status, fixed model/WebS
 | `GET /api/knowledge/tasks/TASK_ID/events?knowledgeBaseId=ID` | Subscribe to SSE events |
 | `POST /api/knowledge/tasks/TASK_ID/cancel?knowledgeBaseId=ID` | Request cancellation |
 
-SSE frames contain monotonically increasing numeric IDs. `Last-Event-ID` resumes buffered events. The server sends heartbeat comments every 20 seconds and ends the stream after terminal `done`. Current event names include:
+SSE frames contain monotonically increasing numeric IDs. `Last-Event-ID` resumes buffered events. The server sends heartbeat comments; clients close the stream after terminal `done`. Current event names include:
 
 - `state`, `session`, and `activity` for observable execution state;
 - `thinking` and `diagnostic` for bounded, user-visible status, not hidden chain of thought;
-- `text` and `text_replace` for answer content;
-- `usage` for bounded token/cost metadata when available;
+- `text` for incremental answer content;
+- `warning` for retry or configuration information; usage is included in `done` when available;
 - `draft_ready` for a generated note draft;
 - `task_error` followed by terminal `done` on failure;
-- `done` with `completed`, `failed`, or `cancelled` status.
+- `done` with `completed`, `failed`, `cancelled`, or `timed_out` status.
 
 ## Draft confirmation
 
@@ -141,7 +141,7 @@ SSE frames contain monotonically increasing numeric IDs. `Last-Event-ID` resumes
 | `POST /api/knowledge/drafts/DRAFT_ID/save` | Confirm and save changes to the selected Vault |
 | `DELETE /api/knowledge/drafts/DRAFT_ID?knowledgeBaseId=ID` | Discard a draft |
 
-The save JSON body carries `knowledgeBaseId`, edited Markdown content, and any client fields returned by the draft contract. The server does not trust the client path blindly. It rechecks ownership, expiry, destination policy, symbolic links, target hash, attachment names, and concurrent changes.
+The save JSON body carries `knowledgeBaseId`, edited Markdown `content`, and an optional scratch/video `title`. The server does not trust the client path blindly. It rechecks ownership, expiry, destination policy, symbolic links, target hash, attachment names, and concurrent changes.
 
 A successful save returns the relative path plus any warnings. `AUDIT_WRITE_FAILED` can be returned as a post-commit warning when the note write succeeded but the audit append failed. Clients must not blindly repeat that save.
 
@@ -201,3 +201,7 @@ JSON failures use:
 ```
 
 Expected status families are `400` invalid input, `401` missing/failed authentication, `403` request/origin rejection, `404` unknown scoped resource, `409` revision or active-state conflict, `413` size limit, `422` Provider validation failure, and `503` unavailable dependency or knowledge base. Unexpected internal exceptions are replaced with a generic message. Provider response bodies, credentials, absolute Vault paths, and raw note text must not be copied into API errors or logs.
+
+## Speech and video
+
+`POST /api/knowledge/transcribe` accepts the original audio payload; `POST /api/knowledge/video-uploads` stages a video outside the Vault; `DELETE /api/knowledge/video-uploads/ID` removes a staged upload. Use the browser request shape as the current contract. A video task references an upload or accepted source URL and produces a normal confirmable draft. Qwen 3.8 Max is required by the original visual workflow. These routes use the same selected-knowledge-base and authentication boundary.

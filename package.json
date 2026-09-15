@@ -1,7 +1,7 @@
 {
   "name": "second-mind",
   "version": "0.1.0",
-  "description": "Self-hosted, provider-neutral RAG workspace for Obsidian vaults",
+  "description": "Self-hosted Obsidian knowledge workspace powered by the Claude Agent SDK",
   "type": "module",
   "license": "MIT",
   "private": true,
@@ -18,10 +18,6 @@
     "test": "node scripts/run-tests.mjs",
     "test:coverage": "node scripts/run-tests.mjs --experimental-test-coverage",
     "index": "node scripts/reindex.mjs",
-    "eval": "node scripts/evaluate-retrieval.mjs",
-    "eval:completeness30": "node scripts/evaluate-completeness-30.mjs",
-    "benchmark": "node scripts/benchmark-compare.mjs",
-    "benchmark:adjudicate": "node scripts/benchmark-adjudicate.mjs",
     "security:scan": "node scripts/scan-secrets.mjs",
     "security:ocr": "node scripts/scan-screenshot-ocr.mjs",
     "security:history": "node scripts/scan-history.mjs",
@@ -29,14 +25,13 @@
     "postinstall": "node scripts/sync-vendor-assets.mjs"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "0.85.1",
-    "@earendil-works/pi-ai": "0.85.1",
-    "@earendil-works/pi-coding-agent": "0.85.1",
+    "@anthropic-ai/claude-agent-sdk": "0.3.247",
     "@modelcontextprotocol/sdk": "1.30.0",
-    "dompurify": "3.4.14",
-    "jsonrepair": "3.15.0",
-    "katex": "0.18.4",
-    "marked": "18.0.11"
+    "dompurify": "3.4.12",
+    "katex": "0.18.1",
+    "marked": "18.0.7",
+    "tavily-mcp": "0.2.22",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "html-validate": "11.13.0"

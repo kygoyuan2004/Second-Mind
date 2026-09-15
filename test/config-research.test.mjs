@@ -22,14 +22,9 @@ function validBase(overrides = {}) {
   });
 }
 
-test('research and outbound page-reading features default off with bounded limits', () => {
+test('legacy research controls are absent and outbound readers default off', () => {
   const config = createConfig();
-  assert.deepEqual(config.research, {
-    contextualizerEnabled: false,
-    loopEnabled: false,
-    contextualizerTimeoutMs: 45_000,
-    evidenceTimeoutMs: 60_000,
-  });
+  assert.equal(config.research, undefined);
   assert.equal(config.webReader.enabled, false);
   assert.equal(config.webReader.pdfEnabled, false);
   assert.equal(config.webReader.pageTimeoutMs, 15_000);
@@ -43,6 +38,7 @@ test('research and outbound page-reading features default off with bounded limit
   assert.equal(config.webReader.deepMaxPagesPerRound, 3);
   assert.equal(config.responsesFallback.enabled, false);
   assert.equal(config.responsesFallback.model, 'qwen3.8-max');
+  assert.equal(config.llm.contextWindow, undefined);
   assert.deepEqual(config.webSearch.officialDomains, []);
 });
 
@@ -141,13 +137,7 @@ test('Responses API key validation accepts sk-ws credentials and enforces opaque
   }
 });
 
-test('runtime validation enforces research and reader dependency gates', () => {
-  assert.throws(
-    () => validateRuntimeConfig(validBase({
-      research: { contextualizerEnabled: false, loopEnabled: true },
-    })),
-    /QA_RESEARCH_LOOP_ENABLED requires QA_CONTEXTUALIZER_ENABLED/u,
-  );
+test('runtime validation enforces reader dependency gates', () => {
   assert.throws(
     () => validateRuntimeConfig(validBase({
       webReader: { enabled: true },

@@ -291,7 +291,7 @@ export class KnowledgeBaseHub {
       if (selected && !selected.has(id)) continue;
       if ((record.admissions || 0) > 0) return true;
       const tasks = record.context?.manager?.tasks;
-      if (tasks && [...tasks.values()].some((task) => !['completed', 'failed', 'cancelled'].includes(task.status))) {
+      if (tasks && [...tasks.values()].some((task) => !['completed', 'failed', 'cancelled', 'timed_out'].includes(task.status))) {
         return true;
       }
     }

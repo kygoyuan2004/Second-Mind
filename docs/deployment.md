@@ -90,6 +90,8 @@ Unix:
 ./install.sh logs --no-follow --tail 200
 ./install.sh backup
 ./install.sh update
+./install.sh restart
+./install.sh uninstall
 ```
 
 PowerShell uses the same subcommands, for example:
@@ -100,13 +102,23 @@ PowerShell uses the same subcommands, for example:
 .\install.ps1 logs --no-follow --tail 200
 .\install.ps1 backup
 .\install.ps1 update
+.\install.ps1 restart
+.\install.ps1 uninstall
 ```
 
-`doctor` checks the Docker client/engine and Compose, Linux-container mode, rendered configuration, knowledge-base access, runtime volume, selected port, Docker disk usage, and, when running, liveness/readiness and PDF sandbox capability.
+`doctor` checks the Docker client/engine and Compose, Linux-container mode, rendered configuration, knowledge-base access, runtime volume, selected port, Docker disk usage, and, when running, liveness/readiness and bundled speech/video dependencies. PDF attachments are read through the Agent SDK on supported models.
 
 `status` displays Compose state and checks the live and ready endpoints. `logs` follows by default; `--no-follow` returns a bounded tail and `--tail N` accepts 1 to 10000 lines.
 
-`update` validates the same boundaries, pulls the configured image or builds the current checkout, recreates the exact instance without changing its data volume, and waits up to two minutes for readiness. It does not automatically roll back an image when readiness fails. Make and verify a backup first, retain the previous reviewed image, and review release notes and schema compatibility before changing an image tag or source revision.
+`update` first creates a verified backup and retains the running image as `second-mind-rollback:INSTANCE_ID`. It then pulls or builds the configured image, recreates only that instance, and waits for readiness. The named data volume and credentials stay in place. If readiness fails, the command reports failure; it does not silently restore older data.
+
+`restart` recreates the selected application using the locally available image and waits for readiness. To select the retained image after a failed upgrade:
+
+```bash
+SECOND_MIND_IMAGE=second-mind-rollback:INSTANCE_ID ./install.sh restart --instance INSTANCE_ID
+```
+
+PowerShell: set `$env:SECOND_MIND_IMAGE = 'second-mind-rollback:INSTANCE_ID'`, run `.\install.ps1 restart --instance INSTANCE_ID`, then remove that environment variable. An image rollback reuses current data; use the independent restore below when an older data snapshot is also required.
 
 ## Backup semantics
 
@@ -116,7 +128,7 @@ PowerShell uses the same subcommands, for example:
 - the complete application data volume, including every per-base index and history;
 - generated instance metadata and Compose configuration;
 - authentication and Provider secret files;
-- SHA-256 inventories for the copied Vault and runtime-data trees;
+- SHA-256 inventories for configuration, Vault and runtime-data trees;
 - a manifest marked complete only after every component succeeds.
 
 The backup does not automatically include private volumes, account/link state, or remote state owned by an independent sync engine. Design and test that recovery path separately.
@@ -129,30 +141,30 @@ The installer does not currently preserve every platform ACL or extended attribu
 
 ## Restore
 
-There is no automatic restore command. A safe manual procedure is:
+Restore creates a **new independent instance**, using a separate empty directory and a different port. The source instance, source Vault, source volume and backup are retained.
 
-1. Stop the exact target instance and any sync process that can write the Vault.
-2. Copy the backup to a separate verification directory.
-3. Require a complete manifest and verify inventory hashes and expected paths.
-4. Inspect configuration and Provider destinations before restoring credentials.
-5. Restore the Vault, private configuration, and runtime data to a new isolated instance or volume.
-6. Start on a different loopback port and test sign-in, base selection, search, conversations, and drafts.
-7. Only then decide whether to replace the original deployment.
+1. Run `backup` on the source instance and keep its instance ID and backup directory name.
+2. Create an empty destination directory outside the source Vault and installer state.
+3. Run the matching command, replacing the uppercase placeholders:
 
-Do not restore private state into a Vault, merge two knowledge-base state directories, or let external sync run during the copy.
+```bash
+./install.sh restore --instance SOURCE_INSTANCE_ID --backup BACKUP_DIRECTORY_NAME \
+  --vault "/path/to/Recovered Vault" --port 8789 --non-interactive
+```
+
+```powershell
+.\install.ps1 restore --instance SOURCE_INSTANCE_ID --backup BACKUP_DIRECTORY_NAME --vault "C:\Notes\Recovered Vault" --port 8789 --non-interactive
+```
+
+The command verifies the complete manifest and all inventories before copying. It refuses an occupied destination, overlapping source/destination paths, modified files or an existing recovery volume. It restores secret files and runtime configuration while generating new host paths, instance identity and volume name. Sign in using the backed-up administrator password, then verify settings, notes, conversations and drafts before switching any external access or sync.
+
+Recovery is for backups made by this installer version with all three inventories. Earlier incomplete or unverified copies require a separately reviewed manual recovery. File modes and symbolic links are retained where supported; platform ACLs and extended attributes are not fully preserved. Keep external sync paused for the destination during copying. If copying or startup fails, the original remains usable; the partial recovery is retained for inspection and is not automatically selected as a replacement deployment.
 
 ## Removal
 
-There is no destructive uninstall command. To remove running containers while preserving data, run `docker compose down` using the exact project name, generated env file, repository Compose files, and generated instance overlay. Do not add `--volumes`.
+`./install.sh uninstall` or `.\install.ps1 uninstall` runs `docker compose down` for the selected instance, without deleting volumes. Add `--instance INSTANCE_ID` when several instances exist. Vaults, runtime data, credentials, configuration and backups remain available. `restart` starts the retained instance again.
 
-The operation preserves:
-
-- the host Vault or parent directory;
-- the named runtime-data volume;
-- installer configuration and secret files;
-- installer-created backups.
-
-Before permanent deletion, make and verify a backup. List and inspect the exact named volume and the exact instance configuration directory, then remove only those targets. Never use a wildcard or broad recursive delete against a user profile, config root, repository root, or Vault.
+Permanent deletion is outside this command. Inspect and back up each exact volume and directory before any separate removal.
 
 ## Manual Compose deployment
 
@@ -188,6 +200,10 @@ Do not run as root to bypass a permission problem. Validate the rendered unit wi
 
 The main application image contains only runtime source, browser assets, and production dependencies. It does not include installer configuration, Vaults, secrets, backups, deployment examples, or the optional sync package. CI is expected to publish `linux/amd64` and `linux/arm64` with provenance and an SBOM.
 
-For repeatable production rollouts, pin an immutable release tag or digest rather than `latest`, retain the previous reviewed image, and test migration plus manual restore on a copy. The current installer has no automatic rollback command.
+For repeatable production rollouts, pin an immutable release tag or digest rather than `latest`, retain the previous reviewed image, and test migration and independent restore on a copy. Image rollback is explicit using the retained image tag; data is never silently rolled back.
 
 See [configuration](configuration.md), [networking](networking.md), [security](security.md), and [sync](sync.md) before enabling remote access or external synchronization.
+
+## Validation matrix
+
+See [the migration validation report](claude-sdk-migration.md#部署平台矩阵) for actual host, architecture, CI and Docker results. Native installer helper tests do not establish that Docker Desktop was tested on that host.

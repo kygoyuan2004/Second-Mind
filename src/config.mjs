@@ -3,6 +3,7 @@ import { isIP } from 'node:net';
 import path from 'node:path';
 import { domainToASCII, fileURLToPath } from 'node:url';
 
+
 const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 function loadDotEnv(file = path.join(PROJECT_ROOT, '.env')) {
@@ -274,8 +275,8 @@ export function createConfig(overrides = {}) {
       apiKey: secret('EMBEDDING_API_KEY'),
       model: text('EMBEDDING_MODEL', 'nomic-embed-text'),
       dimensions: integer('EMBEDDING_DIMENSIONS', 768, { min: 8, max: 32_768 }),
-      batchSize: integer('EMBEDDING_BATCH_SIZE', 16, { min: 1, max: 100 }),
-      timeoutMs: integer('EMBEDDING_TIMEOUT_MS', 30_000, { min: 1_000, max: 300_000 }),
+      batchSize: integer('EMBEDDING_BATCH_SIZE', 20, { min: 1, max: 100 }),
+      timeoutMs: integer('EMBEDDING_TIMEOUT_MS', 12_000, { min: 1_000, max: 300_000 }),
       allowInsecureHttp: bool('ALLOW_INSECURE_PROVIDER_HTTP', false),
     },
     webSearch: {
@@ -290,18 +291,6 @@ export function createConfig(overrides = {}) {
       modelSourceLimit: integer('WEB_SEARCH_MODEL_SOURCE_LIMIT', 10, { min: 1, max: 10 }),
       maxContextChars: integer('WEB_SEARCH_MAX_CONTEXT_CHARS', 30_000, { min: 2_000, max: 100_000 }),
       officialDomains: normalizeOfficialDomains(text('WEB_SEARCH_OFFICIAL_DOMAINS')),
-    },
-    research: {
-      contextualizerEnabled: bool('QA_CONTEXTUALIZER_ENABLED', false),
-      loopEnabled: bool('QA_RESEARCH_LOOP_ENABLED', false),
-      contextualizerTimeoutMs: integer('QA_CONTEXTUALIZER_TIMEOUT_MS', 45_000, {
-        min: 5_000,
-        max: 120_000,
-      }),
-      evidenceTimeoutMs: integer('QA_EVIDENCE_TIMEOUT_MS', 60_000, {
-        min: 5_000,
-        max: 180_000,
-      }),
     },
     webReader: {
       provider: 'server-safe-reader',
@@ -381,7 +370,6 @@ export function createConfig(overrides = {}) {
     llm: { ...config.llm, ...(overrides.llm || {}) },
     embedding: { ...config.embedding, ...(overrides.embedding || {}) },
     webSearch: { ...config.webSearch, ...(overrides.webSearch || {}) },
-    research: { ...config.research, ...(overrides.research || {}) },
     webReader: { ...config.webReader, ...(overrides.webReader || {}) },
     responsesFallback: { ...config.responsesFallback, ...(overrides.responsesFallback || {}) },
     retrieval: { ...config.retrieval, ...(overrides.retrieval || {}) },
@@ -427,12 +415,6 @@ export function validateRuntimeConfig(config) {
   }
   if (config.webSearch?.enabled && !config.webSearch.apiKey && config.runtimeManagedProviders !== true) {
     issues.push('WEB_SEARCH_API_KEY is required when Web Search is enabled.');
-  }
-  if (config.research?.loopEnabled && !config.research?.contextualizerEnabled) {
-    issues.push('QA_RESEARCH_LOOP_ENABLED requires QA_CONTEXTUALIZER_ENABLED.');
-  }
-  if (config.research?.loopEnabled && config.deep?.enabled === false) {
-    issues.push('QA_RESEARCH_LOOP_ENABLED requires DEEP_TASKS_ENABLED.');
   }
   if (config.webReader?.enabled && !config.webSearch?.enabled) {
     issues.push('WEB_READER_ENABLED requires WEB_SEARCH_ENABLED.');

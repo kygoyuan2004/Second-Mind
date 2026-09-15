@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 export const TAVILY_SEARCH_TOOL = 'mcp__tavily__tavily_search';
 export const TAVILY_EXTRACT_TOOL = 'mcp__tavily__tavily_extract';
@@ -8,7 +9,7 @@ export const DEFAULT_TAVILY_KEY_FILE =
 export const DEFAULT_TAVILY_NODE =
   process.execPath;
 export const DEFAULT_TAVILY_SERVER =
-  new URL('../../node_modules/tavily-mcp/build/index.js', import.meta.url).pathname;
+  fileURLToPath(new URL('../../node_modules/tavily-mcp/build/index.js', import.meta.url));
 
 export const DEFAULT_TAVILY_PARAMETERS = Object.freeze({
   search_depth: 'advanced',

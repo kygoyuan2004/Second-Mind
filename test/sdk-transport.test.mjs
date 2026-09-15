@@ -52,7 +52,9 @@ test('transport authenticates locally, forwards context suffix and count tokens,
   assert.equal(calls[0].init.headers['x-api-key'], 'synthetic-provider-key');
 });
 
-test('Tavily worker starts the pinned original MCP with file-only credentials and native tools', async (t) => {
+test('Tavily worker starts the pinned original MCP with file-only credentials and native tools', {
+  skip: process.platform === 'win32' && 'POSIX credential-file permissions run on Linux/macOS; Windows deploys the Linux container.',
+}, async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sdk-tavily-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const env = await sdkEnvironment(root, { baseUrl: 'http://127.0.0.1:1', token: 'temporary-local-token' });

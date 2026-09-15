@@ -40,13 +40,16 @@ test('full SDK browser isolates two Vaults, histories, source preview and confir
   await waitPage(`document.querySelector('#knowledge-login-form')?.hidden === false`);
   await browser.evaluate(`document.querySelector('#knowledge-username').value='admin'; document.querySelector('#knowledge-password').value='synthetic admin password'; document.querySelector('#knowledge-login-form').requestSubmit()`);
   await waitPage(`document.querySelector('#knowledge-base-select')?.options.length === 2`);
+  const waitIdle = () => waitPage(`document.querySelector('#knowledge-app')?.hidden === false && document.querySelector('#knowledge-send')?.disabled === false`);
   const ask = async (prompt) => {
+    await waitIdle();
     await browser.evaluate(`document.querySelector('#knowledge-prompt').value=${JSON.stringify(prompt)}; document.querySelector('#knowledge-form').requestSubmit()`);
   };
   await ask('请读取 Evidence.md，回答当前库的标记并引用。');
   await waitPage(`document.querySelector('#knowledge-transcript').innerText.includes('sdkmarker 计划尚未完成')`);
   const alphaConversation = [...alphaManager.conversations.values()][0].id;
   const switchTo = async (id) => {
+    await waitIdle();
     await browser.evaluate(`document.querySelector('#knowledge-base-select').value=${JSON.stringify(id)}; document.querySelector('#knowledge-base-select').dispatchEvent(new Event('change'))`);
     await waitPage(`new URL(location.href).searchParams.get('knowledgeBaseId') === ${JSON.stringify(id)} && document.querySelector('#knowledge-base-select')?.value === ${JSON.stringify(id)}`);
   };
@@ -58,7 +61,11 @@ test('full SDK browser isolates two Vaults, histories, source preview and confir
   await waitPage(`document.querySelector('#knowledge-source-dialog')?.open && document.querySelector('#knowledge-source-content').innerText.includes('beta-notebook')`);
   const forbidden = await call(`/api/knowledge/conversations/${alphaConversation}?knowledgeBaseId=${encodeURIComponent(betaId)}`);
   assert.equal(forbidden.status, 404);
+  // Streamed answer text precedes the done event. Mode buttons stay disabled
+  // until done reaches the browser, so a premature click is intentionally ignored.
+  await waitIdle();
   await browser.evaluate(`document.querySelector('#knowledge-source-close').click(); document.querySelector('[data-kind="diary"]').click(); document.querySelector('#knowledge-date').value='2026-09-15'`);
+  await waitPage(`document.querySelector('[data-kind="diary"]').getAttribute('aria-selected') === 'true'`);
   await ask('beta-draft：今天完成第二个演示知识库验收。');
   await waitFor(() => [...betaManager.tasks.values()].some((task) => task.kind === 'diary' && task.status === 'completed'));
   const diaryTask = [...betaManager.tasks.values()].find((task) => task.kind === 'diary');

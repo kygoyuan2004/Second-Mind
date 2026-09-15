@@ -19,6 +19,12 @@ export const WINDOWS_CONTAINER_SECURITY_SUITES = Object.freeze([
   'runtime-bootstrap.test.mjs',
   'runtime-config-registry-boundaries.test.mjs',
   'runtime-config-registry.test.mjs',
+  'sdk-browser.test.mjs',
+  'sdk-lifecycle.test.mjs',
+  'sdk-media.test.mjs',
+  'sdk-multi-knowledge-base-browser.test.mjs',
+  'sdk-production.test.mjs',
+  'sdk-provider-matrix.test.mjs',
   'vault-replica.test.mjs',
 ]);
 

@@ -719,6 +719,7 @@ test('知识库 Agent 始终只读、按开关开放 Tavily MCP，历史与草�
   assert.equal(captured[1].mcpServers.tavily.type, 'stdio');
   assert.equal(captured[1].mcpServers.tavily.timeout, 60_000);
   assert.equal(path.relative(fixture.vault, fixture.conversations).startsWith('..'), true);
+  await manager.persistQueue;
   assert.equal((await fsp.readFile(fixture.conversations, 'utf8')).includes('RAG 是什么'), true);
 
   const qaWithAttachment = await manager.createTask('user-12345678', {

@@ -16,14 +16,21 @@ test('test runner keeps POSIX container guarantees explicit on Windows', () => {
     'runtime-bootstrap.test.mjs',
     'runtime-config-registry-boundaries.test.mjs',
     'runtime-config-registry.test.mjs',
+    'sdk-browser.test.mjs',
+    'sdk-lifecycle.test.mjs',
+    'sdk-media.test.mjs',
+    'sdk-multi-knowledge-base-browser.test.mjs',
+    'sdk-production.test.mjs',
+    'sdk-provider-matrix.test.mjs',
     'vault-replica.test.mjs',
   ]);
   const fixtures = [
     'sdk-production.test.mjs', 'runtime-config-registry.test.mjs', 'sdk-browser.test.mjs',
+    'install-cli.test.mjs', 'sdk-transport.test.mjs',
   ];
   assert.deepEqual(selectTestFiles(fixtures, 'linux'), [...fixtures].sort());
   assert.deepEqual(selectTestFiles(fixtures, 'darwin'), [...fixtures].sort());
   assert.deepEqual(selectTestFiles(fixtures, 'win32'), [
-    'sdk-browser.test.mjs', 'sdk-production.test.mjs',
+    'install-cli.test.mjs', 'sdk-transport.test.mjs',
   ]);
 });

@@ -68,7 +68,9 @@ test('qwen3-rerank 使用顶层 query/documents/top_n 并解析顶层 results', 
   assert.equal(DEFAULT_RERANK_TIMEOUT_MS, 20_000);
 });
 
-test('无 workspace 时复用权限 0600 的 Claude 百炼凭据并使用共享北京端点', () => {
+test('无 workspace 时复用权限 0600 的 Claude 百炼凭据并使用共享北京端点', {
+  skip: process.platform === 'win32' && 'POSIX credential-file permissions run on Linux/macOS; Windows deploys the Linux container.',
+}, () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bailian-retrieval-key-'));
   const settingsFile = path.join(directory, 'settings.json');
   try {

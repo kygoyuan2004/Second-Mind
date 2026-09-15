@@ -33,6 +33,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Record tested runner platform
+        run: |
+          node --input-type=module -e "import os from 'node:os'; console.log('::notice title=Runner platform::' + JSON.stringify({ platform: process.platform, architecture: process.arch, release: os.release(), image: process.env.ImageOS, imageVersion: process.env.ImageVersion, node: process.version }));"
       - name: Install locked dependencies
         run: npm ci
       - name: Check source and public contracts

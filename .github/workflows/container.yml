@@ -50,20 +50,44 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
+      - name: Release exported build cache before runtime verification
+        run: docker buildx prune --all --force
       - name: Verify SDK and media on both container architectures
         env:
           CANDIDATE: ghcr.io/kygoyuan2004/second-mind@${{ steps.image.outputs.digest }}
         run: |
           set -Eeuo pipefail
+          run_gate() {
+            local phase="$1"
+            shift
+            local log="${RUNNER_TEMP}/container-runtime-gate.log"
+            if "$@" > "$log" 2>&1; then
+              cat "$log"
+            else
+              local status=$?
+              cat "$log"
+              python3 - "$phase" "$log" <<'PY'
+          import pathlib, sys
+          message = sys.argv[1] + '\n' + pathlib.Path(sys.argv[2]).read_text(errors='replace')[-16000:]
+          message = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print('::error title=Container runtime gate::' + message)
+          PY
+              df -h
+              docker system df
+              return "$status"
+            fi
+          }
           for platform in linux/amd64 linux/arm64; do
-            docker run --rm --platform "$platform" --read-only \
+            run_gate "$platform pull" docker pull --platform "$platform" "$CANDIDATE"
+            run_gate "$platform SDK" docker run --rm --platform "$platform" --read-only \
               --tmpfs /tmp:rw,nosuid,size=768m \
               --mount type=bind,source="$GITHUB_WORKSPACE/test",target=/app/test,readonly \
               --env KNOWLEDGE_BASE_ALLOWED_ROOTS= --workdir /app \
               "$CANDIDATE" node --test test/sdk-provider-matrix.test.mjs
-            docker run --rm --platform "$platform" --read-only "$CANDIDATE" \
+            run_gate "$platform media" docker run --rm --platform "$platform" --read-only "$CANDIDATE" \
               /opt/media/bin/python -c 'import av, ctranslate2, faster_whisper, yt_dlp; print("media imports passed")'
-            docker run --rm --platform "$platform" --read-only "$CANDIDATE" ffmpeg -version
+            run_gate "$platform ffmpeg" docker run --rm --platform "$platform" --read-only "$CANDIDATE" ffmpeg -version
+            docker image rm "$CANDIDATE"
           done
       - name: Promote the verified digest to release tags
         env:

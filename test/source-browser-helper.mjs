@@ -61,13 +61,26 @@ export async function sourceBrowser(t, url) {
     socket.send(JSON.stringify({ id, method, params }));
   });
   const evaluate = async (expression) => {
-    const result = await call('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true });
-    if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
-    return result.result?.value;
+    // Navigation briefly removes the default context. This CDP error happens
+    // before evaluation, so retry it without repeating an executed action.
+    const deadline = Date.now() + 6000;
+    while (true) {
+      try {
+        const result = await call('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true });
+        if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
+        return result.result?.value;
+      } catch (error) {
+        if (!/Cannot find default execution context/u.test(error.message) || Date.now() >= deadline) throw error;
+        await delay(50);
+      }
+    }
   };
   const waitFor = async (expression) => {
     for (let attempt = 0; attempt < 120; attempt++) {
-      if (await evaluate(expression)) return;
+      try { if (await evaluate(expression)) return; }
+      catch (error) {
+        if (!/Execution context was destroyed/u.test(error.message)) throw error;
+      }
       await delay(25);
     }
     const snapshot = await evaluate(`({path: document.querySelector('#path')?.textContent, content: document.querySelector('#content')?.innerHTML})`);

@@ -52,7 +52,7 @@ async function main(extraArguments = process.argv.slice(2)) {
     '--test-reporter=spec',
     ...(continuousIntegration ? [
       '--test-reporter-destination=stdout',
-      `--test-reporter=${fileURLToPath(new URL('./ci-test-reporter.mjs', import.meta.url))}`,
+      `--test-reporter=${new URL('./ci-test-reporter.mjs', import.meta.url).href}`,
       '--test-reporter-destination=stderr',
     ] : []),
     '--test-concurrency=1',
@@ -61,7 +61,12 @@ async function main(extraArguments = process.argv.slice(2)) {
     ...selected,
   ], {
     env: process.env,
-    stdio: 'inherit',
+    stdio: ['inherit', 'inherit', continuousIntegration ? 'pipe' : 'inherit'],
+  });
+  let diagnosticTail = '';
+  child.stderr?.on('data', (chunk) => {
+    process.stderr.write(chunk);
+    diagnosticTail = (diagnosticTail + chunk).slice(-32_000);
   });
   let deadline;
   let timedOut = false;
@@ -82,6 +87,10 @@ async function main(extraArguments = process.argv.slice(2)) {
   }
   if (timedOut) {
     console.error('::error title=Offline test deadline::The bounded test runner exceeded five minutes.');
+  }
+  if (continuousIntegration && exitCode !== 0 && diagnosticTail && !diagnosticTail.includes('::error ')) {
+    const escaped = diagnosticTail.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+    console.error(`::error title=Test runner diagnostic::${escaped}`);
   }
   process.exitCode = exitCode;
 }

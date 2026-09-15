@@ -53,6 +53,9 @@ test('browser config check/save/reload updates the full SDK app and preserves ci
     document.querySelector('#config-save').click();
   })()`);
   await waitFor(() => app.runtimeConfig.runtimeSnapshot().branding.appName === 'SDK 浏览器验收');
+  // Server commit precedes the browser's refresh/dirty-state reset. Reloading
+  // during that gap opens the real unsaved-changes dialog and blocks CDP.
+  await waitPage(`document.querySelector('#config-save')?.disabled === false && document.querySelector('[data-connection-key]')?.value === ''`);
   assert.ok(requests.length > 0, 'Save must validate with the actual SDK request path');
   assert.equal(requests.at(-1).key, 'synthetic-replaced-key');
   assert.equal(requests.at(-1).body.model, 'qwen3.8-max');

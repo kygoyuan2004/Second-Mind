@@ -1851,3 +1851,18 @@ html[data-no-backdrop] .knowledge-console-header {
   }
   .knowledge-modes button strong { font-size: .62rem; }
 }
+
+/* Metadata inventory uses the existing conversation surface. */
+.knowledge-inventory { min-width: 0; }
+.knowledge-inventory h3 { margin-top: 0; }
+.inventory-stats { font-weight: 600; }
+.inventory-table-wrap { overflow: auto; max-width: 100%; max-height: 360px; }
+.knowledge-inventory thead { position: sticky; top: 0; background: #f6f9fe; }
+.knowledge-inventory table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.knowledge-inventory td, .knowledge-inventory th { padding: 8px; text-align: left; border-bottom: 1px solid #dce3ec; }
+.knowledge-inventory td:first-child { overflow-wrap: anywhere; min-width: 160px; }
+.inventory-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0; }
+.inventory-actions button, .inventory-actions select { border: 1px solid #c9d5e5; border-radius: 8px; background: #f6f9fe; color: #263754; padding: 8px 12px; cursor: pointer; }
+.inventory-actions button:disabled { opacity: 0.5; cursor: default; }
+.knowledge-inventory details { margin-top: 8px; overflow-wrap: anywhere; }
+.knowledge-inventory details ul { max-height: 240px; overflow: auto; }

@@ -1267,10 +1267,21 @@ export async function createApp(configInput, dependencies = {}) {
           context,
         ));
       }
-      if (pathname === '/api/knowledge/tasks' && req.method === 'POST') {
+      const inventoryMatch=/^\/api\/knowledge\/inventories\/([^/]+)(?:\/(cancel))?$/.exec(pathname);
+      if(inventoryMatch) {
+        const context=resolveKnowledgeContext(requestKnowledgeBaseId(url));
+        const [,id,action]=inventoryMatch, conversationId=url.searchParams.get('conversationId');
+        if(!action && req.method==='GET') return json(res,200,withContextIdentity(await context.manager.getInventory(userId,id,conversationId,url.searchParams.get('cursor') || ''),context));
+        if(action==='cancel' && req.method==='POST') return json(res,200,withContextIdentity(await context.manager.cancelInventory(userId,id,conversationId),context));
+      }
+      if (['/api/knowledge/tasks','/api/knowledge/inventories'].includes(pathname) && req.method === 'POST') {
         const body = await readJson(req, config.limits.jsonBodyBytes);
         const requestedKnowledgeBaseId = requestKnowledgeBaseId(url, body);
         const { knowledgeBaseId: _knowledgeBaseId, ...taskBody } = body;
+        if(pathname.endsWith('/inventories')) {
+          for(const key of ['root','path','cwd']) if(Object.hasOwn(body,key)) throw httpError(400,'根目录由服务器决定。');
+          Object.assign(taskBody,{kind:'qa',prompt:body.prompt || '文件清单',inventory:{scope:body.scope,start:body.start,end:body.end,timeZone:body.timeZone,allTime:body.allTime}});
+        }
         let context;
         let result;
         if (knowledgeBaseHub) {

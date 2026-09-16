@@ -263,12 +263,12 @@ test('原话三轮直接进入只读 Agent，固定范围跨重启恢复且联�
   assert.equal(webFactories, 1);
 
   // Preserve an old restrictive answer in the resumed SDK conversation. The
-  // current policy must also be sent for ordinary file-list follow-ups.
+  // current policy must also be sent for ordinary content follow-ups.
   const conversation = manager.conversations.get(conversationId);
   conversation.messages.push({ role: 'assistant', text: '旧回答：没有日记活动句的技术笔记不计入本期成果。', createdAt: CLOCK });
   const messageCount = conversation.messages.length;
   const followUp = await manager.createTask('review-test-user', {
-    kind: 'qa', prompt: '告诉我我最近新写了哪些笔记', model: 'qwen', effort: 'xhigh',
+    kind: 'qa', prompt: '解释这些技术笔记的正文内容', model: 'qwen', effort: 'xhigh',
     webSearch: true, conversationId,
   });
   const followUpTask = await waitForTask(manager, followUp.taskId);

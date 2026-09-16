@@ -1,3 +1,4 @@
+import { mountInventory } from './knowledge-inventory.js?v=1';
 import { enhanceSourceLinks, createSourcePreview } from './knowledge-sources.js?v=1';
 import { filesFromClipboard } from './knowledge-clipboard.js?v=1';
 
@@ -907,8 +908,8 @@ async function openConversation(id) {
     elements.taskMode.value = conversation.kind === 'qa' ? conversation.taskMode || 'normal' : 'normal';
     if (!selectedTaskMode()) elements.taskMode.value = 'normal';
     updateTaskModeUi();
-    elements.model.value = conversation.model;
-    const unavailable = !selectedModel() || selectedModel().available === false;
+    if (!conversation.inventoryOnly) elements.model.value = conversation.model;
+    const unavailable = !conversation.inventoryOnly && (!selectedModel() || selectedModel().available === false);
     updateEffortOptions(conversation.effort);
     elements.webSearch.checked = Boolean(conversation.webSearch);
     syncCompactSettingLabels();
@@ -916,12 +917,14 @@ async function openConversation(id) {
     for (const message of conversation.messages || []) {
       const names = message.role === 'user' && message.attachments?.length
         ? `\n\n附件：${message.attachments.join('、')}` : '';
-      appendMessage(message.role, `${message.text}${names}`, { draftId: message.draftId });
+      const content=appendMessage(message.role, `${message.text}${names}`, { draftId: message.draftId });
+      if(message.inventoryId) showInventory(content,message.inventoryId,conversation.id);
     }
     setStatus(unavailable ? 'error' : '', conversation.title, unavailable
       ? '历史记录已保留；该模型当前不可用，请新建对话。'
       : conversation.kind === 'qa' ? '已恢复对话，可以继续追问。' : '已打开历史记录。');
     renderConversationList();
+    if(conversation.activeTask) { setBusy(true); connectTask(conversation.activeTask.id); }
   } catch (error) {
     toast(error.message);
   }
@@ -972,6 +975,15 @@ function parseEvent(event) {
   try { return JSON.parse(event.data); } catch { return {}; }
 }
 
+function showInventory(content,id,conversationId) {
+  return mountInventory(content,{id,conversationId,api,fileUrl:knowledgeFileLink,onRescan:async(inventory)=>{
+    if(state.busy) throw new Error('请先等待当前任务结束。');
+    setBusy(true); state.assistantNode=null;state.assistantText='';startProcess('重新扫描文件清单');
+    try {const result=await api('/api/knowledge/tasks',{method:'POST',body:JSON.stringify({kind:'qa',prompt:'重新扫描文件清单',conversationId,inventory})});state.conversationId=result.conversationId;connectTask(result.taskId);}
+    catch(e){setBusy(false);throw e;}
+  }});
+}
+
 function connectTask(taskId) {
   state.taskId = taskId;
   state.source?.close();
@@ -1008,6 +1020,15 @@ function connectTask(taskId) {
     const message = data.message || '任务正在重试。';
     appendProcessStep(data.title || '服务正在重试', message, data.key || 'warning');
     appendNotice(message);
+  });
+  let inventoryCard=null;
+  source.addEventListener('inventory', (event)=>{
+    const data=parseEvent(event);
+    appendProcessStep('后端文件清单',`已发现 ${data.discovered}／已处理 ${data.processed} · 不读取正文`,'inventory');
+    if(!inventoryCard){
+      const existing=elements.transcript.querySelector(`[data-inventory-id="${data.inventoryId}"]`);
+      if(!existing){state.assistantNode=appendMessage('assistant','');inventoryCard=showInventory(state.assistantNode,data.inventoryId,data.conversationId);}
+    } else if(!['queued','scanning','verifying'].includes(data.status)) inventoryCard.refresh();
   });
   source.addEventListener('text', (event) => {
     const text = parseEvent(event).text || '';

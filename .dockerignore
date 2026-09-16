@@ -74,3 +74,6 @@
 !scripts/
 !scripts/sync-vendor-assets.mjs
 public/vendor/
+
+!src/original/knowledge-inventory.mjs
+!public/knowledge-inventory.js

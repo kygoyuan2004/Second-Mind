@@ -1,3 +1,4 @@
+import { KnowledgeInventories, isInventoryRequest, inventoryRange, inventoryError } from './knowledge-inventory.mjs';
 import { markPublicMessage } from '../public-errors.mjs';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -505,6 +506,7 @@ export class KnowledgeAgentManager {
     this.conversations = new Map();
     this.conversationMutations = new Map();
     this.persistQueue = Promise.resolve();
+    this.inventoryRuns = new Set();
     this.ready = this.initialize();
     this.cleanupTimer = setInterval(() => this.cleanup(), 10 * 60_000);
     this.cleanupTimer.unref();
@@ -517,6 +519,8 @@ export class KnowledgeAgentManager {
     if (isInside(this.store.realRoot, realParent)) {
       throw agentError(500, '知识库对话历史不能保存在 Obsidian 目录中。', 'UNSAFE_HISTORY_PATH');
     }
+    this.inventories = new KnowledgeInventories({ root:this.store.root, directory:path.join(path.dirname(this.conversationFile),'file-inventories'), now:this.now });
+    await this.inventories.ready;
     try {
       const parsed = JSON.parse(await fsp.readFile(this.conversationFile, 'utf8'));
       for (const conversation of Array.isArray(parsed.conversations) ? parsed.conversations : []) {
@@ -553,11 +557,17 @@ export class KnowledgeAgentManager {
     const activeTask = [...this.tasks.values()].find((task) => (
       task.conversationId === conversation.id && !TERMINAL_STATES.has(task.status)
     ));
-    const selection = normalizeStoredModelSelection(
-      conversation.modelId,
-      conversation.effortId,
-      this.modelCatalog,
-    );
+    let selection;
+    let modelUnavailable = false;
+    try {
+      selection = conversation.inventoryOnly
+        ? { model: { id: conversation.modelId }, effort: { id: conversation.effortId } }
+        : normalizeStoredModelSelection(conversation.modelId, conversation.effortId, this.modelCatalog);
+    } catch {
+      // Reading history and metadata must not require a working model binding.
+      selection = { model: { id: conversation.modelId }, effort: { id: conversation.effortId } };
+      modelUnavailable = true;
+    }
     return {
       id: conversation.id,
       kind: conversation.kind,
@@ -565,6 +575,8 @@ export class KnowledgeAgentManager {
       model: selection.model.id,
       effort: selection.effort.id,
       webSearch: Boolean(conversation.webSearch),
+      inventoryOnly: Boolean(conversation.inventoryOnly),
+      ...(modelUnavailable ? { modelUnavailable: true } : {}),
       learningReview: normalizeLearningReview(conversation.learningReview),
       taskMode: conversation.taskModeId || 'normal',
       createdAt: conversation.createdAt,
@@ -606,7 +618,7 @@ export class KnowledgeAgentManager {
     };
   }
 
-  deleteConversation(userId, id) {
+  async deleteConversation(userId, id) {
     if (this.conversationMutations.has(String(userId))) {
       throw agentError(409, '知识库对话正在创建或清除，请稍后重试。', 'CONVERSATION_BUSY');
     }
@@ -620,7 +632,8 @@ export class KnowledgeAgentManager {
       throw agentError(409, '对话仍有任务运行，请先取消。', 'CONVERSATION_BUSY');
     }
     this.conversations.delete(id);
-    this.persistConversations();
+    await this.persistConversations();
+    await this.inventories.removeConversation(id);
     this.store.audit({ action: 'conversation_deleted', userId, conversationId: id });
     return { ok: true };
   }
@@ -652,6 +665,7 @@ export class KnowledgeAgentManager {
           throw error;
         }
       }
+      for (const conversation of removed) await this.inventories.removeConversation(conversation.id);
       await this.store.audit({
         action: 'conversations_cleared',
         userId,
@@ -749,6 +763,7 @@ export class KnowledgeAgentManager {
 
   async createTaskWithinMutation(userId, body) {
     await this.ready;
+    if (isInventoryRequest(body)) return this.createInventoryTask(userId, body);
     await this.store.assertNoSymlinks();
     const modelCatalog = this.resolveModelCatalog ? await this.resolveModelCatalog() : this.modelCatalog;
     const kind = String(body.kind || 'qa');
@@ -784,7 +799,7 @@ export class KnowledgeAgentManager {
     let createdConversation = false;
     if (body.conversationId) {
       conversation = this.conversations.get(String(body.conversationId));
-      const storedSelection = conversation
+      const storedSelection = conversation?.inventoryOnly ? {model,effort} : conversation
         ? normalizeStoredModelSelection(
             conversation.modelId,
             conversation.effortId,
@@ -798,7 +813,7 @@ export class KnowledgeAgentManager {
         kind !== 'qa' ||
         storedSelection.model.id !== model.id ||
         storedSelection.effort.id !== effort.id ||
-        Boolean(conversation.webSearch) !== webSearch
+        (!conversation.inventoryOnly && Boolean(conversation.webSearch) !== webSearch)
       ) {
         throw agentError(404, '对话不存在或设置已改变，请新建对话。', 'CONVERSATION_NOT_FOUND');
       }
@@ -903,6 +918,7 @@ export class KnowledgeAgentManager {
       throw error;
     }
     this.tasks.set(task.id, task);
+    if (conversation.inventoryOnly) { conversation.modelId=model.id; conversation.effortId=effort.id; conversation.webSearch=webSearch; conversation.inventoryOnly=false; }
     conversation.taskModeId = taskMode.id;
     conversation.learningReview = learningReview;
     conversation.messages.push({
@@ -935,6 +951,83 @@ export class KnowledgeAgentManager {
     }
     queueMicrotask(() => this.runTask(task, conversation));
     return { taskId: task.id, conversationId: conversation.id, status: task.status, taskMode: taskMode.id };
+  }
+
+
+  async createInventoryTask(userId, body) {
+    if (Object.keys(body).some((key) => ['root','path','cwd','tools','allowedTools','disallowedTools','permissionMode','mcpServers','systemPrompt','env','settings','agents','sdkSessionId','resume'].includes(key))) throw inventoryError('知识库路径和执行权限由服务器决定。');
+    rejectClientSubagentFields(body);
+    const prompt = String(body.prompt || '文件清单').trim();
+    if (prompt.length > 12000) throw inventoryError('单条内容最多 12000 个字符。', 413);
+    if (body.attachments?.length) throw inventoryError('文件清单查询不接收附件，请移除附件后重试。');
+    let conversation = body.conversationId ? this.conversations.get(String(body.conversationId)) : null;
+    if (body.conversationId && (!conversation || conversation.userId !== userId || conversation.kind !== 'qa')) throw inventoryError('知识库对话不存在。',404);
+    const previous = conversation?.inventoryRange || (conversation?.learningReview ? {
+      startMs: Date.parse(conversation.learningReview.startInclusive), endMs: Date.parse(conversation.learningReview.endInclusive) + 1,
+    } : null);
+    const range = inventoryRange(body, previous, this.now());
+    const date = new Date(this.now()).toISOString(), id = crypto.randomUUID();
+    const created = !conversation;
+    if (!conversation) conversation = { id:crypto.randomUUID(),userId,kind:'qa',title:prompt.slice(0,48),modelId:body.model || null,effortId:body.effort || null,webSearch:Boolean(body.webSearch),taskModeId:'normal',inventoryOnly:true,sdkSessionId:null,messages:[],createdAt:date,updatedAt:date };
+    this.taskRegistry.claim(userId,id,'knowledge');
+    let record;
+    try {
+      record = await this.inventories.create(userId,conversation.id,range,id);
+      const task = { id,userId,conversationId:conversation.id,kind:'qa',inventoryId:record.id,prompt,status:'starting',createdAt:date,updatedAt:date,model:{id:conversation.modelId},effort:{id:conversation.effortId},taskMode:{id:'normal'},events:[],sequence:0,clients:new Set(),abortController:new AbortController(),assistantText:'',root:this.store.root };
+      this.tasks.set(id,task); this.conversations.set(conversation.id,conversation);
+      conversation.inventoryRange=range; conversation.lastInventoryId=record.id; conversation.updatedAt=date;
+      conversation.messages.push({id:crypto.randomUUID(),role:'user',text:prompt,taskId:id,createdAt:date});
+      // Save the link before starting work, so an interrupted scan remains recoverable.
+      conversation.messages.push({id:crypto.randomUUID(),role:'assistant',text:'文件清单（后端只读枚举，不读取正文）',taskId:id,inventoryId:record.id,createdAt:date});
+      await this.persistConversations();
+      const work = this.runInventoryTask(task,conversation,record);
+      this.inventoryRuns.add(work); work.then(()=>this.inventoryRuns.delete(work),()=>this.inventoryRuns.delete(work));
+      return {taskId:id,conversationId:conversation.id,inventoryId:record.id,status:task.status,taskMode:'normal'};
+    } catch(error) {
+      this.taskRegistry.release(userId,id); this.tasks.delete(id);
+      if (created) this.conversations.delete(conversation.id);
+      if (record) { this.inventories.records.delete(record.id); await fsp.rm(path.join(this.inventories.directory,record.id+'.json'),{force:true}); }
+      throw error;
+    }
+  }
+
+  async runInventoryTask(task, conversation, record) {
+    task.status='running';
+    this.emit(task,'state',{status:task.status,conversationId:conversation.id});
+    try {
+      await this.inventories.scan(record,{signal:task.abortController.signal,onProgress:(page)=>{
+        this.emit(task,'inventory',{inventoryId:record.id,conversationId:conversation.id,status:page.status,discovered:page.discovered,processed:page.processed});
+      }});
+      task.status=record.status==='cancelled'?'cancelled':record.status==='failed'?'failed':'completed';
+      task.assistantText=record.status==='completed'?'文件清单扫描完成。':'文件清单尚不完整，请查看缺口或重新扫描。';
+    } catch {
+      task.status='failed'; task.assistantText='清单状态保存失败，请重新扫描。';
+      this.emit(task,'task_error',{message:task.assistantText});
+    } finally {
+      const message=conversation.messages.find((m)=>m.inventoryId===record.id);
+      if(message) { message.text=task.assistantText; message.status=record.status; }
+      conversation.updatedAt=new Date(this.now()).toISOString();
+      await this.persistConversations().catch(()=>{});
+      this.taskRegistry.release(task.userId,task.id);
+      this.emit(task,'done',{status:task.status,message:task.assistantText,conversationId:conversation.id,inventoryId:record.id});
+      await this.store.audit({action:'inventory_finished',userId:task.userId,conversationId:conversation.id,inventoryId:record.id,status:record.status,matched:record.entries.length}).catch(()=>{});
+    }
+  }
+
+  async getInventory(userId,id,conversationId,cursor='') {
+    await this.ready; await this.inventories.ready;
+    const ownerConversation = conversationId || this.inventories.records.get(id)?.conversationId;
+    const conversation = this.conversations.get(ownerConversation);
+    if (!conversation || conversation.userId !== userId) throw inventoryError('文件清单不存在。',404);
+    return this.inventories.page(this.inventories.owned(userId,id,ownerConversation),cursor);
+  }
+
+  async cancelInventory(userId,id,conversationId) {
+    await this.getInventory(userId,id,conversationId);
+    const record=this.inventories.records.get(id);
+    const task=this.tasks.get(record.taskId);
+    if(task) return this.cancel(userId,task.id);
+    return {ok:true,status:record.status};
   }
 
   queryOptions(task, conversation) {
@@ -1251,6 +1344,7 @@ export class KnowledgeAgentManager {
           toolName: 'VideoProcessor',
         });
       }
+      if (conversation.inventoryRange) task.taskPrompt += `\n已有后端文件清单：${JSON.stringify(conversation.inventoryRange)}。清单 ID：${conversation.lastInventoryId}。这是元数据观察，不证明首次创建或已学习；用户仍可在清单卡片翻页查看完整结果。需要解释时实际读取相关正文，不宣称已通读清单中的所有文件。`;
       await this.prepareSdkTask?.(task, conversation);
       if (task.status === 'cancelled' || task.status === 'timed_out') return;
       const handle = this.queryFn({
@@ -1367,6 +1461,7 @@ export class KnowledgeAgentManager {
   cancel(userId, id) {
     const task = this.getTask(userId, id);
     if (TERMINAL_STATES.has(task.status)) return { ok: true, status: task.status };
+    if(task.inventoryId){task.abortController.abort();this.emit(task,'state',{status:'running',message:'正在取消扫描并保存已观测结果。'});return {ok:true,status:'cancelling'};}
     task.status = 'cancelled';
     task.cancelReason = '用户停止了任务。';
     task.abortController.abort();

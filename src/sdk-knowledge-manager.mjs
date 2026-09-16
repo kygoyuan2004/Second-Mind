@@ -1,3 +1,4 @@
+import { isInventoryRequest } from './original/knowledge-inventory.mjs';
 import path from 'node:path';
 import { KnowledgeAgentManager } from './original/knowledge-agent.mjs';
 import { sdkCatalog, sdkBinding, openSdkTransport, sdkEnvironment } from './sdk-runtime.mjs';
@@ -43,6 +44,7 @@ export class SdkKnowledgeManager extends KnowledgeAgentManager {
     if (['tools', 'allowedTools', 'disallowedTools', 'mcpServers', 'permissionMode', 'systemPrompt', 'env', 'settings', 'agents', 'sdkSessionId', 'resume', 'maxTurns', 'cwd'].some((key) => Object.hasOwn(body, key))) {
       throw error('CLIENT_AGENT_OPTIONS_DENIED', '执行权限、工具和 SDK 状态由服务器管理。', 400);
     }
+    if (isInventoryRequest(body)) return super.createTask(userId, body);
     await this.runtimeConfig.refresh();
     const snapshot = this.runtimeConfig.runtimeSnapshot();
     if (body.modelCatalogRevision && body.modelCatalogRevision !== snapshot.modelCatalogRevision) {
@@ -58,7 +60,7 @@ export class SdkKnowledgeManager extends KnowledgeAgentManager {
     const binding = sdkBinding(model);
     if (body.webSearch && !binding.webSearch?.enabled) throw error('WEB_SEARCH_NOT_CONFIGURED', '请先在配置页启用并验证联网搜索。');
     const prior = this.conversations.get(body.conversationId);
-    if (prior && !this.modelCatalog.some((item) => item.id === prior.modelId)) {
+    if (prior && !prior.inventoryOnly && !this.modelCatalog.some((item) => item.id === prior.modelId)) {
       throw error('CONVERSATION_MODEL_UNAVAILABLE', '历史记录已保留；原模型配置已移除，请选择可用模型新建对话。');
     }
     if (prior?.sdkBindingRevision && prior.sdkBindingRevision !== binding.revision) {
@@ -208,7 +210,7 @@ export class SdkKnowledgeManager extends KnowledgeAgentManager {
 
   async close() {
     super.close();
-    await Promise.allSettled([...this.running]);
+    await Promise.allSettled([...this.running, ...this.inventoryRuns]);
     await this.persistQueue;
     await this.index?.close?.();
   }

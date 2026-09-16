@@ -34,6 +34,7 @@ test('enumeration includes root, deep, Chinese, spaces and >100 files; frozen pa
 test('strict dates, Shanghai midnight, exact end exclusion, month clamping and inheritance',async(t)=>{
  const now=Date.parse('2026-03-31T02:15:00Z');
  const recent=inventoryRange({prompt:'最近新写了哪些笔记'},null,now);assert.equal(recent.start,'2026-02-28T02:15:00.000Z');
+ const unbounded=inventoryRange({prompt:'列出全部笔记'});assert.equal(inventoryRange({prompt:'最近新写了哪些笔记'},unbounded,now).start,recent.start);
  const r=inventoryRange({prompt:'2026-08-16至2026-09-16修改了哪些文件'});assert.equal(r.start,'2026-08-15T16:00:00.000Z');assert.equal(r.end,'2026-09-16T16:00:00.000Z');
  assert.equal(inventoryRange({prompt:'最近新写了哪些笔记'},r,now).start,r.start);
  const exact=inventoryRange({prompt:'2026-09-16 00:00:00 — 2026-09-16 09:41:36 有哪些笔记'});assert.equal(exact.end,'2026-09-16T01:41:36.000Z');

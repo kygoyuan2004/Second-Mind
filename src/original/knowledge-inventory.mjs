@@ -58,7 +58,7 @@ export function inventoryRange(body = {}, previous = null, now = Date.now()) {
     else if (/今天|昨天/.test(p)) { a = today - (/昨天/.test(p) ? 86400_000 : 0); b = /昨天/.test(p) ? today : +now; source = '北京时间日期'; }
     else if (/本周|上周/.test(p)) { const dow = new Date(today + 8*3600_000).getUTCDay() || 7; a = today-(dow-1)*86400_000; b = +now; if (/上周/.test(p)) { b=a; a-=7*86400_000; } source='北京时间自然周'; }
     else if (/最近\s*\d+\s*天/.test(p)) { const n=+p.match(/最近\s*(\d+)\s*天/)[1]; if (!n || n>36500) throw inventoryError('天数无效。'); a=+now-n*86400_000; b=+now; source='指定最近天数'; }
-    else if (previous && !/重新指定|过去一个月|最近一个月|近一个月/.test(p)) { a=previous.startMs; b=previous.endMs; source='沿用当前对话时间范围'; }
+    else if (previous && Number.isFinite(previous.startMs) && Number.isFinite(previous.endMs) && !/重新指定|过去一个月|最近一个月|近一个月/.test(p)) { a=previous.startMs; b=previous.endMs; source='沿用当前对话时间范围'; }
     else if (/最近|近期|新写|修改|更新/.test(p)) {
       // Calendar month subtraction, clamped at month end, retaining local clock time.
       const last = new Date(Date.UTC(y,m-1,0)).getUTCDate();

@@ -1,8 +1,29 @@
-# Second Mind
+<p align="center">
+  <a href="docs/assets/second-mind-hero.png">
+    <img src="docs/assets/second-mind-hero.png" alt="Second Mind 自托管知识工作台项目插画" width="100%">
+  </a>
+</p>
 
-让自己的 Obsidian 笔记参与问答、学习回顾和日常记录。
+<h1 align="center">Second Mind</h1>
 
-[English](README.en.md) · [项目展示](https://kygoyuan2004.github.io/Second-Mind/) · [安装](#安装) · [配置](docs/configuration.md) · [迁移与验收](docs/claude-sdk-migration.md)
+<p align="center"><strong>让自己的 Obsidian 笔记参与问答、学习回顾和日常记录。</strong></p>
+
+<p align="center">
+  <a href="README.en.md">English</a> ·
+  <a href="https://kygoyuan2004.github.io/Second-Mind/">项目展示</a> ·
+  <a href="#安装">安装</a> ·
+  <a href="docs/configuration.md">配置</a> ·
+  <a href="docs/claude-sdk-migration.md">迁移与验收</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml">
+    <img src="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml/badge.svg" alt="CI">
+  </a>
+  <a href="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/pages.yml">
+    <img src="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/pages.yml/badge.svg" alt="Pages">
+  </a>
+</p>
 
 ![真实 SDK 问答与来源，使用公开演示资料](docs/assets/second-mind-qa.png)
 

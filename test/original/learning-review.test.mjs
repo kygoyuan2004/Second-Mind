@@ -6,7 +6,7 @@ import test from 'node:test';
 import { KnowledgeAgentManager } from '../../src/original/knowledge-agent.mjs';
 import {
   createLearningReview, learningReviewPrompt, normalizeLearningReview, resolveLearningReview,
-  createLearningReviewToolBudget, learningReviewExecutionBudget,
+  createLearningReviewToolBudget, learningReviewExecutionBudget, knowledgeEvidencePolicy,
 } from '../../src/original/learning-review.mjs';
 
 const QUESTION = '总结最近一个月的学习重点';
@@ -75,17 +75,17 @@ test('旧会话三轮原话复用首轮日期，新主题不继承陈旧范围',
   assert.equal(normalizeLearningReview({ ...expected, startInclusive: '2026-08-02T16:00:00.000Z' }), null);
 });
 
-test('提示词要求期内事件、日期清单、分段覆盖及计划与完成区分', () => {
+test('回顾覆盖技术笔记与正文日期，保留范围、分段读取及计划与完成区分', () => {
   const prompt = learningReviewPrompt(createLearningReview(QUESTION, OPTIONS));
   for (const required of [
-    /Glob\/Grep 枚举全库/, /周计划和日期段落/, /日期表格列/, /offset\/limit 连续分段/,
-    /8 月 3—5 日不属于范围/, /修改时间只辅助/, /复习或实践/, /仅主题相关/,
+    /Glob\/Grep 枚举全库/, /技术笔记、整理笔记、日记、计划、周计划和日期段落/, /日期表格列/, /offset\/limit 连续分段/,
+    /8 月 3—5 日不属于范围/, /最后修改时间只能说明最后修改/, /技术笔记不必由日记或计划引出/, /正文和 frontmatter/,
     /完成、进行中、计划、未确认/, /不能判断“未完成”/, /期内最新明确事件/,
     /部分处理数/, /预算未覆盖数/, /不编造覆盖率/, /不得要求用户开启时间窗/,
   ]) assert.match(prompt, required);
 });
 
-test('回顾生成与服务端收尾都要求活动短引文，禁止用笔记或图片元数据建立本期成果', async () => {
+test('首轮、阶段提醒与收尾均允许独立技术笔记，并保留时间来源及覆盖约束', async () => {
   const prompt = learningReviewPrompt(createLearningReview(QUESTION, OPTIONS));
   const budget = createLearningReviewToolBudget({});
   const intermediateReminders = [];
@@ -98,14 +98,14 @@ test('回顾生成与服务端收尾都要求活动短引文，禁止用笔记�
   assert.equal(intermediateReminders.length, 2);
   for (const text of [prompt, ...intermediateReminders, denied.hookSpecificOutput.additionalContext,
     finalReminder.hookSpecificOutput.additionalContext]) {
-    assert.match(text, /期内日记、计划或周计划中的明确活动句/u);
-    assert.match(text, /每一项必须紧邻给出：事件日期、记录类型、原文逐字短引文/u);
-    assert.match(text, /计划句只能支持本期计划，不能支持已学习或已完成/u);
-    assert.match(text, /标题日期、frontmatter 日期、图片文件名、截图时间、附件时间及文件修改时间均不是学习活动日期/u);
-    assert.match(text, /不得编造未读取或根本不存在的图片/u);
-    assert.match(text, /“关联资料说明”/u);
-    assert.match(text, /“未确认资料列表”/u);
-    assert.match(text, /不计入本期学习、成果或已完成数量/u);
+    assert.ok(text.includes(knowledgeEvidencePolicy));
+    assert.match(text, /技术笔记可以纳入本期回顾，无须日记佐证/u);
+    assert.match(text, /注明实际日期来源及其含义/u);
+    assert.match(text, /日期不明确的相关笔记可以列出并概述/u);
+    assert.match(text, /时间待核/u);
+    assert.match(text, /不自动推断已经掌握、实践或完成全部任务/u);
+    assert.match(text, /不编造不存在的文件、图片、附件或时间/u);
+    assert.doesNotMatch(text, /本期活动与成果只能由|文件元数据绝不建立|无法给出期内活动句|必须紧邻给出：事件日期/u);
     assert.match(text, /候选记录数 = 完整处理数 \+ 部分处理数 \+ 读取失败数 \+ 预算未覆盖数/u);
     assert.match(text, /空文件成功 Read 应计完整处理/u);
     assert.match(text, /不能同时计读取失败/u);
@@ -261,4 +261,23 @@ test('原话三轮直接进入只读 Agent，固定范围跨重启恢复且联�
   assert.equal(captured.at(-1).options.hooks, undefined);
   assert.equal(normalSearches, 1);
   assert.equal(webFactories, 1);
+
+  // Preserve an old restrictive answer in the resumed SDK conversation. The
+  // current policy must also be sent for ordinary file-list follow-ups.
+  const conversation = manager.conversations.get(conversationId);
+  conversation.messages.push({ role: 'assistant', text: '旧回答：没有日记活动句的技术笔记不计入本期成果。', createdAt: CLOCK });
+  const messageCount = conversation.messages.length;
+  const followUp = await manager.createTask('review-test-user', {
+    kind: 'qa', prompt: '告诉我我最近新写了哪些笔记', model: 'qwen', effort: 'xhigh',
+    webSearch: true, conversationId,
+  });
+  const followUpTask = await waitForTask(manager, followUp.taskId);
+  assert.equal(followUpTask.learningReview, null);
+  assert.equal(captured.at(-1).options.resume, 'mock-review-session');
+  assert.ok(captured.at(-1).options.systemPrompt.append.includes(knowledgeEvidencePolicy));
+  assert.match(captured.at(-1).options.systemPrompt.append, /取代历史消息中的日记或计划佐证门槛/u);
+  assert.equal(conversation.messages.length, messageCount + 2);
+  assert.ok(conversation.messages.some((m) => m.text.startsWith('旧回答：')));
+  assert.equal(normalSearches, 2);
+  assert.equal(webFactories, 2);
 });

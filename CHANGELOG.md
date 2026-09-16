@@ -5,6 +5,13 @@ tagged release. Until then, `main` is the source of truth.
 
 ## [Unreleased]
 
+### Changed
+
+- Learning reviews can use technical and organized notes directly, with their
+  stated dates and source citations, without a separate diary or plan entry.
+  Resumed conversations receive the same policy; date windows, read-only tools,
+  completion distinctions, and retrieval budgets remain in place.
+
 ### Added
 
 - Provider-neutral OpenAI-compatible and Anthropic chat adapters.

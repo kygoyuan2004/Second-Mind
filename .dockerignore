@@ -5,8 +5,11 @@
 !package-lock.json
 !requirements-media.txt
 !src/
+src/**
 !src/original/
+src/original/**
 !src/scripts/
+src/scripts/**
 !src/auth.mjs
 !src/bailian-responses-extractor.mjs
 !src/bailian-web-search-client.mjs
@@ -56,6 +59,7 @@
 !src/vault-replica.mjs
 !src/vault-store.mjs
 !public/
+public/**
 !public/admin-config.css
 !public/admin-config.html
 !public/admin-config.js
@@ -72,6 +76,7 @@
 !public/site-config.js
 !public/styles.css
 !scripts/
+scripts/**
 !scripts/sync-vendor-assets.mjs
 public/vendor/
 
@@ -79,13 +84,16 @@ public/vendor/
 !public/knowledge-inventory.js
 
 !platform/
+platform/**
 !platform/private-storage.mjs
 !platform/process-tree.mjs
 !desktop/
+desktop/**
 !desktop/resources.mjs
 !desktop/media-model.mjs
 !public/knowledge-passage.js
 !public/study-plan/
+public/study-plan/**
 !src/original/knowledge-evidence.mjs
 !src/original/knowledge-query.mjs
 !src/original/study-plan-store.mjs

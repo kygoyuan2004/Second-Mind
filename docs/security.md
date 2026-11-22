@@ -35,3 +35,5 @@ The image runs without root by default, drops capabilities, uses a read-only roo
 The Docker context is an explicit runtime allowlist. Historical code, test credentials, private backups, acceptance logs, and real API keys do not belong in images or Pages. Before publication, scan the working tree, staged diff, outgoing history, built site, image metadata/layers, and screenshot OCR/metadata. A clean scan is evidence for the scanned artifacts, not proof against every possible leak.
 
 See [deployment](deployment.md), [configuration](configuration.md), and the dated [validation scope](claude-sdk-migration.md).
+
+When a Vault contains a tool cache such as `.cache`, `.git` or `node_modules`, the SDK uses a private per-conversation working directory containing copies of allowed ordinary files. Cache directories, hidden entries and reparse points are excluded from this view. Confirmed drafts still write through the original Vault store. The application removes the working copy after each task.

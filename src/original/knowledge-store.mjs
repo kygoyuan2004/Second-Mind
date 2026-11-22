@@ -1,3 +1,5 @@
+import { isToolCache } from '../path-policy.mjs';
+import { reparseChildren } from '../../platform/private-storage.mjs';
 import { markPublicMessage } from '../public-errors.mjs';
 import { noteTermLookup, matchedLineExcerpt } from './knowledge-query.mjs';
 import { passageHeadings } from '../../public/knowledge-passage.js';
@@ -368,20 +370,24 @@ export class KnowledgeStore {
     }
   }
 
-  async assertNoSymlinks(relative = '') {
+  async assertNoSymlinks(relative = '', isolateCaches = false) {
+    let needsView = false;
     const directory = relative ? path.join(this.root, relative) : this.root;
     const entries = await fsp.readdir(directory, { withFileTypes: true });
+    const reparse = await reparseChildren(directory);
     for (const entry of entries) {
       const child = relative ? `${relative}/${entry.name}` : entry.name;
-      if (entry.isSymbolicLink()) {
+      if (isolateCaches && isToolCache(entry.name)) { needsView = true; continue; }
+      if (entry.isSymbolicLink() || reparse.has(entry.name)) {
         throw knowledgeError(
           503,
           `知识库包含不允许的符号链接：${child}`,
           'KNOWLEDGE_SYMLINK_DENIED',
         );
       }
-      if (entry.isDirectory()) await this.assertNoSymlinks(child);
+      if (entry.isDirectory() && await this.assertNoSymlinks(child, isolateCaches)) needsView = true;
     }
+    return needsView;
   }
 
   async resolveSource(reference) {
@@ -417,9 +423,10 @@ export class KnowledgeStore {
     const directory = relative ? path.join(this.root, relative) : this.root;
     const entries = await fsp.readdir(directory, { withFileTypes: true });
     entries.sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
+    const reparse = await reparseChildren(directory);
     for (const entry of entries) {
       const child = relative ? `${relative}/${entry.name}` : entry.name;
-      if (entry.isSymbolicLink()) continue;
+      if (entry.isSymbolicLink() || reparse.has(entry.name) || isToolCache(entry.name)) continue;
       if (entry.isDirectory()) yield* this.walk(child);
       else if (entry.isFile()) yield child;
     }

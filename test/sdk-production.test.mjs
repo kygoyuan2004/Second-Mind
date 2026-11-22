@@ -8,7 +8,7 @@ import { temporaryProject } from './helpers.mjs';
 
 import { messageResponse, waitFor } from './sdk-test-helpers.mjs';
 
-test('real Agent SDK binary uses Read + knowledge MCP, streams citations, and resumes its session with isolated credentials', { timeout: 60_000 }, async (t) => {
+test('real Agent SDK reads a Vault containing a linked tool cache, streams citations and resumes its session', { timeout: 60_000 }, async (t) => {
   const project = await temporaryProject('second-mind-sdk-');
   let app;
   t.after(async () => {
@@ -21,6 +21,11 @@ test('real Agent SDK binary uses Read + knowledge MCP, streams citations, and re
   });
   await fs.mkdir(path.join(project.vaultPath, '.obsidian'));
   await fs.writeFile(path.join(project.vaultPath, 'Evidence.md'), '# Evidence\n\n公开演示资料：验收标记是 sdkpublicmarker，计划尚未完成。\n');
+  const cache = path.join(project.vaultPath, '.cache', 'codex-runtimes', 'demo', 'node_modules');
+  await fs.mkdir(cache, { recursive: true });
+  const cachedModule = path.join(cache, 'fixture-module');
+  await fs.symlink(cache, cachedModule, process.platform === 'win32' ? 'junction' : 'dir');
+  await fs.writeFile(path.join(cache, 'cache-marker.txt'), 'unrelated build cache');
   const requests = [];
   const credential = 'synthetic-sdk-provider-credential';
   let toolSequence = 0;
@@ -71,11 +76,15 @@ test('real Agent SDK binary uses Read + knowledge MCP, streams citations, and re
   const toolResults = requests.flatMap((r) => r.messages).flatMap((m) => Array.isArray(m.content) ? m.content : []).filter((b) => b.type === 'tool_result');
   assert.ok(toolResults.some((b) => b.tool_use_id === 'read_fixture' && JSON.stringify(b.content).includes('计划尚未完成')));
   assert.ok(toolResults.some((b) => b.tool_use_id === 'search_fixture' && !b.is_error));
+  assert.equal(JSON.stringify(requests).includes('unrelated build cache'), false);
+  assert.equal((await fs.lstat(cachedModule)).isSymbolicLink(), true);
   assert.equal(requests[0].output_config?.effort, 'xhigh');
   // SDK 0.3.247 applies its own 128000 wire cap to the original 131072 env setting.
   assert.equal(requests[0].max_tokens, 128_000);
   const conversation = manager.conversations.get(created.conversationId);
   assert.ok(conversation.sdkSessionId);
+  assert.equal(conversation.isolatedSdkWorkspace, true);
+  assert.notEqual(finished.root, project.vaultPath);
   const sessionId = conversation.sdkSessionId;
   await waitFor(() => !manager.taskRegistry.active?.has?.(finished.userId));
   const next = await call('/api/knowledge/tasks?knowledgeBaseId=default', { method: 'POST', body: JSON.stringify({

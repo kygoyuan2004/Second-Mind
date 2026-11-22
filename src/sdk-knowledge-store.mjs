@@ -1,3 +1,5 @@
+import { isToolCache } from './path-policy.mjs';
+import { markPublicMessage } from './public-errors.mjs';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -18,6 +20,13 @@ export class SdkKnowledgeStore extends KnowledgeStore {
     this.config = config;
     this.legacyConfig = legacyConfig;
     this.recoveryRoot = path.join(config.dataDir, 'recovery');
+  }
+
+  async assertPathNoSymlinks(relative) {
+    if (relative.split('/').some(isToolCache)) {
+      throw markPublicMessage(Object.assign(new Error('工具缓存目录不属于可读取的笔记。'), { status: 403, code: 'VAULT_PATH_EXCLUDED' }));
+    }
+    return super.assertPathNoSymlinks(relative);
   }
 
   async findDatedTarget(kind, date) {

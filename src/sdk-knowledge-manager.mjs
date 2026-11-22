@@ -1,3 +1,4 @@
+import { SdkVaultViews } from './sdk-vault-view.mjs';
 import { isInventoryRequest } from './original/knowledge-inventory.mjs';
 import path from 'node:path';
 import { KnowledgeAgentManager } from './original/knowledge-agent.mjs';
@@ -27,6 +28,7 @@ export class SdkKnowledgeManager extends KnowledgeAgentManager {
     this.config = config;
     this.runtimeConfig = options.runtimeConfig;
     this.transportFetch = options.sdkFetch;
+    this.sdkViews = new SdkVaultViews(config);
     this.sdkStateDir = path.join(config.dataDir, 'claude-sessions');
     this.webFactory = options.webFactory;
     this.running = new Set();
@@ -159,6 +161,15 @@ export class SdkKnowledgeManager extends KnowledgeAgentManager {
   }
 
   async prepareSdkTask(task, conversation) {
+    if (task.isolateSdkFiles || conversation.isolatedSdkWorkspace) {
+      task.sdkView = await this.sdkViews.open(conversation.id, task.abortController.signal);
+      task.root = task.sdkView.directory;
+      if (!conversation.isolatedSdkWorkspace && conversation.sdkSessionId) {
+        conversation.sdkSessionId = null;
+        conversation.legacyContextPending = true;
+      }
+      conversation.isolatedSdkWorkspace = true;
+    }
     const binding = sdkBinding(task.model);
     task.sdkTransport = await openSdkTransport(binding, { fetch: this.transportFetch, onFailure: ({ status }) => {
       const failures = {
@@ -200,7 +211,8 @@ export class SdkKnowledgeManager extends KnowledgeAgentManager {
       await task.sdkTransport?.close();
       delete task.sdkTransport;
       delete task.sdkEnv;
-      await task.webMcp?.closeLease?.();
+      try { await task.webMcp?.closeLease?.(); }
+      finally { await task.sdkView?.release(); delete task.sdkView; }
     }
   }
 

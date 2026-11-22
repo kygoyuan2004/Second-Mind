@@ -766,7 +766,9 @@ export class KnowledgeAgentManager {
   async createTaskWithinMutation(userId, body) {
     await this.ready;
     if (isInventoryRequest(body)) return this.createInventoryTask(userId, body);
-    await this.store.assertNoSymlinks();
+    const isolateSdkFiles = this.sdkViews
+      ? await this.store.assertNoSymlinks('', true)
+      : await this.store.assertNoSymlinks();
     const modelCatalog = this.resolveModelCatalog ? await this.resolveModelCatalog() : this.modelCatalog;
     const kind = String(body.kind || 'qa');
     if (!KNOWLEDGE_KINDS.has(kind)) {
@@ -911,6 +913,7 @@ export class KnowledgeAgentManager {
       cancelReason: '',
       draftId: null,
       root: this.store.root,
+      isolateSdkFiles,
       hybridSearchEnabled: this.hybridSearchEnabled,
       subagentsEnabled: this.subagentsEnabled,
       subagentToolUseIds: new Set(),

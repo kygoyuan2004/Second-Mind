@@ -49,6 +49,10 @@ export function normalizeRelative(value, options = {}) {
   return parts.join('/');
 }
 
+export function isToolCache(name) {
+  return /^(?:\.cache|node_modules|\.git)$/iu.test(name);
+}
+
 export function isInside(root, target) {
   return isInsidePath(root, target);
 }
@@ -79,7 +83,7 @@ export class VaultPathPolicy {
     const relative = normalizeRelative(relativeInput, { allowEmpty: true });
     if (!relative) return false;
     const parts = relative.split('/');
-    if (parts.some((part) => part.startsWith('.'))) return true;
+    if (parts.some((part) => part.startsWith('.') || isToolCache(part))) return true;
     const key = process.platform === 'win32' ? relative.toLowerCase() : relative;
     return this.exclusions.some((input) => {
       const excluded = process.platform === 'win32' ? input.toLowerCase() : input;

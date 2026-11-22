@@ -27,8 +27,8 @@ jobs:
           package=$(realpath dist/linux/*.deb)
           sudo apt-get update -qq
           sudo apt-get install -y "$package"
-          binary=$(dpkg-query -L second-mind | rg '/second-mind$' | while read -r entry; do if test -f "$entry" && test -x "$entry"; then echo "$entry"; break; fi; done)
-          test -n "$binary"
+          binary=$(command -v second-mind)
+          test -x "$binary"
           xvfb-run -a env SECOND_MIND_PACKAGED_EXECUTABLE="$binary" node --test test/desktop-shell.electron.mjs
           sudo apt-get remove -y second-mind
       - uses: actions/upload-artifact@v4

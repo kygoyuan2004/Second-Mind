@@ -100,3 +100,4 @@ public/vendor/
 !public/study-plan/sync.css
 !src/original/local-asr.mjs
 !src/scripts/transcribe-qwen.py
+!src/sdk-vault-view.mjs

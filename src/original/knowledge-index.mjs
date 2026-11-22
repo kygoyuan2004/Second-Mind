@@ -1,3 +1,5 @@
+import { isToolCache } from '../path-policy.mjs';
+import { reparseChildren } from '../../platform/private-storage.mjs';
 import { noteTermLookup, matchedLineExcerpt } from './knowledge-query.mjs';
 import { passageHeadings } from '../../public/knowledge-passage.js';
 import crypto from 'node:crypto';
@@ -70,7 +72,7 @@ function shouldSkip(relative, entryName = '') {
   if (parts.includes('.obsidian')) return true;
   const name = entryName || parts.at(-1) || '';
   return (
-    name.startsWith('.') ||
+    isToolCache(name) || name.startsWith('.') ||
     name.startsWith('~') ||
     name.endsWith('~') ||
     /(?:\.tmp|\.temp|\.swp|\.part|\.crdownload)$/i.test(name)
@@ -90,10 +92,11 @@ async function walkFiles(root, relative = '', output = { files: [], directories:
   } catch {
     return output;
   }
+  const reparse = await reparseChildren(directory);
   entries.sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
   for (const entry of entries) {
     const child = relative ? `${relative}/${entry.name}` : entry.name;
-    if (entry.isSymbolicLink() || shouldSkip(child, entry.name)) continue;
+    if (entry.isSymbolicLink() || reparse.has(entry.name) || shouldSkip(child, entry.name)) continue;
     if (entry.isDirectory()) await walkFiles(root, child, output);
     else if (entry.isFile() && indexedExtension(child)) output.files.push(child);
   }

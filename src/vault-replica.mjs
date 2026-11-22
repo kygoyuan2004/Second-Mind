@@ -41,9 +41,10 @@ function sameStat(left, right) {
     left.mtimeMs === right.mtimeMs && left.ctimeMs === right.ctimeMs;
 }
 
-async function readFileRecord(filename, destination, signal) {
+export async function readFileRecord(filename, destination, signal, expected) {
   signal?.throwIfAborted?.();
   const before = await fsp.lstat(filename);
+  if (expected && !sameStat(before, expected)) fail('REPLICA_SOURCE_CHANGED', '文件在准备读取时发生变化，请重试。');
   if (!before.isFile() || before.isSymbolicLink()) fail('REPLICA_SPECIAL_FILE', 'Only ordinary files can be copied.');
   const input = await fsp.open(filename, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
   let output;

@@ -4,9 +4,27 @@ import path from 'node:path';
 import test from 'node:test';
 import { createConfig } from '../src/config.mjs';
 import { startApplication } from '../src/bootstrap.mjs';
+import { SdkModelRuntime } from '../src/sdk-runtime.mjs';
 import { temporaryProject } from './helpers.mjs';
 
 import { messageResponse, waitFor } from './sdk-test-helpers.mjs';
+
+test('a successful SDK connection probe releases its working directory before settings are saved', { timeout: 60_000 }, async (t) => {
+  const project = await temporaryProject('sdk-probe-');
+  t.after(() => project.cleanup());
+  const stateDir = path.join(project.dataDir, 'sdk-validation');
+  const runtime = new SdkModelRuntime({
+    stateDir,
+    fetch: async () => messageResponse({ type: 'text', text: 'OK' }, 'end_turn'),
+  });
+  const result = await runtime.validateAllEnabled({
+    connections: [{ id: 'fixture', providerId: 'deepseek', protocol: 'anthropic-messages',
+      authMode: 'bearer', apiBase: 'https://api.deepseek.com/anthropic', apiKey: 'synthetic-sdk-probe' }],
+    models: [{ id: 'probe', actualModel: 'deepseek-flash', connectionId: 'fixture' }],
+  });
+  assert.equal(result.checked, 1);
+  assert.deepEqual(await fs.readdir(stateDir), []);
+});
 
 test('real Agent SDK reads a Vault containing a linked tool cache, streams citations and resumes its session', { timeout: 60_000 }, async (t) => {
   const project = await temporaryProject('second-mind-sdk-');

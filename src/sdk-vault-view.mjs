@@ -24,8 +24,9 @@ export class SdkVaultViews {
     const current = new Promise((resolve) => { unlock = resolve; });
     this.leases.set(key, current);
     await previous;
+    const clearView = () => fs.rm(directory, { recursive: true, force: true, maxRetries: 15, retryDelay: 100 });
     const release = async () => {
-      try { await fs.rm(directory, { recursive: true, force: true, maxRetries: 3 }); }
+      try { await clearView(); }
       finally {
         unlock();
         if (this.leases.get(key) === current) this.leases.delete(key);
@@ -34,7 +35,7 @@ export class SdkVaultViews {
     try {
       signal?.throwIfAborted();
       await ensurePrivateDirectory(this.directory);
-      await fs.rm(directory, { recursive: true, force: true });
+      await clearView();
       await fs.mkdir(directory, { mode: 0o700 });
       for await (const relative of policy.walk()) {
         signal?.throwIfAborted();

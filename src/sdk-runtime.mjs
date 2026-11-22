@@ -198,8 +198,15 @@ export class SdkModelRuntime {
         results.push({ modelId: model.id, ok: false, code, message: code === 'SDK_PROTOCOL_UNSUPPORTED'
           ? '此连接需要受支持的 Anthropic Messages 接口。' : 'SDK 连接检查失败；请核对模型与凭据。' });
       } finally {
-        clearTimeout(timer); handle?.close?.(); await transport?.close();
-        await fs.rm(root, { recursive: true, force: true });
+        clearTimeout(timer);
+        try {
+          // The SDK's generator return waits for its subprocess to release cwd on Windows.
+          handle?.close?.();
+          await handle?.return?.();
+        } finally {
+          try { await transport?.close(); }
+          finally { await fs.rm(root, { recursive: true, force: true, maxRetries: 15, retryDelay: 100 }); }
+        }
       }
     }
     if (results.some((r) => !r.ok)) {

@@ -208,11 +208,13 @@ export class SdkKnowledgeManager extends KnowledgeAgentManager {
       await super.runTask(task, conversation);
     } finally {
       task.transportRequests = task.sdkTransport?.requests || [];
-      await task.sdkTransport?.close();
-      delete task.sdkTransport;
-      delete task.sdkEnv;
-      try { await task.webMcp?.closeLease?.(); }
-      finally { await task.sdkView?.release(); delete task.sdkView; }
+      try { await task.sdkTransport?.close(); }
+      finally {
+        delete task.sdkTransport;
+        delete task.sdkEnv;
+        try { await task.webMcp?.closeLease?.(); }
+        finally { await task.sdkView?.release(); delete task.sdkView; }
+      }
     }
   }
 

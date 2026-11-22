@@ -373,7 +373,16 @@ export class KnowledgeStore {
   async assertNoSymlinks(relative = '', isolateCaches = false) {
     let needsView = false;
     const directory = relative ? path.join(this.root, relative) : this.root;
-    const entries = await fsp.readdir(directory, { withFileTypes: true });
+    let entries;
+    try {
+      entries = await fsp.readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      if (error.code !== 'EPERM' && error.code !== 'EACCES') throw error;
+      // The SDK read view excludes all dot directories, including their descendants.
+      // A normal desktop account may lack permission to enumerate one of them.
+      if (isolateCaches && relative.split('/').some((part) => part.startsWith('.'))) return true;
+      throw knowledgeError(403, '当前账号无法读取知识库目录。请检查所选目录及其笔记子目录的读取权限。', 'KNOWLEDGE_DIRECTORY_UNREADABLE');
+    }
     const reparse = await reparseChildren(directory);
     for (const entry of entries) {
       const child = relative ? `${relative}/${entry.name}` : entry.name;

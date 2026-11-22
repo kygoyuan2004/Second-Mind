@@ -5,9 +5,37 @@ import test from 'node:test';
 import { createConfig } from '../src/config.mjs';
 import { startApplication } from '../src/bootstrap.mjs';
 import { SdkModelRuntime } from '../src/sdk-runtime.mjs';
+import { KnowledgeStore } from '../src/original/knowledge-store.mjs';
+import { SdkVaultViews } from '../src/sdk-vault-view.mjs';
 import { temporaryProject } from './helpers.mjs';
 
 import { messageResponse, waitFor } from './sdk-test-helpers.mjs';
+
+test('denied enumeration under a hidden directory isolates SDK reads while visible access errors remain actionable', async (t) => {
+  const project = await temporaryProject('sdk-restricted-vault-');
+  t.after(() => project.cleanup());
+  const hidden = path.join(project.vaultPath, '.support-cache', 'private');
+  const visible = path.join(project.vaultPath, 'Notes');
+  await fs.mkdir(hidden, { recursive: true });
+  await fs.mkdir(visible);
+  await fs.writeFile(path.join(visible, 'Note.md'), 'Public note');
+  const store = new KnowledgeStore({ root: project.vaultPath });
+  let denied = hidden;
+  const readdir = fs.readdir.bind(fs);
+  t.mock.method(fs, 'readdir', async (dir, ...args) => {
+    if (dir === denied) throw Object.assign(new Error('Directory access denied'), { code: 'EPERM' });
+    return readdir(dir, ...args);
+  });
+  assert.equal(await store.assertNoSymlinks('', true), true);
+  const view = await new SdkVaultViews(project.config).open('restricted-example');
+  try {
+    assert.deepEqual(await fs.readdir(view.directory), ['Notes']);
+    assert.equal(await fs.readFile(path.join(view.directory, 'Notes', 'Note.md'), 'utf8'), 'Public note');
+  } finally { await view.release(); }
+  for (denied of [visible, project.vaultPath]) {
+    await assert.rejects(store.assertNoSymlinks('', true), { code: 'KNOWLEDGE_DIRECTORY_UNREADABLE', status: 403 });
+  }
+});
 
 test('a successful SDK connection probe releases its working directory before settings are saved', { timeout: 60_000 }, async (t) => {
   const project = await temporaryProject('sdk-probe-');

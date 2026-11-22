@@ -491,9 +491,16 @@ function api(path, options = {}) {
   return fetch(knowledgeUrl(path), { credentials: 'same-origin', ...options, method, headers }).then(async (response) => {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const error = new Error(payload.message || `请求失败（${response.status}）`);
+      const rawCode = payload.error || payload.code;
+      const code = typeof rawCode === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(rawCode) ? rawCode : '';
+      const fallback = ['EPERM', 'EACCES'].includes(code)
+        ? '操作系统拒绝了文件访问。请检查知识库和应用数据目录的访问权限。'
+        : '服务暂时无法完成请求。';
+      const message = payload.message && payload.message !== 'The server could not complete this request.'
+        ? payload.message : `${fallback}（HTTP ${response.status}${code ? `，${code}` : ''}）`;
+      const error = new Error(message);
       error.status = response.status;
-      error.code = payload.code || '';
+      error.code = code;
       throw error;
     }
     return payload;

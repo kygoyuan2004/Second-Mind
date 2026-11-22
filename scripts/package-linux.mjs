@@ -9,7 +9,7 @@ import { createReadStream } from 'node:fs';
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const stage = path.resolve(process.argv[2]);
 const out = path.join(root, 'dist', 'linux');
-await build({ projectDir: root, targets: Platform.LINUX.createTarget(['AppImage', 'deb'], Arch.x64), config: {
+await build({ publish: 'never', projectDir: root, targets: Platform.LINUX.createTarget(['AppImage', 'deb'], Arch.x64), config: {
   extends: null, appId: 'io.secondmind.desktop', productName: 'Second Mind', asar: true, npmRebuild: false,
   directories: { output: out, buildResources: 'build/assets' },
   artifactName: 'SecondMind-${version}-linux-${arch}.${ext}',

@@ -115,7 +115,7 @@ if (prepareOnly) {
       await fs.copyFile(uninstallerPath, path.join(auditDirectory, 'SecondMind-uninstaller.exe'));
     },
   });
-  try { await build({ projectDir: root, targets: Platform.WINDOWS.createTarget(['nsis'], Arch.x64), config: configuration }); }
+  try { await build({ publish: 'never', projectDir: root, targets: Platform.WINDOWS.createTarget(['nsis'], Arch.x64), config: configuration }); }
   finally { restoreExtraction(); }
   const files = (await fs.readdir(output)).filter((file) => /^SecondMind-.*-windows-x64-setup\.exe$/.test(file));
   if (!files.length) throw new Error('No Windows installer was produced');

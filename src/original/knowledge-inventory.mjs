@@ -178,7 +178,16 @@ export class KnowledgeInventories {
     };
     const verify=async(rel,directory=false)=>{
       // Open root and each parent with NOFOLLOW, never resolving a replaced link.
-      if(!linux) { const target=await safePath(rel); return directory ? {stat:await fs.lstat(target,{bigint:true}),names:directoryNames(await fs.readdir(target,{withFileTypes:true}))} : {stat:await fs.lstat(target,{bigint:true})}; }
+      if (!linux) {
+        if (directory) {
+          const target = await safePath(rel);
+          return { stat: await fs.lstat(target, { bigint: true }), names: directoryNames(await fs.readdir(target, { withFileTypes: true })) };
+        }
+        // Inspect the leaf itself. A skipped symlink must still be compared as a link.
+        const parent = path.posix.dirname(rel);
+        const checkedParent = await safePath(parent === '.' ? '' : parent);
+        return { stat: await fs.lstat(path.join(checkedParent, path.posix.basename(rel)), { bigint: true }) };
+      }
       let h=await this.directoryHandle(this.root);
       try {
         const parts=rel.split('/').filter(Boolean), leaf=parts.pop();

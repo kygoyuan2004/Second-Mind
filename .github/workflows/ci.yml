@@ -62,6 +62,9 @@ jobs:
       - name: Compile the Windows filesystem helper
         if: runner.os == 'Windows'
         run: node platform/native/build-native.mjs
+      - name: Prepare the pinned Windows desktop runtime
+        if: runner.os == 'Windows'
+        run: python scripts/prepare-windows-runtime.py
       - name: Run Windows tests with ordinary filesystem permissions
         if: runner.os == 'Windows'
         shell: pwsh

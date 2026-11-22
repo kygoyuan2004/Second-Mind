@@ -53,7 +53,7 @@ class DownloadTest(unittest.TestCase):
         with patch.object(media.urllib.request, "urlopen", fetch):
             self.assertEqual(media.prepare_model(), str(self.directory))
         self.assertEqual((self.directory / "model.bin").read_bytes(), self.payload)
-        self.assertEqual(json.loads(self.status.read_text())["state"], "ready")
+        self.assertEqual(json.loads(self.status.read_text(encoding="utf-8"))["state"], "ready")
         with patch.object(media.urllib.request, "urlopen", side_effect=AssertionError("must work offline")):
             media.prepare_model()
 
@@ -61,17 +61,17 @@ class DownloadTest(unittest.TestCase):
         with patch.object(media.urllib.request, "urlopen", side_effect=lambda *args, **kwargs: Response(b"x" * len(self.payload))):
             with self.assertRaisesRegex(RuntimeError, "下载失败"):
                 media.prepare_model()
-        self.assertEqual(json.loads(self.status.read_text())["state"], "error")
+        self.assertEqual(json.loads(self.status.read_text(encoding="utf-8"))["state"], "error")
         self.assertFalse((self.directory / ".complete.json").exists())
         with patch.object(media.urllib.request, "urlopen", side_effect=lambda *args, **kwargs: Response(self.payload)):
             media.prepare_model()
-        self.assertEqual(json.loads(self.status.read_text())["state"], "ready")
+        self.assertEqual(json.loads(self.status.read_text(encoding="utf-8"))["state"], "ready")
 
     def test_complete_partial_after_interruption_needs_no_http_request(self):
         (self.directory / "model.bin.partial").write_bytes(self.payload)
         with patch.object(media.urllib.request, "urlopen", side_effect=AssertionError("must resume complete partial")):
             media.prepare_model()
-        self.assertEqual(json.loads(self.status.read_text())["state"], "ready")
+        self.assertEqual(json.loads(self.status.read_text(encoding="utf-8"))["state"], "ready")
 
 
 if __name__ == "__main__":

@@ -68,7 +68,7 @@ The application pins `@anthropic-ai/claude-agent-sdk@0.3.247`. Bailian, DeepSeek
 
 Each task pins its connection and credential. Real provider keys stay in the application server; SDK subprocesses receive a temporary local transport token. The SDK uses private state and does not read host `~/.claude` settings. External models receive questions, attachments, and selected note excerpts; remote embedding services receive indexed text. [Data flow](docs/data-flow.md) · [Security](docs/security.md)
 
-The previous executor is archived under `archive/pi/`, outside production imports, dependencies, and image context. Migration preserves original conversation and draft files while creating separate SDK state.
+The [v0.2.1 source archive](https://github.com/kygoyuan2004/Second-Mind/tree/v0.2.1/archive/pi) preserves the previous Pi executor, tests and documentation. Migration preserves original conversation and draft files while creating separate SDK state.
 
 ## Development
 

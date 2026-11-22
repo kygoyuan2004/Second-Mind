@@ -91,7 +91,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 
 服务端按任务固定连接和凭据。真实 Key 不交给浏览器或 SDK 子进程；SDK 使用独立私有状态目录，不读取宿主机的 `~/.claude`。模型仍会收到问题、附件和工具返回的笔记片段，远程 Embedding 会收到索引文本；自托管不等于模型处理全部留在本机。[数据流](docs/data-flow.md) · [安全边界](docs/security.md)
 
-旧执行器及其文档、测试归档在 `archive/pi/`，不在生产导入图、npm 依赖或镜像构建上下文中。升级保留旧会话、草稿和原始状态，新 SDK 状态使用独立目录。
+[v0.2.1 源码归档](https://github.com/kygoyuan2004/Second-Mind/tree/v0.2.1/archive/pi)保留了旧 Pi 执行器、文档和测试。升级保留旧会话、草稿和原始状态，新 SDK 状态使用独立目录。
 
 ## 开发与文档
 

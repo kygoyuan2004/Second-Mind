@@ -44,10 +44,8 @@
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
-    "adm-zip": "0.6.1",
     "electron": "44.11.5",
     "electron-builder": "26.15.3",
-    "extract-zip": "2.0.1",
     "html-validate": "11.13.0"
   },
   "main": "desktop/main.mjs",

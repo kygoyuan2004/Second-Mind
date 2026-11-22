@@ -45,4 +45,4 @@ Normal tasks keep the original 20-turn/10-minute limit. Deep Q&A keeps 50 turns/
 
 The SDK has no Bash, edit, or write tools. Application hooks constrain reads to the selected root and reject symbolic-link traversal. This is an application permission boundary, not a separate operating-system sandbox. Model keys remain in the server, behind an authenticated loopback Messages transport.
 
-See [migration differences](claude-sdk-migration.md), [data flow](data-flow.md), and [API](api.md). Historical implementation material under `archive/pi/` is not part of current runtime or test claims.
+See [migration differences](claude-sdk-migration.md), [data flow](data-flow.md), and [API](api.md). The [v0.2.1 source archive](https://github.com/kygoyuan2004/Second-Mind/tree/v0.2.1/archive/pi) preserves the previous Pi implementation and its tests.

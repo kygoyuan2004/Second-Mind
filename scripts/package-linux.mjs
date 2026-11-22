@@ -2,6 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import { build, Platform, Arch } from 'electron-builder';
+import electronExecutable from 'electron';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 
@@ -18,7 +19,7 @@ await build({ projectDir: root, targets: Platform.LINUX.createTarget(['AppImage'
     { from: path.join(stage, 'backend/node_modules'), to: 'backend/node_modules', filter: ['**/*', '!.bin{,/**/*}', '!.package-lock.json'] },
     { from: path.join(stage, 'runtime'), to: 'runtime' },
   ],
-  electronDist: path.join(root, 'node_modules/electron/dist'),
+  electronDist: path.dirname(electronExecutable),
   linux: { category: 'Office', executableName: 'second-mind', maintainer: 'Second Mind maintainers <opensource@users.noreply.github.com>' },
   extraMetadata: { homepage: 'https://github.com/kygoyuan2004/Second-Mind' },
   afterPack: async ({ appOutDir }) => {

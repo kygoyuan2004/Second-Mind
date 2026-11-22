@@ -93,6 +93,7 @@ export class KnowledgeInventories {
   async initialize() {
     await ensurePrivateDirectory(this.directory);
     const [root, storage] = await Promise.all([fs.realpath(this.root),fs.realpath(this.directory)]);
+    this.realRoot = root;
     if (isInsidePath(root, storage)) throw inventoryError('清单状态不能保存在知识库内。',500);
     for (const name of await fs.readdir(this.directory)) {
       if (!/^[a-f0-9-]{36}\.json$/.test(name)) continue;
@@ -145,7 +146,7 @@ export class KnowledgeInventories {
       const parts=rel.split('/').filter(Boolean); let target=this.root;
       for (const p of ['',...parts]) { if (p) target=path.join(target,p); const s=await fs.lstat(target,{bigint:true}); if(s.isSymbolicLink()) throw inventoryError('路径已变为符号链接'); }
       const real=await fs.realpath(target);
-      if(!isInsidePath(this.root,real)) throw inventoryError('路径越界');
+      if(!isInsidePath(this.realRoot,real)) throw inventoryError('路径越界');
       if(process.platform==='win32') await assertNoReparseTraversal(target);
       return target;
     };

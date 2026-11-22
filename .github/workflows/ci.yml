@@ -59,7 +59,17 @@ jobs:
           browser="${browser_root}/chrome-linux64/chrome"
           test -x "$browser"
           echo "SECOND_MIND_TEST_CHROME=$browser" >> "$GITHUB_ENV"
+      - name: Compile the Windows filesystem helper
+        if: runner.os == 'Windows'
+        run: node platform/native/build-native.mjs
+      - name: Run Windows tests with ordinary filesystem permissions
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows-test-user-token.ps1 -NodePath (Get-Command node).Source -ProjectRoot $PWD.Path
+          exit $LASTEXITCODE
       - name: Run offline tests
+        if: runner.os != 'Windows'
         run: npm test
       - name: Parse POSIX installer
         if: runner.os != 'Windows'

@@ -35,22 +35,25 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.247",
-    "@modelcontextprotocol/sdk": "1.30.0",
-    "dompurify": "3.4.15",
-    "katex": "0.18.1",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "dompurify": "3.4.18",
+    "katex": "0.18.10",
     "marked": "18.0.7",
     "tavily-mcp": "0.2.22",
-    "zod": "4.4.3"
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "html-validate": "11.13.0",
     "@playwright/test": "1.63.0",
     "adm-zip": "0.6.1",
-    "electron": "44.4.3",
+    "electron": "44.11.5",
     "electron-builder": "26.15.3",
-    "extract-zip": "2.0.1"
+    "extract-zip": "2.0.1",
+    "html-validate": "11.13.0"
   },
   "main": "desktop/main.mjs",
   "productName": "Second Mind",
-  "homepage": "https://github.com/kygoyuan2004/Second-Mind"
+  "homepage": "https://github.com/kygoyuan2004/Second-Mind",
+  "overrides": {
+    "@modelcontextprotocol/sdk": "$@modelcontextprotocol/sdk"
+  }
 }

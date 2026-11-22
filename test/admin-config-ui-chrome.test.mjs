@@ -1,18 +1,14 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { createRequire } from 'node:module';
+import { sourceBrowser } from './source-browser-helper.mjs';
 import { once } from 'node:events';
 import fsp from 'node:fs/promises';
 import http from 'node:http';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-const require = createRequire(import.meta.url);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicRoot = path.join(projectRoot, 'public');
-const chromePath = path.resolve(process.env.SECOND_MIND_TEST_CHROME || '/usr/bin/google-chrome');
 
 const providerOptions = [
   {
@@ -412,167 +408,12 @@ async function waitFor(check, description, timeoutMs = 8_000) {
   throw new Error(`Timed out waiting for ${description}${lastError ? `: ${lastError.message}` : ''}`);
 }
 
-function websocketImplementation() {
-  if (typeof globalThis.WebSocket === 'function') return globalThis.WebSocket;
-  try {
-    return require('undici').WebSocket;
-  } catch {
-    return null;
-  }
-}
-
-function boundCdpSetup(promise, description) {
-  let timer;
-  const deadline = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`Timed out waiting for ${description}`)), 8_000);
-    timer.unref?.();
-  });
-  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
-}
-
-async function connectCdp(url, WebSocketImpl) {
-  const socket = new WebSocketImpl(url);
-  try {
-    await boundCdpSetup(new Promise((resolve, reject) => {
-      socket.addEventListener('open', resolve, { once: true });
-      socket.addEventListener('error', reject, { once: true });
-    }), 'Chrome DevTools connection');
-  } catch (error) {
-    try { socket.close(); } catch {}
-    throw error;
-  }
-  let nextId = 0;
-  const pending = new Map();
-  const rejectPending = () => {
-    for (const entry of pending.values()) {
-      entry.reject(new Error('Chrome DevTools connection closed.'));
-    }
-    pending.clear();
-  };
-  socket.addEventListener('close', rejectPending);
-  socket.addEventListener('error', rejectPending);
-  socket.addEventListener('message', (event) => {
-    let message;
-    try {
-      message = JSON.parse(typeof event.data === 'string' ? event.data : Buffer.from(event.data).toString('utf8'));
-    } catch {
-      return;
-    }
-    if (!message.id || !pending.has(message.id)) return;
-    const entry = pending.get(message.id);
-    pending.delete(message.id);
-    if (message.error) entry.reject(new Error(`${message.error.code}: ${message.error.message}`));
-    else entry.resolve(message.result || {});
-  });
-  const call = (method, params = {}) => new Promise((resolve, reject) => {
-    const id = ++nextId;
-    const timer = setTimeout(() => {
-      pending.delete(id);
-      reject(new Error(`Timed out waiting for Chrome DevTools ${method}.`));
-    }, 8_000);
-    timer.unref?.();
-    const entry = {
-      resolve(value) {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      reject(error) {
-        clearTimeout(timer);
-        reject(error);
-      },
-    };
-    pending.set(id, entry);
-    try {
-      socket.send(JSON.stringify({ id, method, params }));
-    } catch (error) {
-      pending.delete(id);
-      entry.reject(error);
-    }
-  });
-  try {
-    await boundCdpSetup(
-      Promise.all([call('Page.enable'), call('Runtime.enable')]),
-      'Chrome DevTools initialization',
-    );
-  } catch (error) {
-    try { socket.close(); } catch {}
-    throw error;
-  }
-  return {
-    call,
-    close() {
-      rejectPending();
-      try { socket.close(); } catch {}
-    },
-    async evaluate(expression) {
-      const result = await call('Runtime.evaluate', {
-        expression,
-        awaitPromise: true,
-        returnByValue: true,
-        userGesture: true,
-      });
-      if (result.exceptionDetails) {
-        throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
-      }
-      return result.result?.value;
-    },
-  };
-}
-
-async function launchChrome(url, profile, WebSocketImpl) {
-  const chrome = spawn(chromePath, [
-    '--headless=new', '--disable-gpu', '--disable-extensions', '--disable-background-networking',
-    '--disable-component-update', '--disable-default-apps', '--disable-sync', '--metrics-recording-only',
-    '--no-first-run', '--no-default-browser-check', '--no-sandbox',
-    '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0',
-    `--user-data-dir=${profile}`, url,
-  ], { stdio: ['ignore', 'ignore', 'pipe'] });
-  let spawnError = null;
-  chrome.once('error', (error) => { spawnError = error; });
-  const stderr = [];
-  chrome.stderr.on('data', (chunk) => {
-    if (stderr.reduce((sum, item) => sum + item.length, 0) < 32 * 1024) stderr.push(chunk);
-  });
-  try {
-    const activePortFile = path.join(profile, 'DevToolsActivePort');
-    const port = await waitFor(async () => {
-      if (spawnError) throw new Error(`Chrome could not start (${spawnError.code || 'spawn error'}).`);
-      if (chrome.exitCode !== null || chrome.signalCode !== null) {
-        throw new Error(Buffer.concat(stderr).toString('utf8').slice(-2_000));
-      }
-      const value = await fsp.readFile(activePortFile, 'utf8').catch(() => '');
-      return Number(value.split(/\r?\n/)[0]) || 0;
-    }, 'Chrome DevTools port');
-    const target = await waitFor(async () => {
-      const response = await fetch(`http://127.0.0.1:${port}/json/list`, {
-        signal: AbortSignal.timeout(2_000),
-      });
-      return (await response.json()).find((item) => item.type === 'page' && item.url.startsWith(url));
-    }, 'admin page target');
-    return { chrome, cdp: await connectCdp(target.webSocketDebuggerUrl, WebSocketImpl) };
-  } catch (error) {
-    await stopChrome(chrome).catch(() => {});
-    throw error;
-  }
-}
-
-async function stopChrome(chrome) {
-  if (!chrome || chrome.exitCode !== null || chrome.signalCode !== null || !chrome.pid) return;
-  const exited = once(chrome, 'exit');
-  chrome.kill('SIGTERM');
-  await Promise.race([exited, delay(1_500)]);
-  if (chrome.exitCode === null && chrome.signalCode === null) {
-    chrome.kill('SIGKILL');
-    await Promise.race([once(chrome, 'exit'), delay(1_500)]);
-  }
-}
-
 async function waitForPage(cdp, expression, description) {
   try {
     return await waitFor(() => cdp.evaluate(expression), description);
   } catch (error) {
     const snapshot = await cdp.evaluate(`({
-      title: document.title,
+      location: location.protocol + location.pathname, ready: document.readyState, title: document.title,
       gate: document.querySelector('#gate-message')?.textContent,
       message: document.querySelector('#config-message')?.textContent,
       connections: document.querySelectorAll('[data-connection-card]').length,
@@ -585,30 +426,10 @@ async function waitForPage(cdp, expression, description) {
 test('headless Chrome validates a simplified Provider candidate then commits only its receipt', {
   timeout: 60_000,
 }, async (t) => {
-  const WebSocketImpl = websocketImplementation();
-  const chromeAvailable = await fsp.access(chromePath).then(() => true, () => false);
-  if (!chromeAvailable || !WebSocketImpl) {
-    t.skip('Google Chrome or a WHATWG WebSocket implementation is unavailable.');
-    return;
-  }
-
-  const profile = await fsp.mkdtemp(path.join(os.tmpdir(), 'vaultmind-admin-ui-chrome-'));
   const application = await createMockApplication();
-  let chrome;
-  let cdp;
-  t.after(async () => {
-    cdp?.close();
-    await stopChrome(chrome);
-    await application.close();
-    await fsp.rm(profile, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 50,
-    });
-  });
-
-  ({ chrome, cdp } = await launchChrome(application.url, profile, WebSocketImpl));
+  t.after(() => application.close());
+  const cdp = await sourceBrowser(t, application.url);
+  if (!cdp) return;
   await waitForPage(cdp, `document.querySelector('#admin-app')?.hidden === false
     && document.querySelectorAll('[data-connection-card]').length === 1
     && document.querySelectorAll('[data-model-row]').length === 1`, 'initial Provider config');

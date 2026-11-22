@@ -10,7 +10,15 @@ import { messageResponse, waitFor } from './sdk-test-helpers.mjs';
 
 test('real Agent SDK binary uses Read + knowledge MCP, streams citations, and resumes its session with isolated credentials', { timeout: 60_000 }, async (t) => {
   const project = await temporaryProject('second-mind-sdk-');
-  t.after(() => project.cleanup());
+  let app;
+  t.after(async () => {
+    if (app) {
+      await app.knowledgeBaseHub.close();
+      app.server.closeAllConnections?.();
+      await new Promise((resolve) => app.server.close(resolve));
+    }
+    await project.cleanup();
+  });
   await fs.mkdir(path.join(project.vaultPath, '.obsidian'));
   await fs.writeFile(path.join(project.vaultPath, 'Evidence.md'), '# Evidence\n\n公开演示资料：验收标记是 sdkpublicmarker，计划尚未完成。\n');
   const requests = [];
@@ -33,8 +41,7 @@ test('real Agent SDK binary uses Read + knowledge MCP, streams citations, and re
       apiBase: 'https://dashscope.aliyuncs.com/apps/anthropic', apiKey: credential, model: 'qwen3.8-max' },
     embedding: { provider: 'disabled' }, webSearch: { enabled: false },
   });
-  const app = await startApplication({ config, dependencies: { sdkFetch } });
-  t.after(async () => { await app.knowledgeBaseHub.close(); await new Promise((r) => app.server.close(r)); });
+  app = await startApplication({ config, dependencies: { sdkFetch } });
   await app.ready;
   const base = `http://127.0.0.1:${app.port}`;
   const login = await fetch(`${base}/api/login`, { method: 'POST',

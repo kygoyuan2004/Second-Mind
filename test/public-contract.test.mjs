@@ -18,11 +18,11 @@ test('the public knowledge page keeps the original Second Mind UI contract', asy
   }
   assert.match(html, /\/styles\.css/);
   assert.match(html, /\/overrides\.css\?v=9/);
-  assert.match(html, /\/knowledge\.css\?v=19/);
+  assert.match(html, /\/knowledge\.css\?v=21/);
   assert.match(html, /\/agent-render\.js\?v=2/);
-  assert.match(html, /\/knowledge\.js\?v=19/);
+  assert.match(html, /\/knowledge\.js\?v=20261120-search/);
   assert.doesNotMatch(html, /\/drive\.html|Yuan Drive/);
-  assert.match(html, /href="\/admin-config\.html\?knowledgeBaseId=default">配置管理/);
+  assert.match(html, /href="\/admin-config\.html">配置管理/);
 });
 
 test('the original browser client keeps its API, streaming, source and write-preview flows', async () => {

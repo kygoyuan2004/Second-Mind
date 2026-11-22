@@ -53,7 +53,7 @@
     <section class="hero shell" aria-labelledby="hero-title">
       <div class="hero-copy">
         <p class="eyebrow">自托管知识工作台</p>
-        <h1 id="hero-title">读懂笔记，找到依据</h1>
+        <h1 id="hero-title">这周走到了哪一步？</h1>
         <p class="lede">在自己的基础设施中检索 Obsidian、追溯来源，并在明确确认后写回。</p>
         <div class="hero-actions">
           <a class="button button-primary" href="#quickstart">查看快速安装</a>
@@ -201,7 +201,7 @@
       <div class="section-heading offset-heading">
         <p class="eyebrow">真实产品截图</p>
         <h2 id="screenshots-title">在演示知识库中实际运行</h2>
-        <p>这些截图来自完整应用和真实 Claude Agent SDK 任务，使用独立公开演示资料。问答、学习回顾、日记与计划由百炼 Qwen 3.8 Max 生成。日记与计划通过原有编辑器去除了额外说明；截图不包含私人知识库。</p>
+        <p>这些截图来自独立演示库。DeepSeek 通过 Claude Agent SDK 阅读公开笔记并生成回顾、日记和计划。打开引用可核对原文，确认后的两项计划会出现在每日安排中。</p>
       </div>
       <div class="screenshot-ledger">
         <figure class="shot shot-wide asset-figure">
@@ -234,6 +234,8 @@
           <p class="asset-pending" hidden>计划界面截图未能加载。</p>
           <figcaption><strong>计划草稿</strong><small>内容与目标路径一起确认</small></figcaption>
         </figure>
+        <figure class="shot shot-wide asset-figure"><img src="/Second-Mind/assets/second-mind-source.png" width="1440" height="1050" alt="引用直接定位到笔记段落" loading="lazy"><figcaption><strong>核对原文</strong><small>引用直接定位到笔记段落</small></figcaption></figure>
+        <figure class="shot shot-wide asset-figure"><img src="/Second-Mind/assets/second-mind-schedule.png" width="1280" height="960" alt="确认后查看与编辑当日事项" loading="lazy"><figcaption><strong>每日安排</strong><small>确认后查看与编辑当日事项</small></figcaption></figure>
       </div>
     </section>
 
@@ -241,8 +243,8 @@
       <div class="shell quickstart-layout">
         <div class="section-heading">
           <p class="eyebrow">三平台快速安装</p>
-          <h2 id="quickstart-title">准备 Docker，选择一个知识库目录</h2>
-          <p>安装器只询问 Vault 或知识库父目录、管理员密码和端口。运行逻辑在 Node 容器中执行，宿主机不需要安装 Node.js。</p>
+          <h2 id="quickstart-title">在电脑上打开知识库，或部署为网页</h2><p>Windows x64 选择 EXE；Linux x86_64 选择 AppImage 或 Debian/Ubuntu 的 DEB。桌面应用支持本机 Vault 和连接现有服务器。下方是 Docker 网页版的安装命令。</p>
+          <a class="button button-primary" href="https://github.com/kygoyuan2004/Second-Mind/releases">下载桌面版</a>
           <p class="quickstart-prereq"><strong>前置条件：</strong>Git；Linux 使用常规 rootful Docker Engine 与 Compose v2，macOS 和 Windows 使用 Docker Desktop。rootless Docker 或 SELinux enforcing 主机需要管理员另行设计 UID、卷权限和 bind-mount relabel；安装器不会自动修改这些边界。</p>
         </div>
         <div class="install-terminal" data-tabs>

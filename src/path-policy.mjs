@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { markPublicMessage } from './public-errors.mjs';
+import { assertNoReparseTraversal, isInsidePath, isWindowsPathSegment, reparseChildren } from '../platform/private-storage.mjs';
 
 export const INDEXED_EXTENSIONS = new Set([
   '.md', '.txt', '.json', '.canvas', '.base', '.csv', '.yaml', '.yml', '.log',
@@ -42,15 +43,14 @@ export function normalizeRelative(value, options = {}) {
     throw pathError(400, 'Vault path is required.');
   }
   const parts = normalized.split('/');
-  if (parts.some((part) => !part || part === '.' || part === '..')) {
+  if (parts.some((part) => !part || part === '.' || part === '..' || (process.platform === 'win32' && !isWindowsPathSegment(part)))) {
     throw pathError(400, 'Vault path is invalid.');
   }
   return parts.join('/');
 }
 
 export function isInside(root, target) {
-  const relative = path.relative(root, target);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  return isInsidePath(root, target);
 }
 
 function normalizeExclusion(value) {
@@ -69,6 +69,8 @@ export class VaultPathPolicy {
     if (!stat?.isDirectory()) {
       throw pathError(503, `Vault directory is unavailable: ${this.root}`, 'VAULT_UNAVAILABLE');
     }
+    try { await assertNoReparseTraversal(this.root); }
+    catch { throw pathError(403, 'Vault root cannot traverse symbolic links or reparse points.', 'VAULT_SYMLINK_DENIED'); }
     this.realRoot = await fsp.realpath(this.root);
     return this;
   }
@@ -78,9 +80,11 @@ export class VaultPathPolicy {
     if (!relative) return false;
     const parts = relative.split('/');
     if (parts.some((part) => part.startsWith('.'))) return true;
-    return this.exclusions.some((excluded) => (
-      relative === excluded || relative.startsWith(`${excluded}/`)
-    ));
+    const key = process.platform === 'win32' ? relative.toLowerCase() : relative;
+    return this.exclusions.some((input) => {
+      const excluded = process.platform === 'win32' ? input.toLowerCase() : input;
+      return key === excluded || key.startsWith(`${excluded}/`);
+    });
   }
 
   assertAllowed(relativeInput) {
@@ -110,6 +114,8 @@ export class VaultPathPolicy {
         throw pathError(403, 'Symbolic links are not allowed inside accessible Vault paths.', 'VAULT_SYMLINK_DENIED');
       }
     }
+    try { await assertNoReparseTraversal(path.join(this.root, relative), options); }
+    catch { throw pathError(403, 'Symbolic links and reparse points are not allowed in Vault paths.', 'VAULT_SYMLINK_DENIED'); }
   }
 
   async existingFile(relativeInput, options = {}) {
@@ -136,14 +142,18 @@ export class VaultPathPolicy {
     const relative = normalizeRelative(relativeInput, { allowEmpty: true });
     if (relative && this.isExcluded(relative)) return;
     const directory = relative ? path.join(this.root, relative) : this.root;
+    await this.assertNoSymlinks(relative);
+    const real = await fsp.realpath(directory);
+    if (!isInside(this.realRoot, real)) throw pathError(403, 'Resolved Vault directory escapes its root.', 'VAULT_SYMLINK_DENIED');
     const entries = await fsp.readdir(directory, { withFileTypes: true }).catch((error) => {
       if (error.code === 'ENOENT') return [];
       throw error;
     });
+    const reparse = await reparseChildren(directory);
     entries.sort((left, right) => left.name.localeCompare(right.name));
     for (const entry of entries) {
       const child = relative ? `${relative}/${entry.name}` : entry.name;
-      if (this.isExcluded(child) || entry.isSymbolicLink()) continue;
+      if (this.isExcluded(child) || entry.isSymbolicLink() || reparse.has(entry.name)) continue;
       if (entry.isDirectory()) yield* this.walk(child);
       else if (entry.isFile()) yield child;
     }

@@ -1,3 +1,4 @@
+import { assertPrivateMode, setTestPermissions } from './platform-fixtures.mjs';
 import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
@@ -85,11 +86,12 @@ function dynamicDocument({ connections, models }) {
 
 async function writePrivateJson(filename, value) {
   await fsp.writeFile(filename, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
-  await fsp.chmod(filename, 0o600);
+  await setTestPermissions(filename, 0o600);
 }
 
 async function legacyRegistryFixture(t) {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'runtime-branding-boundary-'));
+  await setTestPermissions(root, 0o700);
   t.after(() => fsp.rm(root, { recursive: true, force: true }));
   const settingsFile = path.join(root, 'settings.json');
   const managedFile = path.join(root, 'managed.json');

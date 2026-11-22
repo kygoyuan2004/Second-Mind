@@ -1,3 +1,4 @@
+import { assertPrivateMode, setTestPermissions } from './platform-fixtures.mjs';
 import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -39,7 +40,8 @@ test('publishes verified ordinary files, hidden notes and binary attachments wit
   const status = await inspectVaultReplica(value);
   assert.equal(JSON.stringify(status).includes(value.root), false);
   assert.equal(JSON.stringify(status).includes('.hidden'), false);
-  assert.equal((await fsp.stat(path.join(value.stateDir, 'vault-replica.json'))).mode & 0o777, 0o600);
+  await assertPrivateMode(value.stateDir, 0o700);
+  await assertPrivateMode(path.join(value.stateDir, 'vault-replica.json'));
 });
 
 test('manual update propagates source edits and deletions with a recoverable previous copy', async (t) => {
@@ -85,13 +87,13 @@ test('rejects symlinks without publishing or modifying an unrelated fixed benchm
   await fsp.mkdir(benchmark);
   await fsp.writeFile(path.join(benchmark, 'fixed.md'), 'fixed benchmark');
   await fsp.writeFile(path.join(value.sourceRoot, 'note.md'), 'source');
-  await fsp.symlink(path.join(benchmark, 'fixed.md'), path.join(value.sourceRoot, 'link.md'));
+  await fsp.symlink(process.platform === 'win32' ? benchmark : path.join(benchmark, 'fixed.md'), path.join(value.sourceRoot, 'link.md'), process.platform === 'win32' ? 'junction' : 'file');
   await assert.rejects(syncVaultReplica(value), { code: 'REPLICA_SYMLINK' });
   await assert.rejects(fsp.stat(value.targetRoot), { code: 'ENOENT' });
   assert.equal(await fsp.readFile(path.join(benchmark, 'fixed.md'), 'utf8'), 'fixed benchmark');
   assert.equal((await inspectVaultReplica(value)).configured, false);
   await fsp.rm(path.join(value.sourceRoot, 'link.md'));
-  await fsp.symlink(benchmark, path.join(value.root, 'alias'));
+  await fsp.symlink(benchmark, path.join(value.root, 'alias'), process.platform === 'win32' ? 'junction' : 'dir');
   await assert.rejects(syncVaultReplica({ ...value, targetRoot: path.join(value.root, 'alias', 'copy') }), { code: 'REPLICA_SYMLINK' });
 });
 
@@ -167,6 +169,9 @@ test('a manifest publication failure restores the old target and manifest togeth
   const rename = fsp.rename;
   fsp.rename = async (source, destination) => {
     if (destination === path.join(value.stateDir, 'vault-replica.json')) {
+      await assertPrivateMode(source);
+      await assertPrivateMode(path.join(value.stateDir, 'vault-replica-pending.json'));
+      await assertPrivateMode(path.join(value.stateDir, 'vault-replica.lock'));
       throw Object.assign(new Error('Synthetic publication failure'), { code: 'EIO' });
     }
     return rename.call(fsp, source, destination);

@@ -1,0 +1,20 @@
+.plan-migration-dialog { width: min(720px, 92vw); max-height: 85vh; padding: 24px; border: 1px solid #cbd5c5; border-radius: 16px; color: #203c33; background: #fffefa; }
+.plan-migration-dialog::backdrop { background: #15292088; }
+.plan-migration-dialog p { line-height: 1.7; }
+.plan-migration-dialog footer { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+.plan-migration-dialog button, .plan-migration-dialog select { padding: 10px 14px; font: inherit; cursor: pointer; }
+.migration-conflict { display: block; padding: 12px 0; border-top: 1px solid #dce3d7; }
+.migration-conflict pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; max-height: 260px; overflow: auto; }
+.plan-import-panel { border: 1px solid #d8dde5; padding: 16px; margin: 16px 0; }
+.plan-import-panel label { display: block; margin: 8px 0; }
+.plan-import-panel input[type=checkbox] { width: auto; }
+.knowledge-draft-dialog .knowledge-dialog-card { max-height: 90dvh; overflow-y: auto; box-sizing: border-box; }
+.knowledge-draft-dialog .plan-import-panel input[type=checkbox] { width: 18px; height: 18px; min-height: 0; padding: 0; vertical-align: middle; margin-right: 6px; }
+.plan-import-panel [data-generate] { padding: 10px 16px; border: 1px solid #203c33; background: #203c33; color: white; font: inherit; cursor: pointer; border-radius: 8px; }
+.plan-import-row { border-top: 1px solid #d8dde5; padding: 12px 0; }
+.plan-import-fields { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; }
+.plan-import-fields input, .plan-import-fields select { width: 100%; min-width: 0; font: inherit; padding: 8px; box-sizing: border-box; }
+.plan-import-row p { margin: 6px 0; overflow-wrap: anywhere; }
+.plan-import-warning { color: #925020; }
+@media (max-width: 650px) { .plan-import-fields { grid-template-columns: 1fr 1fr; } .knowledge-draft-dialog .plan-import-fields input, .plan-import-fields select { font-size: 16px; } }
+@media (max-width: 760px) { .knowledge-draft-dialog .knowledge-dialog-card { max-height: var(--kb-viewport-height, 100dvh); } }

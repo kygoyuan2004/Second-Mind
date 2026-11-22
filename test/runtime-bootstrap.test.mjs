@@ -1,3 +1,4 @@
+import { assertPrivateMode, setTestPermissions } from './platform-fixtures.mjs';
 import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -163,8 +164,8 @@ test('repository bootstrap remains offline and useful with an empty LLM catalog'
     assert.deepEqual(bootstrap.publicSnapshot.models, []);
     assert.equal(bootstrap.config.embedding.provider, 'disabled');
     assert.equal(bootstrap.runtimeConfig.runtimeSnapshot().embedding.provider, 'openai-compatible');
-    assert.equal((await fsp.stat(bootstrap.paths.managedFile)).mode & 0o777, 0o600);
-    assert.equal((await fsp.stat(bootstrap.paths.backupFile)).mode & 0o777, 0o600);
+    await assertPrivateMode(bootstrap.paths.managedFile);
+    await assertPrivateMode(bootstrap.paths.backupFile);
 
     app = await startServer({ config: bootstrap.config, dependencies: bootstrap.dependencies });
     await app.ready;
@@ -268,13 +269,16 @@ test('explicit Vault mounts discover immediate Obsidian children with stable iso
     const first = await createRuntimeBootstrap({ config, allowedRoots });
     const firstSnapshot = first.knowledgeBaseRegistry.administrativeSnapshot();
     assert.equal(firstSnapshot.source, 'managed');
-    assert.deepEqual(firstSnapshot.knowledgeBases.map((entry) => entry.name), ['Alpha Notes', '中文资料']);
-    assert.deepEqual(firstSnapshot.knowledgeBases.map((entry) => entry.relativePath), ['Alpha Notes', '中文资料']);
+    // Discovery follows the host locale; membership and stable selection matter
+    // regardless of whether Chinese or Latin names sort first.
+    assert.deepEqual(new Set(firstSnapshot.knowledgeBases.map((entry) => entry.name)), new Set(['Alpha Notes', '中文资料']));
+    assert.ok(firstSnapshot.knowledgeBases.every((entry) => entry.relativePath === entry.name));
+    assert.equal(firstSnapshot.defaultKnowledgeBaseId, firstSnapshot.knowledgeBases[0].knowledgeBaseId);
     assert.equal(firstSnapshot.knowledgeBases[0].default, true);
     assert.equal(firstSnapshot.knowledgeBases[1].default, false);
     assert.ok(firstSnapshot.knowledgeBases.every((entry) => /^[a-z0-9][a-z0-9.-]{0,63}$/u.test(entry.knowledgeBaseId)));
     assert.equal(new Set(firstSnapshot.knowledgeBases.map((entry) => entry.knowledgeBaseId)).size, 2);
-    assert.equal((await fsp.stat(first.paths.knowledgeBaseFile)).mode & 0o777, 0o600);
+    await assertPrivateMode(first.paths.knowledgeBaseFile);
 
     const runtimeEntries = first.knowledgeBaseRegistry.runtimeSnapshot().knowledgeBases;
     assert.notEqual(runtimeEntries[0].state.dataDir, runtimeEntries[1].state.dataDir);
@@ -287,6 +291,7 @@ test('explicit Vault mounts discover immediate Obsidian children with stable iso
       firstSnapshot.knowledgeBases.map((entry) => entry.knowledgeBaseId),
     );
     assert.equal(secondSnapshot.revision, firstSnapshot.revision);
+    assert.equal(secondSnapshot.defaultKnowledgeBaseId, firstSnapshot.defaultKnowledgeBaseId);
   } finally {
     await project.cleanup();
   }

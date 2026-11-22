@@ -49,8 +49,8 @@ const CONNECTION_PRESETS = Object.freeze({
   }),
   custom: Object.freeze({
     id: 'custom', label: '自定义兼容服务', defaultApiBase: '',
-    defaultProtocol: 'openai-chat-completions', authMode: 'bearer',
-    requestProfile: 'default', efforts: ['default'], defaultEffort: 'default', docsUrl: '',
+    defaultProtocol: 'anthropic-messages', authMode: 'x-api-key',
+    requestProfile: 'anthropic-standard', efforts: ['default'], defaultEffort: 'default', docsUrl: '',
   }),
 });
 
@@ -632,7 +632,7 @@ async function saveKnowledgeBases() {
   let knowledgeBases;
   try {
     knowledgeBases = collectKnowledgeBases();
-    if (!adminPassword) throw new Error('请输入当前管理员密码以确认注册表修改。');
+    if (!adminPassword && state.session?.authMode !== 'desktop') throw new Error('请输入当前管理员密码以确认注册表修改。');
   } catch (error) {
     showMessage(error.message, 'error');
     return;
@@ -765,7 +765,7 @@ function providerIdForCard(card) {
 function providerProtocol(card) {
   const id = providerIdForCard(card);
   const apiBase = connectionField(card, 'apiBase').value.trim();
-  if (id === 'custom') return connectionField(card, 'protocol').value || 'openai-chat-completions';
+  if (id === 'custom') return connectionField(card, 'protocol').value || 'anthropic-messages';
   if (id === 'bailian' && /\/compatible-mode\/v1(?:\/chat\/completions)?\/?$/iu.test(apiBase)) {
     return 'openai-chat-completions';
   }
@@ -830,6 +830,10 @@ function syncProviderCard(card, { applyDefaults = false } = {}) {
     : endpointPreview(apiBase.value, providerProtocol(card));
   card.dataset.endpointPreview = '';
   card.querySelector('[data-provider-endpoint]').textContent = preview;
+  const incompatible = Boolean(apiBase.value.trim()) && providerProtocol(card) !== 'anthropic-messages';
+  card.querySelector('[data-protocol-notice]').hidden = !incompatible;
+  card.querySelector('[data-use-messages]').hidden = providerId === 'custom' || !option.defaultApiBase;
+
   const docs = card.querySelector('[data-provider-docs]');
   const docsUrl = safeHttpsLink(card.dataset.docsUrl || option.docsUrl || fallback.docsUrl || '');
   docs.hidden = !docsUrl;
@@ -1670,7 +1674,7 @@ function collectBranding() {
 
 function collectPayload() {
   const adminPassword = elements.adminPassword.value;
-  if (!adminPassword) throw new Error('请输入当前管理员密码以确认本次操作。');
+  if (!adminPassword && state.session?.authMode !== 'desktop') throw new Error('请输入当前管理员密码以确认本次操作。');
   const connections = collectConnections();
   const models = collectModels(connections);
   const defaultModelId = elements.defaultModel.value;
@@ -1877,7 +1881,7 @@ async function checkConnection(card) {
     return;
   }
   const adminPassword = elements.adminPassword.value;
-  if (!adminPassword) {
+  if (!adminPassword && state.session?.authMode !== 'desktop') {
     showMessage('请输入当前管理员密码以确认真实连接检查。', 'error');
     elements.adminPassword.focus();
     return;
@@ -2026,7 +2030,7 @@ async function saveConfig() {
   const adminPassword = elements.adminPassword.value;
   try {
     if (!elements.form.reportValidity()) return false;
-    if (!adminPassword) throw new Error('请输入当前管理员密码以确认本次操作。');
+    if (!adminPassword && state.session?.authMode !== 'desktop') throw new Error('请输入当前管理员密码以确认本次操作。');
     if (state.providerApiAvailable) {
       if ((state.dirtyProviders || state.dirtyWebSearch) && !state.validationStageId) {
         collectProviderConfigPayload();
@@ -2120,7 +2124,7 @@ async function buildIndex() {
     return;
   }
   const adminPassword = elements.adminPassword.value;
-  if (!adminPassword) {
+  if (!adminPassword && state.session?.authMode !== 'desktop') {
     showMessage('请输入当前管理员密码以确认索引构建。', 'error');
     elements.adminPassword.focus();
     return;
@@ -2182,7 +2186,7 @@ async function cancelIndexBuild() {
   const rebuildId = state.activeRebuildId;
   if (!state.building || !rebuildId || state.cancellingRebuildId || state.loading || state.saving) return;
   const adminPassword = elements.adminPassword.value;
-  if (!adminPassword) {
+  if (!adminPassword && state.session?.authMode !== 'desktop') {
     showMessage('请输入当前管理员密码以确认取消索引构建。', 'error');
     elements.adminPassword.focus();
     return;
@@ -2284,6 +2288,13 @@ function markDirty(event) {
 function handleConnectionEvent(event) {
   const card = event.target.closest('[data-connection-card]');
   if (!card) return;
+  if (event.type === 'click' && event.target.closest('[data-use-messages]')) {
+    const input = connectionField(card, 'apiBase');
+    input.value = providerOption(providerIdForCard(card)).defaultApiBase;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus();
+    return;
+  }
   if (event.target.closest('[data-connection-check]')) {
     void checkConnection(card);
     return;
@@ -2362,6 +2373,9 @@ async function initialize() {
     state.knowledgeBaseId = state.requestedKnowledgeBaseId;
     const session = await api('/api/session');
     state.session = session;
+    const desktop = session.authMode === 'desktop';
+    elements.adminPassword.required = !desktop;
+    elements.adminPassword.closest('.confirmation-card').hidden = desktop;
     if (!session.authenticated) {
       setGate('需要登录', '请先返回知识库登录，再打开管理员配置。', { action: true });
       return;

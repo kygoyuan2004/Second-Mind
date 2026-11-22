@@ -1,3 +1,4 @@
+import { assertPrivateMode, setTestPermissions } from './platform-fixtures.mjs';
 import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
@@ -60,16 +61,17 @@ function claudeSettings(suffix = 'v1') {
 
 async function privateJson(filename, value) {
   await fsp.writeFile(filename, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
-  await fsp.chmod(filename, 0o600);
+  await setTestPermissions(filename, 0o600);
 }
 
 async function fixture(t, options = {}) {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'runtime-config-registry-'));
+  await setTestPermissions(root, 0o700);
   t.after(() => fsp.rm(root, { recursive: true, force: true }));
   const settingsFile = path.join(root, 'settings.json');
   const managedFile = path.join(root, 'managed.json');
   if (options.settings !== null) await privateJson(settingsFile, options.settings || claudeSettings());
-  if (options.settingsMode !== undefined) await fsp.chmod(settingsFile, options.settingsMode);
+  if (options.settingsMode !== undefined) await setTestPermissions(settingsFile, options.settingsMode);
   if (options.managed) await privateJson(managedFile, options.managed);
   const registry = new RuntimeConfigRegistry({
     settingsFile,
@@ -376,7 +378,7 @@ test('managed overrides are atomic, revision guarded, and public snapshots never
   assert.equal(updated.embedding.apiKeyConfigured, true);
   assert.equal(updated.webSearch.configured, true);
   assert.doesNotMatch(JSON.stringify(updated), new RegExp(`${EMBEDDING_SECRET}|${WEB_SECRET}`, 'u'));
-  assert.equal((await fsp.stat(value.managedFile)).mode & 0o777, 0o600);
+  await assertPrivateMode(value.managedFile);
 
   const runtime = value.registry.runtimeSnapshot();
   assert.equal(runtime.embedding.apiKey, EMBEDDING_SECRET);
@@ -434,8 +436,9 @@ test('credential values require an explicit action and managed parents cannot be
   );
 
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'runtime-config-open-parent-'));
+  await setTestPermissions(root, 0o700);
   t.after(() => fsp.rm(root, { recursive: true, force: true }));
-  await fsp.chmod(root, 0o777);
+  await setTestPermissions(root, 0o777);
   await assert.rejects(
     () => runtimeConfigInternals.atomicPrivateJson(path.join(root, 'managed.json'), {}),
     { code: 'UNSAFE_RUNTIME_CONFIG_PATH' },
@@ -524,8 +527,9 @@ test('an Embedding credential can never be silently reused across provider desti
 
 test('a directory sync error after rename cannot turn a visible pointer commit into failure', async (t) => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'runtime-config-commit-point-'));
+  await setTestPermissions(root, 0o700);
   t.after(() => fsp.rm(root, { recursive: true, force: true }));
-  await fsp.chmod(root, 0o700);
+  await setTestPermissions(root, 0o700);
   const filename = path.join(root, 'pointer.json');
   await runtimeConfigInternals.atomicPrivateJson(filename, { generation: 'old' });
 
@@ -535,7 +539,7 @@ test('a directory sync error after rename cannot turn a visible pointer commit i
     { syncDirectory: async () => { throw new Error('injected post-rename failure'); } },
   );
   assert.deepEqual(JSON.parse(await fsp.readFile(filename, 'utf8')), { generation: 'new' });
-  assert.equal((await fsp.stat(filename)).mode & 0o777, 0o600);
+  await assertPrivateMode(filename);
 });
 
 test('model overrides can return to settings inheritance without freezing unrelated settings', async (t) => {
@@ -574,7 +578,7 @@ test('last-known-good remains active and is marked stale for malformed or unsafe
   assert.equal(restored.stale, false);
   assert.equal(restored.models[0].actualModel, 'qwen-runtime-restored[1M]');
 
-  await fsp.chmod(value.settingsFile, 0o644);
+  await setTestPermissions(value.settingsFile, 0o644);
   const unsafe = await value.registry.refresh();
   assert.equal(unsafe.stale, true);
   assert.equal(unsafe.staleCode, 'UNSAFE_RUNTIME_CONFIG_FILE');
@@ -594,11 +598,13 @@ test('unsafe initial files and symlinks are rejected before any last-known-good 
   await assert.rejects(wrongMode.registry.ready, { code: 'UNSAFE_RUNTIME_CONFIG_FILE' });
 
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'runtime-config-symlink-'));
+  await setTestPermissions(root, 0o700);
   t.after(() => fsp.rm(root, { recursive: true, force: true }));
   const target = path.join(root, 'target.json');
-  const settingsFile = path.join(root, 'settings.json');
+  const settingsFile = process.platform === 'win32' ? path.join(root, 'linked', 'target.json') : path.join(root, 'settings.json');
   await privateJson(target, claudeSettings());
-  await fsp.symlink(target, settingsFile);
+  if (process.platform === 'win32') await fsp.symlink(root, path.join(root, 'linked'), 'junction');
+  else await fsp.symlink(target, settingsFile);
   const registry = new RuntimeConfigRegistry({
     settingsFile,
     managedFile: path.join(root, 'managed.json'),
@@ -744,10 +750,10 @@ test('a fresh registry recovers its durable last-known-good document without exp
   const upgraded = await value.registry.bootstrapManagedV2();
   const validPrimary = await fsp.readFile(value.managedFile);
   const backupFile = `${value.managedFile}.last-good`;
-  assert.equal((await fsp.stat(backupFile)).mode & 0o777, 0o600);
+  await assertPrivateMode(backupFile);
 
   await fsp.writeFile(value.managedFile, '{malformed-json', { mode: 0o600 });
-  await fsp.chmod(value.managedFile, 0o600);
+  await setTestPermissions(value.managedFile, 0o600);
   const recoveredRegistry = new RuntimeConfigRegistry({
     settingsFile: value.settingsFile,
     managedFile: value.managedFile,
@@ -789,7 +795,7 @@ test('a fresh registry recovers its durable last-known-good document without exp
   );
 
   await fsp.writeFile(value.managedFile, validPrimary, { mode: 0o600 });
-  await fsp.chmod(value.managedFile, 0o600);
+  await setTestPermissions(value.managedFile, 0o600);
   const restored = await recoveredRegistry.refresh();
   assert.equal(restored.stale, false);
   assert.equal(restored.recovered, false);

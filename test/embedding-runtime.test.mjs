@@ -1,3 +1,4 @@
+import { assertPrivateMode, setTestPermissions } from './platform-fixtures.mjs';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import fsp from 'node:fs/promises';
@@ -144,6 +145,7 @@ function fakeHttpsRequest(responses, calls) {
 
 async function fixture(t, options = {}) {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'embedding-runtime-'));
+  await setTestPermissions(root, 0o700);
   t.after(() => fsp.rm(root, { recursive: true, force: true }));
   const oldProfile = embedding({
     apiKey: ['old', 'embedding', 'fixture', 'credential'].join('-'),
@@ -183,8 +185,9 @@ async function fixture(t, options = {}) {
 
 async function privateJson(filename, value) {
   await fsp.mkdir(path.dirname(filename), { recursive: true, mode: 0o700 });
+  await setTestPermissions(path.dirname(filename), 0o700);
   await fsp.writeFile(filename, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
-  await fsp.chmod(filename, 0o600);
+  await setTestPermissions(filename, 0o600);
 }
 
 function manifestEntry(slotId, revision, model, generation) {
@@ -214,8 +217,7 @@ test('a successful rebuild persists a private profile and exposes only a sanitiz
   assert.equal(publicJson.includes('apiBase'), false);
 
   const filename = path.join(value.root, 'private', 'active-embedding.json');
-  const stat = await fsp.stat(filename);
-  assert.equal(stat.mode & 0o777, 0o600);
+  await assertPrivateMode(filename);
   const privateDocument = JSON.parse(await fsp.readFile(filename, 'utf8'));
   assert.equal(privateDocument.current.embedding.apiKey, EMBEDDING_SECRET);
   assert.equal(privateDocument.current.embedding.apiBase, API_BASE);
@@ -412,6 +414,7 @@ test('abort after connection creation destroys the pinned request and settles ev
 
 test('integration can resolve and durably promote a verified previous generation', async (t) => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'embedding-fallback-'));
+  await setTestPermissions(root, 0o700);
   t.after(() => fsp.rm(root, { recursive: true, force: true }));
   const slotsRoot = path.join(root, 'slots');
   const profileFile = path.join(root, 'private', 'active.json');
@@ -465,22 +468,24 @@ test('integration can resolve and durably promote a verified previous generation
   assert.equal(after.selection, 'current');
   assert.equal(after.revision, previous.revision);
   assert.equal(after.slotId, previous.slotId);
-  assert.equal((await fsp.stat(profileFile)).mode & 0o777, 0o600);
+  await assertPrivateMode(profileFile);
 });
 
 test('the persisted base generation always resolves to the original index directory', () => {
+  const indexDirectory = path.resolve('fixture-base', 'index');
   assert.equal(
     embeddingRuntimeInternals.indexDirectory(
-      '/srv/vaultmind/index',
-      '/srv/vaultmind/index-slots',
+      indexDirectory,
+      path.resolve('fixture-base', 'index-slots'),
       { slotId: 'base' },
     ),
-    '/srv/vaultmind/index',
+    indexDirectory,
   );
 });
 
 test('a malformed current or previous profile is never silently ignored', async (t) => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'embedding-corrupt-profile-'));
+  await setTestPermissions(root, 0o700);
   t.after(() => fsp.rm(root, { recursive: true, force: true }));
   const profileFile = path.join(root, 'active.json');
   const config = {
@@ -489,6 +494,7 @@ test('a malformed current or previous profile is never silently ignored', async 
   };
 
   await fsp.writeFile(profileFile, '{not-json', { mode: 0o600 });
+  await setTestPermissions(profileFile, 0o600);
   await assert.rejects(
     () => resolveActiveEmbedding(config, { activeProfileFile: profileFile }),
     { code: 'INVALID_RUNTIME_CONFIG_JSON' },

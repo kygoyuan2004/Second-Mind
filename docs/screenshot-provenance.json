@@ -4,52 +4,66 @@
   "images": [
     {
       "file": "second-mind-diary.png",
-      "sha256": "6d770bc71b4a4fd2998c9c3239baf7ae858d6fdcf33bc71572af2d16201617f9",
-      "source": "full application with public demo Vault",
-      "generatedOutput": "real Bailian Qwen3.8 Max SDK task",
-      "editorNote": "Original draft editor used to remove explanation/code fences before preview and confirmation."
+      "sha256": "18626d771d6cd11c08cea4f484ceb7f4bd5dc14f57ab3e476ca9347e60d6ac03",
+      "source": "full application with public demonstration notes",
+      "generatedOutput": "real DeepSeek task using Claude Agent SDK",
+      "editorNote": null
     },
     {
       "file": "second-mind-execution.png",
-      "sha256": "2e4bed6f1eef2f932e9db914473b31919b2f3da811a3d1b24a2336803d6c8e81",
-      "source": "full application with public demo Vault",
-      "generatedOutput": "real Bailian Qwen3.8 Max SDK task",
-      "editorNote": null
+      "sha256": "8938a31268e24fa5c72ad7ded2220c276b870efc835b0cdfca7fa90ae76b1a6e",
+      "source": "full application with public demonstration notes",
+      "generatedOutput": "real DeepSeek task using Claude Agent SDK",
+      "editorNote": "Expanded tool activity during a deep question."
     },
     {
       "file": "second-mind-hero.png",
       "sha256": "87a96c2d7cf7ef33d69481401d08d083c809cf9dd89b0dc20946f99705e99d3b",
-      "source": "auxiliary illustration, not a product screenshot",
+      "source": "project illustration",
       "generatedOutput": null,
       "editorNote": null
     },
     {
       "file": "second-mind-mobile.png",
-      "sha256": "a4b5c13510e08587cc1525c60a745eb4c8a165b69a2a6166e0ca9a2e944e6094",
-      "source": "full application with public demo Vault",
-      "generatedOutput": "real Bailian Qwen3.8 Max SDK task",
+      "sha256": "f72fca54e72a7df909c59d4213ce9c8dacc95dc398b7779e239e6e93a5c2638e",
+      "source": "full application with public demonstration notes",
+      "generatedOutput": "real DeepSeek task using Claude Agent SDK",
       "editorNote": null
     },
     {
       "file": "second-mind-plan.png",
-      "sha256": "c606cd957c5b3cd06c80663b6fa8e748780a8585f10fd1d55dd822205bffb738",
-      "source": "full application with public demo Vault",
-      "generatedOutput": "real Bailian Qwen3.8 Max SDK task",
-      "editorNote": "Original draft editor used to remove explanation/code fences before preview and confirmation."
+      "sha256": "ed0eff83845904567a6b0eecc50ef733a42b2c98fb9ff6ede9b372acc9012e46",
+      "source": "full application with public demonstration notes",
+      "generatedOutput": "real DeepSeek task using Claude Agent SDK",
+      "editorNote": null
     },
     {
       "file": "second-mind-provider-config.png",
-      "sha256": "e54d205b16d6552a96ec2e52ca4befa52223c5e67bdaff1b527592e4eb6f9198",
-      "source": "full application with public demo Vault",
+      "sha256": "5b40ac9d2ded453ae068a8eb1d0b850e0212d6ba5209f8ff721b519606871f8f",
+      "source": "full application with public demonstration notes",
       "generatedOutput": null,
       "editorNote": null
     },
     {
       "file": "second-mind-qa.png",
-      "sha256": "8162507800b3783cbe839a59a6ed1ceb631fc8b1b7495555281c21ee56452e0a",
-      "source": "full application with public demo Vault",
-      "generatedOutput": "real Bailian Qwen3.8 Max SDK task",
+      "sha256": "40636b01a3551d7edddf6f974b86e27c2832f53d1ea0aec5894a8fdcd9f967d2",
+      "source": "full application with public demonstration notes",
+      "generatedOutput": "real DeepSeek task using Claude Agent SDK",
       "editorNote": null
+    },
+    {
+      "file": "second-mind-schedule.png",
+      "sha256": "00881ad33cb1db8d846593b43e2ce132c3bd238ec628a348a33cc4b08f7da132",
+      "source": "full application with public demonstration notes",
+      "generatedOutput": "real DeepSeek task using Claude Agent SDK",
+      "editorNote": "Two reviewed items saved from the plan preview."
+    },
+    {
+      "file": "second-mind-source.png",
+      "sha256": "476d20aaf612ade4550146160d01a148118b4143c850c4e1825cfdf3317c9b4a",
+      "source": "full application with public demonstration notes",
+      "generatedOutput": "real DeepSeek task using Claude Agent SDK",
+      "editorNote": "Opened the cited note at the matching passage."
     }
   ]
 }

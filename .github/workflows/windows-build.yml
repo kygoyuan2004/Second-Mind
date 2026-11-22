@@ -1,0 +1,144 @@
+name: Windows desktop build and verification
+on:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-x64:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.10'
+      - run: npm ci
+      - run: node platform/native/build-native.mjs
+      - run: python scripts/prepare-windows-runtime.py
+      - run: npm run check
+      - name: Backend tests with filesystem bypass privileges disabled
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows-test-user-token.ps1 -NodePath (Get-Command node).Source -ProjectRoot $PWD.Path
+          if ($LASTEXITCODE -ne 0) { throw 'Windows backend test suite failed' }
+      - run: python test/desktop/media-model-test.py
+      - run: npm run desktop:build:win -- --skip-runtime
+      - name: Install the generated Windows artifact for acceptance
+        id: install
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installers = @(Get-ChildItem dist/windows/*-setup.exe)
+          if ($installers.Count -ne 1) { throw 'Expected exactly one generated installer' }
+          $acceptance = Join-Path $env:RUNNER_TEMP 'SecondMind-artifact-acceptance'
+          $installed = Join-Path $acceptance 'installed'
+          New-Item -ItemType Directory -Force $acceptance | Out-Null
+          $process = Start-Process -FilePath $installers[0].FullName -ArgumentList @('/S', "/D=$installed") -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installer exited $($process.ExitCode)" }
+          foreach ($file in @('Second Mind.exe', 'resources/runtime/node/node.exe', 'resources/backend/node_modules/@anthropic-ai/claude-agent-sdk/package.json')) {
+            if (!(Test-Path (Join-Path $installed $file))) { throw "Installed artifact missing: $file" }
+          }
+          "CI_INSTALL_ROOT=$installed" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "CI_ACCEPTANCE_ROOT=$acceptance" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          @{
+            runner = 'windows-2022 / Windows Server 2022'
+            coverage = 'CI artifact installation and automated checks; not the clean Windows 10/11 matrix'
+            installer = $installers[0].Name
+            sha256 = (Get-FileHash $installers[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            installed = $installed
+          } | ConvertTo-Json | Set-Content (Join-Path $acceptance 'installation.json') -Encoding utf8
+          Get-CimInstance Win32_Process -Filter "Name='Second Mind.exe'" | Where-Object {
+            $_.ExecutablePath -eq (Join-Path $installed 'Second Mind.exe')
+          } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+      - name: Native ACL, filesystem and process-tree checks on the installed artifact
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $resources = Join-Path $env:CI_INSTALL_ROOT 'resources'
+          & "$resources/runtime/node/node.exe" scripts/windows-native-acceptance.mjs --backend "$resources/backend" --work-dir "$env:CI_ACCEPTANCE_ROOT/native" --label 'Windows Server 2022 CI installed artifact' 2>&1 | Tee-Object "$env:CI_ACCEPTANCE_ROOT/native.log"
+          if ($LASTEXITCODE -ne 0) { throw 'Installed native acceptance failed' }
+      - name: Offline media command checks on the installed artifact
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        timeout-minutes: 8
+        shell: pwsh
+        run: |
+          $resources = Join-Path $env:CI_INSTALL_ROOT 'resources'
+          & "$resources/runtime/node/node.exe" scripts/windows-media-acceptance.mjs --resources $resources --work-dir "$env:CI_ACCEPTANCE_ROOT/media" 2>&1 | Tee-Object "$env:CI_ACCEPTANCE_ROOT/media.log"
+          if ($LASTEXITCODE -ne 0) { throw 'Installed media acceptance failed' }
+      - name: Actual packaged Electron GUI and DPAPI automation
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $env:SECOND_MIND_PACKAGED_EXECUTABLE = Join-Path $env:CI_INSTALL_ROOT 'Second Mind.exe'
+          $node = Join-Path $env:CI_INSTALL_ROOT 'resources/runtime/node/node.exe'
+          & $node --import ./test/test-environment.mjs --test --test-reporter=spec --test-timeout=150000 test/desktop-shell.electron.mjs 2>&1 | Tee-Object "$env:CI_ACCEPTANCE_ROOT/electron.log"
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged Electron GUI acceptance failed' }
+      - name: Upgrade and uninstall preserve user state and external Vault
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        timeout-minutes: 8
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = (Get-ChildItem dist/windows/*-setup.exe | Select-Object -First 1).FullName
+          $token = [Guid]::NewGuid().ToString('N')
+          $state = Join-Path $env:LOCALAPPDATA 'SecondMind'
+          $vault = Join-Path $env:CI_ACCEPTANCE_ROOT 'Vault-preservation'
+          New-Item -ItemType Directory -Force $state, $vault | Out-Null
+          $stateSentinel = Join-Path $state "ci-preservation-$token.txt"
+          $vaultSentinel = Join-Path $vault "ci-preservation-$token.md"
+          $token | Set-Content $stateSentinel -Encoding utf8
+          $token | Set-Content $vaultSentinel -Encoding utf8
+          $process = Start-Process -FilePath $installer -ArgumentList @('/S', "/D=$env:CI_INSTALL_ROOT") -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Upgrade exited $($process.ExitCode)" }
+          $upgradeExit = $process.ExitCode
+          foreach ($file in @($stateSentinel, $vaultSentinel)) {
+            if (!(Test-Path $file) -or (Get-Content $file -Raw).Trim() -ne $token) { throw "Upgrade changed preserved file: $file" }
+          }
+          $uninstaller = Join-Path $env:CI_INSTALL_ROOT 'Uninstall Second Mind.exe'
+          if (!(Test-Path $uninstaller)) { throw 'Upgrade did not install an uninstaller' }
+          $testUninstaller = Join-Path $env:CI_ACCEPTANCE_ROOT 'uninstall-lifecycle-check.exe'
+          Copy-Item $uninstaller $testUninstaller -Force
+          # _?= keeps the copied uninstaller in this process; its exit code covers
+          # actual uninstall completion rather than only spawning a temp copy.
+          $process = Start-Process -FilePath $testUninstaller -ArgumentList "/S /currentuser _?=$env:CI_INSTALL_ROOT" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Uninstaller exited $($process.ExitCode)" }
+          if (Test-Path (Join-Path $env:CI_INSTALL_ROOT 'Second Mind.exe')) { throw 'Uninstaller left application executable' }
+          foreach ($file in @($stateSentinel, $vaultSentinel)) {
+            if (!(Test-Path $file) -or (Get-Content $file -Raw).Trim() -ne $token) { throw "Uninstall changed preserved file: $file" }
+          }
+          @{
+            runner = 'windows-2022 / Windows Server 2022'
+            upgradeExit = $upgradeExit
+            uninstallExit = $process.ExitCode
+            userStatePreserved = $true
+            externalVaultPreserved = $true
+            uninstallerSha256 = (Get-FileHash $testUninstaller -Algorithm SHA256).Hash.ToLowerInvariant()
+          } | ConvertTo-Json | Set-Content (Join-Path $env:CI_ACCEPTANCE_ROOT 'lifecycle.json') -Encoding utf8
+      - name: Upload acceptance evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SecondMind-windows-server-2022-acceptance
+          path: |
+            ${{ runner.temp }}/SecondMind-artifact-acceptance/installation.json
+            ${{ runner.temp }}/SecondMind-artifact-acceptance/lifecycle.json
+            ${{ runner.temp }}/SecondMind-artifact-acceptance/*.log
+            ${{ runner.temp }}/SecondMind-artifact-acceptance/**/report.json
+            ${{ runner.temp }}/SecondMind-artifact-acceptance/**/report.txt
+            build/desktop-*-smoke.png
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SecondMind-windows-x64
+          path: |
+            dist/windows/*.exe
+            dist/windows/SHA256SUMS.txt
+            dist/windows/*.md
+          if-no-files-found: error

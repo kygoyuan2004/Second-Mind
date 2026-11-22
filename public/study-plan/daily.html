@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>每日安排 · Second Mind</title>
+  <link rel="stylesheet" href="/study-plan/daily.css">
+  <script type="module" src="/study-plan/daily.js"></script>
+</head>
+<body><main>
+  <a id="back" href="/knowledge.html">← 返回知识库</a>
+  <header><h1>每日安排</h1><label>日期 <input id="date" type="date" required></label></header>
+  <p id="status" role="status"></p><div id="operations"></div><section id="events" aria-label="当日事项"></section>
+  <template id="entry"><form><label>事项<input name="title" maxlength="300" required></label>
+    <label>开始时间<input name="startTime" type="time"></label>
+    <label>时长（分钟）<input name="minutes" type="number" min="1" max="1440"></label>
+    <label class="check"><input type="checkbox" name="done"> 已完成</label><button>保存修改</button>
+    <p role="status"></p></form></template>
+</main></body></html>

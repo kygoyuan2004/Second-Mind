@@ -1,3 +1,4 @@
+import { assertPrivateMode, setTestPermissions } from './platform-fixtures.mjs';
 import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
@@ -19,7 +20,7 @@ async function fixture() {
   await Promise.all([
     fsp.mkdir(path.join(alpha, '.obsidian'), { recursive: true }),
     fsp.mkdir(path.join(beta, '.obsidian'), { recursive: true }),
-    fsp.mkdir(state, { recursive: true, mode: 0o700 }),
+    fsp.mkdir(state, { recursive: true, mode: 0o700 }).then(() => setTestPermissions(state, 0o700)),
   ]);
   const legacy = {
     knowledgeBaseId: 'default',
@@ -119,11 +120,13 @@ test('two Vaults receive independent private namespaces and a CAS revision', asy
     assert.notEqual(alpha.state.piSessionDir, beta.state.piSessionDir);
     assert.equal(alpha.state.piSessionDir, path.join(alpha.state.dataDir, 'pi-sessions'));
     assert.equal(beta.state.piSessionDir, path.join(beta.state.dataDir, 'pi-sessions'));
-    assert.match(alpha.state.dataDir, new RegExp(`${path.sep}knowledge-bases${path.sep}alpha-[a-f0-9]{16}$`));
-    assert.match(beta.state.dataDir, new RegExp(`${path.sep}knowledge-bases${path.sep}beta-[a-f0-9]{16}$`));
-    assert.equal((await fsp.stat(value.options.managedFile)).mode & 0o777, 0o600);
+    assert.equal(path.basename(path.dirname(alpha.state.dataDir)), 'knowledge-bases');
+    assert.equal(path.basename(path.dirname(beta.state.dataDir)), 'knowledge-bases');
+    assert.match(path.basename(alpha.state.dataDir), /^alpha-[a-f0-9]{16}$/u);
+    assert.match(path.basename(beta.state.dataDir), /^beta-[a-f0-9]{16}$/u);
+    await assertPrivateMode(value.options.managedFile);
     const bindingFile = `${value.options.managedFile}.bindings`;
-    assert.equal((await fsp.stat(bindingFile)).mode & 0o777, 0o600);
+    await assertPrivateMode(bindingFile);
     const bindingText = await fsp.readFile(bindingFile, 'utf8');
     assert.equal(bindingText.includes(value.root), false);
     assert.equal(JSON.parse(bindingText).bindings.some((entry) => (
@@ -222,7 +225,7 @@ test('symbolic-link paths and paths outside startup-authorized mounts are reject
   try {
     const link = path.join(value.mounts, 'linked');
     try {
-      await fsp.symlink(value.beta, link, 'dir');
+      await fsp.symlink(value.beta, link, process.platform === 'win32' ? 'junction' : 'dir');
     } catch (error) {
       if (process.platform === 'win32' && ['EPERM', 'EACCES'].includes(error.code)) {
         t.skip('Creating directory symlinks requires a Windows developer-mode permission.');
@@ -457,4 +460,54 @@ test('a previously registered unavailable Vault is isolated instead of invalidat
   } finally {
     await value.cleanup();
   }
+});
+
+test('desktop initial grants create managed IDs without legacy state, reconcile removals and preserve binding history', async (t) => {
+  const value = await fixture(); t.after(value.cleanup);
+  const grants = (names) => ({
+    ...value.options, legacy: null, reconcileMounts: true,
+    allowedRoots: names.map((name) => ({ id: name, path: value[name] })),
+    initialKnowledgeBases: names.map((name, index) => ({ knowledgeBaseId: name, mountId: name, relativePath: '.', name, enabled: true, default: index === 0 })),
+  });
+  const first = new KnowledgeBaseRegistry(grants(['alpha']));
+  const initial = await first.ready;
+  assert.equal(initial.source, 'managed');
+  assert.equal(initial.defaultKnowledgeBaseId, 'alpha');
+  assert.equal(first.resolve('alpha').legacyState, false);
+  assert.equal(first.bindings.has('default'), false);
+  const alphaState = first.resolve('alpha').state.dataDir;
+  await fsp.mkdir(alphaState, { recursive: true });
+  await fsp.writeFile(path.join(alphaState, 'keep-history.json'), '{}');
+  const second = new KnowledgeBaseRegistry(grants(['beta']));
+  assert.deepEqual((await second.ready).knowledgeBases.map((entry) => entry.knowledgeBaseId), ['beta']);
+  assert.equal(second.publicSnapshot().defaultKnowledgeBaseId, 'beta');
+  assert.equal(second.bindings.has('alpha'), true);
+  assert.equal(await fsp.readFile(path.join(alphaState, 'keep-history.json'), 'utf8'), '{}');
+  const bytes = await fsp.readFile(value.options.managedFile, 'utf8');
+  const restart = new KnowledgeBaseRegistry(grants(['beta']));
+  await restart.ready;
+  assert.equal(await fsp.readFile(value.options.managedFile, 'utf8'), bytes);
+  const old = JSON.parse(await fsp.readFile(`${value.options.managedFile}.previous`, 'utf8'));
+  assert.equal(old.knowledgeBases[0].knowledgeBaseId, 'alpha');
+});
+
+test('desktop grant reconciliation preserves administrator deletions and can promote a disabled remaining Vault', async (t) => {
+  const value = await fixture(); t.after(value.cleanup);
+  const initialKnowledgeBases = ['alpha', 'beta'].map((name, index) => ({ knowledgeBaseId: name, name, mountId: name, relativePath: '.', enabled: true, default: index === 0 }));
+  const options = { ...value.options, legacy: null, reconcileMounts: true, initialKnowledgeBases,
+    allowedRoots: ['alpha', 'beta'].map((name) => ({ id: name, path: value[name] })) };
+  const first = new KnowledgeBaseRegistry(options); await first.ready;
+  await first.update({ expectedRevision: first.publicSnapshot().revision, knowledgeBases: [{ ...initialKnowledgeBases[1], default: true }] });
+  const restarted = new KnowledgeBaseRegistry(options); await restarted.ready;
+  assert.deepEqual(restarted.publicSnapshot().knowledgeBases.map((entry) => entry.knowledgeBaseId), ['beta']);
+  const secondDirectory = path.join(value.state, 'second');
+  const secondOptions = { ...options, managedFile: path.join(secondDirectory, 'knowledge-bases.json'), stateDir: secondDirectory };
+  const withDisabled = new KnowledgeBaseRegistry(secondOptions); await withDisabled.ready;
+  await withDisabled.update({ expectedRevision: withDisabled.publicSnapshot().revision,
+    knowledgeBases: [initialKnowledgeBases[0], { ...initialKnowledgeBases[1], enabled: false }] });
+  const retiredDefault = new KnowledgeBaseRegistry({ ...secondOptions,
+    allowedRoots: [{ id: 'beta', path: value.beta }], initialKnowledgeBases: [initialKnowledgeBases[1]] });
+  const promoted = await retiredDefault.ready;
+  assert.equal(promoted.defaultKnowledgeBaseId, 'beta');
+  assert.equal(retiredDefault.resolve('beta').enabled, true);
 });

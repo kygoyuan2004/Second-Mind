@@ -6,12 +6,12 @@
 
 <h1 align="center">Second Mind</h1>
 
-<p align="center"><strong>让自己的 Obsidian 笔记参与问答、学习回顾和日常记录。</strong></p>
+<p align="center"><strong>用自己的 Obsidian 笔记回顾一周：核对原文，区分计划与进展，再把选中的事项加入每日安排。</strong></p>
 
 <p align="center">
   <a href="README.en.md">English</a> ·
   <a href="https://kygoyuan2004.github.io/Second-Mind/">项目展示</a> ·
-  <a href="#安装">安装</a> ·
+  <a href="#桌面软件下载">安装</a> ·
   <a href="docs/configuration.md">配置</a> ·
   <a href="docs/claude-sdk-migration.md">迁移与验收</a>
 </p>
@@ -29,7 +29,12 @@
 
 Second Mind 是单管理员、自托管知识工作台。Claude Agent SDK 负责真实的检索、读取、工具循环和多轮会话；日记、计划、随心记与视频笔记先生成草稿，编辑并确认后才写入 Vault。
 
-## 安装
+## 桌面软件下载
+
+Windows x64 安装包、Linux x86_64 AppImage 和 Debian/Ubuntu 安装包都支持本机知识库和远程服务器连接。桌面版自带 Node、Python 和 FFmpeg。Linux 桌面使用系统密钥环。打开本地 Vault 和连接远程服务器各自使用独立的数据与会话。[GitHub Releases](https://github.com/kygoyuan2004/Second-Mind/releases) · [平台验收记录](docs/desktop-web-release.md)
+
+## Docker 网页版
+
 
 准备 Git 和 Docker。Linux 使用 Docker Engine 与 Compose v2；Windows、macOS 使用 Docker Desktop 的 Linux 容器。
 
@@ -68,7 +73,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 
 ## 实际使用截图
 
-以下截图使用独立公开演示库，来自完整应用及真实百炼 Qwen 3.8 Max SDK 任务。日记、计划展示通过原有编辑器去除模型额外说明后的预览。它们不包含私人知识库，也不代表未经审核即可保存模型输出。
+以下截图来自隔离演示库与真实 DeepSeek SDK 任务。学习回顾区分已跑通的基线与待确认的完整复现，计划经过预览和确认后写入两项日程。
 
 | 执行过程 | 配置管理 |
 | --- | --- |
@@ -78,9 +83,11 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 | --- | --- |
 | ![编辑后的日记预览与确认入口](docs/assets/second-mind-diary.png) | ![编辑后的计划预览与确认入口](docs/assets/second-mind-plan.png) |
 
+[查看定位到原文段落的效果](docs/assets/second-mind-source.png) · [查看确认后的每日安排](docs/assets/second-mind-schedule.png)
+
 ## 模型与数据边界
 
-固定使用原版 `@anthropic-ai/claude-agent-sdk@0.3.247`。百炼与 DeepSeek 已通过隔离真实 SDK 核心验证；其他 Provider 的状态单独列于[兼容性矩阵](docs/claude-sdk-migration.md)。模型 ID 原样保存；供应商自己的别名路由不能由本应用保证。
+固定使用 `@anthropic-ai/claude-agent-sdk@0.3.247`。百炼、DeepSeek、Kimi 和自定义连接均已在独立演示库完成两轮真实 SDK 问答。自定义连接使用 DeepSeek 的官方 Messages 接口。模型 ID 按输入原样发送。[本版验收记录](docs/desktop-web-release.md)
 
 服务端按任务固定连接和凭据。真实 Key 不交给浏览器或 SDK 子进程；SDK 使用独立私有状态目录，不读取宿主机的 `~/.claude`。模型仍会收到问题、附件和工具返回的笔记片段，远程 Embedding 会收到索引文本；自托管不等于模型处理全部留在本机。[数据流](docs/data-flow.md) · [安全边界](docs/security.md)
 

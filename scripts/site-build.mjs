@@ -6,11 +6,13 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 export const REPOSITORY_ROOT = path.resolve(SCRIPT_DIR, '..');
 export const SITE_SOURCE = path.join(REPOSITORY_ROOT, 'site');
-export const SITE_OUTPUT = path.join(REPOSITORY_ROOT, 'dist');
+export const SITE_OUTPUT = path.join(REPOSITORY_ROOT, 'dist', 'pages');
 export const SCREENSHOT_SOURCE = path.join(REPOSITORY_ROOT, 'docs', 'assets');
 export const SITE_BASE = '/Second-Mind/';
 export const REQUIRED_SCREENSHOTS = Object.freeze([
   'second-mind-qa.png',
+  'second-mind-source.png',
+  'second-mind-schedule.png',
   'second-mind-execution.png',
   'second-mind-provider-config.png',
   'second-mind-diary.png',
@@ -42,8 +44,8 @@ async function copyDirectory(source, destination) {
 }
 
 function assertSafeOutputPath() {
-  const expected = path.resolve(REPOSITORY_ROOT, 'dist');
-  if (SITE_OUTPUT !== expected || path.dirname(SITE_OUTPUT) !== REPOSITORY_ROOT) {
+  const expected = path.resolve(REPOSITORY_ROOT, 'dist', 'pages');
+  if (SITE_OUTPUT !== expected || path.dirname(SITE_OUTPUT) !== path.join(REPOSITORY_ROOT, 'dist')) {
     throw new Error(`Refusing to clean unexpected output path: ${SITE_OUTPUT}`);
   }
 }

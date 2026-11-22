@@ -1,6 +1,6 @@
 # Second Mind
 
-Ask your Obsidian notes, review your learning, and turn ideas into records you approve.
+Review the week in your Obsidian notes. Follow each claim to its source, check what you finished, and choose what goes into your next plan.
 
 [中文](README.md) · [Project site](https://kygoyuan2004.github.io/Second-Mind/en/) · [Configuration](docs/configuration.md) · [Migration and validation](docs/claude-sdk-migration.md)
 
@@ -8,7 +8,12 @@ Ask your Obsidian notes, review your learning, and turn ideas into records you a
 
 Second Mind is a self-hosted knowledge workspace for one administrator. Claude Agent SDK runs the actual search, read, tool, and conversation loop. Diaries, plans, scratch notes, and video notes remain drafts until you review and confirm them.
 
-## Install
+## Desktop downloads
+
+The Windows x64 installer, Linux x86_64 AppImage and Debian/Ubuntu package run the knowledge base on your computer. Open a local Vault or connect to an existing Second Mind server. An installation uses its own private settings and sessions. The app includes Node, Python and FFmpeg. Linux desktop uses the system keyring. [Downloads](https://github.com/kygoyuan2004/Second-Mind/releases) · [Platform verification](docs/desktop-web-release.md)
+
+## Docker Web
+
 
 Install Git and Docker first. Use Docker Engine with Compose v2 on Linux, or Docker Desktop with Linux containers on Windows and macOS.
 
@@ -47,7 +52,7 @@ See the [validation matrix](docs/claude-sdk-migration.md) for the distinction be
 
 ## Actual application screenshots
 
-These screenshots use independent public demonstration notes and real Qwen 3.8 Max tasks through Bailian. Diary and plan previews show edits that remove extra model explanations through the existing editor. Review remains necessary before saving.
+These screenshots use public demo notes and real DeepSeek SDK tasks. The review links to the original passage. The plan preview lets you select and edit dated items before saving them to the daily schedule.
 
 | Tool execution | Provider settings |
 | --- | --- |
@@ -59,7 +64,7 @@ These screenshots use independent public demonstration notes and real Qwen 3.8 M
 
 ## Runtime and privacy
 
-The original `@anthropic-ai/claude-agent-sdk@0.3.247` is pinned. Bailian and DeepSeek have passed isolated real SDK core checks; results for other providers are listed separately. Configured model IDs are preserved. Provider-side alias routing is outside the application's control.
+The application pins `@anthropic-ai/claude-agent-sdk@0.3.247`. Bailian, DeepSeek, Kimi and a custom connection to DeepSeek’s official Messages endpoint each completed a two-turn SDK conversation on public demo notes. Configured model IDs are preserved. [Release verification](docs/desktop-web-release.md)
 
 Each task pins its connection and credential. Real provider keys stay in the application server; SDK subprocesses receive a temporary local transport token. The SDK uses private state and does not read host `~/.claude` settings. External models receive questions, attachments, and selected note excerpts; remote embedding services receive indexed text. [Data flow](docs/data-flow.md) · [Security](docs/security.md)
 

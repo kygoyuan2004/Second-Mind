@@ -1,3 +1,4 @@
+import { assertPrivateMode, setTestPermissions } from './platform-fixtures.mjs';
 import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -42,8 +43,9 @@ function settings(models) {
 
 async function writePrivateJson(filename, value) {
   await fsp.mkdir(path.dirname(filename), { recursive: true, mode: 0o700 });
+  await setTestPermissions(path.dirname(filename), 0o700);
   await fsp.writeFile(filename, `${JSON.stringify(value)}\n`, { mode: 0o600 });
-  await fsp.chmod(filename, 0o600);
+  await setTestPermissions(filename, 0o600);
 }
 
 function appConfig(project) {
@@ -208,7 +210,7 @@ test('administrator runtime API hot-refreshes real IDs, guards revisions, and ne
   assert.equal(saved.response.status, 200);
   assert.equal(saved.body.webSearch.configured, true);
   assert.equal(JSON.stringify(saved.body).includes(webSecret), false);
-  assert.equal((await fsp.stat(managedFile)).mode & 0o777, 0o600);
+  await assertPrivateMode(managedFile);
 
   const embeddingSecret = 'embedding-secret-fixture-123456';
   const built = await requestJson(base, '/api/admin/embedding-rebuild', {

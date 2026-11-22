@@ -1,6 +1,8 @@
 import { markPublicMessage } from '../public-errors.mjs';
 import crypto from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { configuredQwenAsr } from './local-asr.mjs';
+import { spawnHidden, terminateProcessTree } from '../../platform/process-tree.mjs';
+import { readMediaModelStatus } from '../../desktop/media-model.mjs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,7 +36,9 @@ function cleanAudioType(value) {
 
 function safeEnvironment(home) {
   const env = {};
-  for (const name of ['PATH', 'SystemRoot', 'WINDIR', 'COMSPEC', 'PATHEXT', 'LANG', 'LC_ALL', 'TZ', 'TMPDIR', 'TEMP', 'TMP']) {
+  for (const name of ['PATH', 'SystemRoot', 'WINDIR', 'COMSPEC', 'PATHEXT', 'LANG', 'LC_ALL', 'TZ', 'TMPDIR', 'TEMP', 'TMP',
+    'KNOWLEDGE_MEDIA_RUNTIME', 'KNOWLEDGE_SPEECH_MODEL_DIR', 'KNOWLEDGE_MEDIA_MODEL_STATUS',
+    'HF_HOME', 'HF_HUB_DISABLE_TELEMETRY', 'HF_HUB_DISABLE_IMPLICIT_TOKEN', 'PYTHONUTF8', 'PYTHONIOENCODING']) {
     if (process.env[name]) env[name] = process.env[name];
   }
   for (const key of Object.keys(env)) {
@@ -50,7 +54,7 @@ function safeEnvironment(home) {
 
 async function canExecute(target) {
   try {
-    await fsp.access(target, 1);
+    await fsp.access(target);
     return true;
   } catch {
     return false;
@@ -59,12 +63,13 @@ async function canExecute(target) {
 
 export class KnowledgeTranscriber {
   constructor(options = {}) {
+    this.asr = configuredQwenAsr();
     this.python = path.resolve(
-      options.python || process.env.KNOWLEDGE_SPEECH_PYTHON ||
+      options.python || this.asr?.python || process.env.KNOWLEDGE_SPEECH_PYTHON ||
         path.resolve(process.env.KNOWLEDGE_SPEECH_PYTHON || '/opt/media/bin/python'),
     );
-    this.script = path.resolve(options.script || process.env.KNOWLEDGE_SPEECH_SCRIPT || DEFAULT_SCRIPT);
-    this.model = String(options.model || process.env.KNOWLEDGE_SPEECH_MODEL || 'small');
+    this.script = path.resolve(options.script || this.asr?.script || process.env.KNOWLEDGE_SPEECH_SCRIPT || DEFAULT_SCRIPT);
+    this.model = String(options.model || this.asr?.model || process.env.KNOWLEDGE_SPEECH_MODEL || 'small');
     this.tempRoot = path.resolve(
       options.tempRoot || process.env.KNOWLEDGE_SPEECH_TEMP_DIR ||
         path.resolve(process.env.DATA_DIR || 'data', 'speech'),
@@ -80,6 +85,9 @@ export class KnowledgeTranscriber {
       maxBytes: MAX_AUDIO_BYTES,
       maxDurationMs: MAX_AUDIO_DURATION_MS,
       privacy: 'server-temporary',
+      ...(process.env.KNOWLEDGE_MEDIA_MODEL_STATUS ? {
+        model: await readMediaModelStatus(path.dirname(path.dirname(process.env.KNOWLEDGE_MEDIA_MODEL_STATUS))),
+      } : {}),
     };
   }
 
@@ -128,20 +136,28 @@ export class KnowledgeTranscriber {
 
   run(audioFile) {
     return new Promise((resolve, reject) => {
-      const child = spawn(this.python, [this.script, audioFile, '--model', this.model, '--language', 'zh'], {
+      const child = spawnHidden(this.python, ['-B', '-X', 'utf8', this.script, audioFile, '--model', this.model, '--language', 'zh'], {
         cwd: this.tempRoot,
-        env: safeEnvironment(this.home),
+        env: { ...safeEnvironment(this.home), ...this.asr?.env },
         stdio: ['ignore', 'pipe', 'pipe'],
+        detached: process.platform !== 'win32',
       });
       let stdout = '';
       let stderr = '';
-      const timer = setTimeout(() => child.kill('SIGKILL'), TRANSCRIPTION_TIMEOUT_MS);
+      let timedOut = false;
+      const expire = () => { timedOut = true; void terminateProcessTree(child); };
+      let timer = setTimeout(expire, process.env.KNOWLEDGE_MEDIA_RUNTIME === '1' ? 60 * 60_000 : TRANSCRIPTION_TIMEOUT_MS);
       timer.unref();
       child.stdout.on('data', (chunk) => {
         if (stdout.length < 40_000) stdout += String(chunk);
       });
       child.stderr.on('data', (chunk) => {
-        if (stderr.length < 8_000) stderr += String(chunk);
+        if (String(chunk).includes('SECOND_MIND_MODEL_READY')) {
+          clearTimeout(timer);
+          timer = setTimeout(expire, TRANSCRIPTION_TIMEOUT_MS);
+          timer.unref();
+        }
+        if (stderr.length < 8_000) stderr += String(chunk).replace(/SECOND_MIND_MODEL_READY\r?\n?/g, '');
       });
       child.once('error', (error) => {
         clearTimeout(timer);
@@ -151,7 +167,7 @@ export class KnowledgeTranscriber {
         clearTimeout(timer);
         const text = stdout.trim();
         if (code === 0 && text) return resolve(text);
-        if (signal === 'SIGKILL') {
+        if (timedOut || signal === 'SIGKILL') {
           return reject(transcriptionError(504, '语音转写超时，请缩短口述后重试。', 'SPEECH_TIMEOUT'));
         }
         const detail = stderr.trim().split('\n').at(-1) || '没有识别到清晰语音。';

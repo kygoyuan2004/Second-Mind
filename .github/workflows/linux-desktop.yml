@@ -1,0 +1,41 @@
+name: Linux desktop packages
+on:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux-x64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run desktop:build:linux
+      - name: Check the AppImage and Debian installation
+        run: |
+          set -euo pipefail
+          (cd dist/linux && sha256sum -c SHA256SUMS.txt)
+          image=$(realpath dist/linux/*.AppImage)
+          work=$(mktemp -d)
+          (cd "$work" && "$image" --appimage-extract >/dev/null)
+          xvfb-run -a env SECOND_MIND_PACKAGED_EXECUTABLE="$work/squashfs-root/second-mind" node --test test/desktop-shell.electron.mjs
+          package=$(realpath dist/linux/*.deb)
+          sudo apt-get update -qq
+          sudo apt-get install -y "$package"
+          binary=$(dpkg-query -L second-mind | rg '/second-mind$' | while read -r entry; do if test -f "$entry" && test -x "$entry"; then echo "$entry"; break; fi; done)
+          test -n "$binary"
+          xvfb-run -a env SECOND_MIND_PACKAGED_EXECUTABLE="$binary" node --test test/desktop-shell.electron.mjs
+          sudo apt-get remove -y second-mind
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SecondMind-linux-x64
+          path: |
+            dist/linux/*.deb
+            dist/linux/*.AppImage
+            dist/linux/SHA256SUMS.txt
+          if-no-files-found: error

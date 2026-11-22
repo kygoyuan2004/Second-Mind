@@ -1,3 +1,4 @@
+import { StudyPlanStore } from './original/study-plan-store.mjs';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import http from 'node:http';
@@ -298,6 +299,7 @@ function requireAdministrator(user) {
 }
 
 function reauthenticateAdministrator(sessions, user, body, req, config) {
+  if (sessions.desktopAuthorized(req) && user?.role === 'admin') return;
   const password = typeof body?.adminPassword === 'string' ? body.adminPassword : '';
   if (!password) {
     throw httpError(
@@ -675,8 +677,27 @@ export async function createApp(configInput, dependencies = {}) {
     return { ...value, ...contextIdentity(context) };
   }
 
+  // Keep independent queues, receipts and events for each mounted knowledge store.
+  const schedules = new WeakMap();
+  function scheduleFor(context) {
+    let schedule = schedules.get(context.store);
+    if (!schedule) {
+      schedule = new StudyPlanStore({ root: path.join(context.config.dataDir, 'study-plans'), knowledgeStore: context.store });
+      schedules.set(context.store, schedule);
+    }
+    return schedule;
+  }
+
+  const desktopActivity = { active: 0, closing: false };
   const server = http.createServer(async (req, res) => {
+    let trackedDesktopOperation = false;
     try {
+      sessions.requireDesktop(req);
+      if (desktopActivity.closing) throw httpError(503, 'Application is shutting down.', 'APPLICATION_CLOSING');
+      if (config.auth.desktopToken && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+        desktopActivity.active += 1;
+        trackedDesktopOperation = true;
+      }
       const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
       const pathname = url.pathname;
 
@@ -714,7 +735,8 @@ export async function createApp(configInput, dependencies = {}) {
         const user = sessions.user(req);
         return json(res, 200, {
           authenticated: Boolean(user),
-          authRequired: true,
+          authRequired: !config.auth.desktopToken,
+          authMode: config.auth.desktopToken ? 'desktop' : 'password',
           user: user ? { username: user.username, role: user.role } : null,
           permissions: user ? {
             useKnowledge: true,
@@ -1313,11 +1335,22 @@ export async function createApp(configInput, dependencies = {}) {
           return json(res, 200, withContextIdentity(context.manager.cancel(userId, taskId), context));
         }
       }
-      const draftMatch = /^\/api\/knowledge\/drafts\/([^/]+)(?:\/(save))?$/.exec(pathname);
+      if (pathname.startsWith('/api/knowledge/schedule/')) {
+        const context = resolveKnowledgeContext(requestKnowledgeBaseId(url));
+        const schedule = scheduleFor(context);
+        await schedule.ready;
+        const route = pathname.slice('/api/knowledge/schedule/'.length);
+        if (route === 'state' && req.method === 'GET') return json(res, 200, await schedule.get(userId));
+        if (route === 'events' && req.method === 'POST') return json(res, 200, await schedule.mutate(userId, 'save', await readJson(req)));
+        const retry = /^operations\/([a-f0-9-]{36})\/retry$/.exec(route);
+        if (retry && req.method === 'POST') return json(res, 200, await schedule.retry(userId, retry[1]));
+        throw httpError(404, '日程操作不存在。', 'PLAN_ROUTE_NOT_FOUND');
+      }
+      const draftMatch = /^\/api\/knowledge\/drafts\/([^/]+)(?:\/(save|schedule-preview))?$/.exec(pathname);
       if (draftMatch) {
         const [, draftId, action] = draftMatch;
         let body = null;
-        if (action === 'save' && req.method === 'POST') body = await readJson(req, MAX_SAFE_DRAFT_BODY);
+        if (action && req.method === 'POST') body = await readJson(req, MAX_SAFE_DRAFT_BODY);
         const context = resolveKnowledgeContext(requestKnowledgeBaseId(url, body));
         if (!action && req.method === 'GET') {
           return json(res, 200, withContextIdentity(await context.store.getDraft(userId, draftId), context));
@@ -1325,10 +1358,13 @@ export async function createApp(configInput, dependencies = {}) {
         if (!action && req.method === 'DELETE') {
           return json(res, 200, withContextIdentity(await context.store.deleteDraft(userId, draftId), context));
         }
+        if (action === 'schedule-preview' && req.method === 'POST') {
+          return json(res, 200, await scheduleFor(context).preview(userId, draftId, body));
+        }
         if (action === 'save' && req.method === 'POST') {
           const { knowledgeBaseId: _knowledgeBaseId, ...draftChanges } = body;
           return json(res, 200, withContextIdentity(
-            await context.store.saveDraft(userId, draftId, draftChanges),
+            await (draftChanges.previewId || draftChanges.operationId ? scheduleFor(context) : context.store).saveDraft(userId, draftId, draftChanges),
             context,
           ));
         }
@@ -1373,6 +1409,8 @@ export async function createApp(configInput, dependencies = {}) {
         message: failure.message,
         ...(error.configurationSaved === true ? { configurationSaved: true } : {}),
       });
+    } finally {
+      if (trackedDesktopOperation) desktopActivity.active -= 1;
     }
   });
   server.requestTimeout = 180_000;
@@ -1380,6 +1418,7 @@ export async function createApp(configInput, dependencies = {}) {
   server.keepAliveTimeout = 5_000;
   return {
     server,
+    desktopActivity,
     config,
     manager,
     index,

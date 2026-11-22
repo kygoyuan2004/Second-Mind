@@ -3,8 +3,12 @@
 
 import argparse
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from faster_whisper import WhisperModel
+from media_model import prepare_model
 
 
 def main() -> int:
@@ -14,7 +18,8 @@ def main() -> int:
     parser.add_argument("--language", default="zh")
     args = parser.parse_args()
 
-    model = WhisperModel(args.model, device="cpu", compute_type="int8")
+    model = WhisperModel(prepare_model(args.model), device="cpu", compute_type="int8")
+    print("SECOND_MIND_MODEL_READY", file=sys.stderr, flush=True)
     segments, _ = model.transcribe(
         args.audio_file,
         language=args.language,

@@ -115,6 +115,7 @@
               <button id="connection-add" class="button button-secondary" type="button">添加 Provider</button>
             </div>
             <div id="connection-list" class="provider-list" aria-live="polite"></div>
+            <p class="config-empty-hint">尚未添加 Provider。请先选择供应商，再点击“添加 Provider”；仅选择下拉框不会保存配置。</p>
 
             <div class="subsection-heading">
               <div>
@@ -125,6 +126,7 @@
             </div>
             <select id="default-model" hidden aria-label="默认模型"></select>
             <div id="model-list" class="model-list" aria-live="polite"></div>
+            <p class="config-empty-hint">尚未添加模型。请点击“添加模型”，填写真实模型 ID、绑定上方 Provider 并启用，再检查和保存。</p>
           </section>
 
           <section class="config-card" aria-labelledby="web-heading">
@@ -306,6 +308,10 @@
             <code data-provider-endpoint>—</code>
             <a data-provider-docs target="_blank" rel="noopener noreferrer nofollow">查看官方文档</a>
           </div>
+          <div class="protocol-notice field-wide" data-protocol-notice hidden>
+            <span>该地址使用 OpenAI 协议。知识库任务需要 Anthropic Messages 地址。</span>
+            <button type="button" data-use-messages hidden>采用官方 Messages 地址</button>
+          </div>
           <input data-connection-key-action type="hidden" value="keep">
           <label class="field field-wide" data-connection-key-field>
             <span>API Key</span>
@@ -321,7 +327,7 @@
                 <span>接口协议</span>
                 <select data-connection-field="protocol" required>
                   <option value="anthropic-messages">Anthropic Messages</option>
-                  <option value="openai-chat-completions">OpenAI Chat Completions</option>
+                  <option value="openai-chat-completions" disabled>OpenAI Chat Completions（旧配置）</option>
                 </select>
               </label>
               <label class="field">

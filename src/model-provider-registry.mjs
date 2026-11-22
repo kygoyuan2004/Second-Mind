@@ -93,7 +93,7 @@ const DEFINITIONS = deepFreeze({
     label: '自定义兼容服务',
     defaultApiBase: '',
     protocols: ['openai-chat-completions', 'anthropic-messages'],
-    defaultProtocol: 'openai-chat-completions',
+    defaultProtocol: 'anthropic-messages',
     authByProtocol: {
       'openai-chat-completions': 'bearer',
       'anthropic-messages': 'x-api-key',

@@ -6,34 +6,21 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-// Second Mind is deployed in a Linux container on every host. These suites
-// exercise fail-closed POSIX ownership, mode-bit, O_NOFOLLOW, and directory
-// durability guarantees that NTFS/libuv cannot represent faithfully. Linux and
-// macOS still run the complete suite; Windows runs every portable suite.
-export const WINDOWS_CONTAINER_SECURITY_SUITES = Object.freeze([
-  'embedding-runtime.test.mjs',
-  'knowledge-base-registry.test.mjs',
-  'multi-knowledge-base-api.test.mjs',
-  'runtime-admin-api.test.mjs',
-  'runtime-admin-v2-security.test.mjs',
-  'runtime-bootstrap.test.mjs',
-  'runtime-config-registry-boundaries.test.mjs',
-  'runtime-config-registry.test.mjs',
-  'sdk-browser.test.mjs',
-  'sdk-lifecycle.test.mjs',
-  'sdk-media.test.mjs',
-  'sdk-multi-knowledge-base-browser.test.mjs',
-  'sdk-production.test.mjs',
-  'sdk-provider-matrix.test.mjs',
-  'server.test.mjs',
-  'vault-replica.test.mjs',
+// Web deployment checks refer to systemd and GitHub Pages, neither shipped by
+// the desktop project. Every backend/SDK suite runs on Windows; POSIX-only
+// assertions are marked individually and have native Windows counterparts.
+export const WEB_DEPLOYMENT_SUITES = Object.freeze([
+  'deployment-entrypoints.test.mjs', 'require-ci-success.test.mjs',
 ]);
+export const WINDOWS_CONTAINER_SECURITY_SUITES = Object.freeze([]);
 
-export function selectTestFiles(files, platform = process.platform) {
-  const ordered = [...files].sort();
-  if (platform !== 'win32') return ordered;
-  const containerOnly = new Set(WINDOWS_CONTAINER_SECURITY_SUITES);
-  return ordered.filter((filename) => !containerOnly.has(path.basename(filename)));
+// These tests exercise repository publication tooling, which intentionally
+// requires Git on a build host. Installed-runtime verification runs separately.
+export const DEVELOPMENT_TOOL_SUITES = Object.freeze(['security-scan.test.mjs']);
+
+export function selectTestFiles(files, platform = process.platform, { runtimeOnly = false } = {}) {
+  return [...files].sort().filter((filename) => !WEB_DEPLOYMENT_SUITES.includes(path.basename(filename))
+    && !(runtimeOnly && DEVELOPMENT_TOOL_SUITES.includes(path.basename(filename))));
 }
 
 async function main(extraArguments = process.argv.slice(2)) {
@@ -42,16 +29,10 @@ async function main(extraArguments = process.argv.slice(2)) {
   const files = (await fsp.readdir(testRoot, { recursive: true }))
     .filter((filename) => filename.endsWith('.test.mjs'))
     .map((filename) => path.join(testRoot, filename));
-  const available = new Set(files.map((filename) => path.basename(filename)));
-  const missing = WINDOWS_CONTAINER_SECURITY_SUITES.filter((filename) => !available.has(filename));
-  if (missing.length) throw new Error('The Windows container-security suite inventory is stale.');
-  const selected = selectTestFiles(files);
-  if (process.platform === 'win32') {
-    process.stdout.write(
-      `Windows: running ${selected.length} portable suites; ` +
-      `${WINDOWS_CONTAINER_SECURITY_SUITES.length} POSIX container-security suites run on Linux/macOS CI.\n`,
-    );
-  }
+  const runtimeOnly = extraArguments.includes('--runtime-only');
+  extraArguments = extraArguments.filter((argument) => argument !== '--runtime-only');
+  const selected = selectTestFiles(files, process.platform, { runtimeOnly });
+  process.stdout.write(`Running ${selected.length} desktop/backend suites on ${process.platform}.\n`);
   const preload = pathToFileURL(path.join(testRoot, 'test-environment.mjs')).href;
   const child = spawn(process.execPath, [
     '--import', preload,

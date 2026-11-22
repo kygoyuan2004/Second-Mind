@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import { constants } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { assertNoReparseTraversal, atomicPrivateFile, ensurePrivateDirectory, isInsidePath, samePath, reparseChildren } from '../../platform/private-storage.mjs';
 
 const ACTIVE = new Set(['queued', 'scanning', 'verifying']);
 export function inventoryError(message, status = 400) {
@@ -10,9 +11,18 @@ export function inventoryError(message, status = 400) {
 export function isInventoryRequest(body = {}) {
   if ((body.kind || 'qa') !== 'qa') return false;
   if (body.inventory) return true;
-  const p = String(body.prompt || '');
-  if (/提到|提及|包含(?!附件|图片)|关于|涉及|介绍|讨论|写了什么|讲了什么|总结|学习成果|学了什么|解释|展开|搜索|检索/.test(p)) return false;
-  return /(?:哪些|什么|全部|所有|清单|列出|盘点).{0,30}(?:笔记|文件)|(?:笔记|文件).{0,30}(?:哪些|全部|所有|清单|盘点)/.test(p);
+  // Opt in only when the entire request describes a metadata listing. Any
+  // unconsumed topic, second question or dictation noise belongs to ordinary QA.
+  const prompt = String(body.prompt || '').normalize('NFKC').trim();
+  if (!/(?:笔记|文件)/u.test(prompt) || !/(?:哪些|多少|什么(?:笔记|文件)|全部|所有|清单|列表|列出|列举|罗列|盘点|列一下|数量)/u.test(prompt)) return false;
+  const residue = prompt
+    .replace(/(?:不用|不需要|无需|无须|不要|别|不)(?:读取?|阅读|分析|总结)(?:笔记|文件)?(?:的)?(?:正文|内容)?/gu, '')
+    .replace(/\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?(?:[T ]\d{1,2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:\d{2})?)?|\d+\s*天/gu, '')
+    .replace(/请问|麻烦|告诉我|帮我|给我|我想知道|看一下|查看|看看|列一下|列出|列举|罗列|盘点|统计|显示|给出|生成|扫描|查询|列|看/gu, '')
+    .replace(/知识库|笔记本|笔记|文件夹|文件|清单|列表|数量|Markdown|PDF|MD|学习|技术|课程|附件|路径|名称|大小|北京时间/giu, '')
+    .replace(/最后修改时间|修改时间|更新时间|时间范围|最近|近期|过去|这个月|上个月|一个月|上月|本月|上周|本周|今天|今日|昨天|昨日|期间|修改|新增|更新|新建|新写|写了|写过|创建|按时间排序/gu, '')
+    .replace(/哪些|多少|什么|全部|所有|一共|共有|分别|包括|当前|现在|\s|[我你请有都的了过是仅只和与到至从在里中内个篇份吗呢吧及含，。？！、；,:;!?.~～—–-]/gu, '');
+  return residue === '';
 }
 const DATE = '(\\d{4}-\\d{1,2}-\\d{1,2}(?:[T ]\\d{1,2}:\\d{2}(?::\\d{2}(?:\\.\\d{1,3})?)?(?:Z|[+-]\\d{2}:\\d{2})?)?)';
 function localParts(date) {
@@ -81,20 +91,20 @@ export class KnowledgeInventories {
     this.ready=this.initialize();
   }
   async initialize() {
-    await fs.mkdir(this.directory,{recursive:true,mode:0o700});
+    await ensurePrivateDirectory(this.directory);
     const [root, storage] = await Promise.all([fs.realpath(this.root),fs.realpath(this.directory)]);
-    if (storage===root || storage.startsWith(root+path.sep)) throw inventoryError('清单状态不能保存在知识库内。',500);
+    if (isInsidePath(root, storage)) throw inventoryError('清单状态不能保存在知识库内。',500);
     for (const name of await fs.readdir(this.directory)) {
       if (!/^[a-f0-9-]{36}\.json$/.test(name)) continue;
       const record=JSON.parse(await fs.readFile(path.join(this.directory,name),'utf8'));
-      if (record.root !== this.root) continue;
+      if (!samePath(record.root, this.root)) continue;
       if (ACTIVE.has(record.status)) { record.status='interrupted'; record.finishedAt=new Date(this.now()).toISOString(); record.errors.push({path:'.',reason:'服务重启，扫描中断，请重新扫描'}); await this.save(record); }
       this.records.set(record.id,record);
     }
   }
   save(record) {
     const data=JSON.stringify(record), target=path.join(this.directory,record.id+'.json');
-    const op=async()=>{ const temp=target+'.'+crypto.randomUUID()+'.tmp'; await fs.writeFile(temp,data,{mode:0o600,flag:'wx'}); await fs.rename(temp,target); };
+    const op=()=>atomicPrivateFile(target, Buffer.from(data));
     this.writes=this.writes.then(op,op); return this.writes;
   }
   async create(userId, conversationId, range, taskId) {
@@ -135,24 +145,27 @@ export class KnowledgeInventories {
       const parts=rel.split('/').filter(Boolean); let target=this.root;
       for (const p of ['',...parts]) { if (p) target=path.join(target,p); const s=await fs.lstat(target,{bigint:true}); if(s.isSymbolicLink()) throw inventoryError('路径已变为符号链接'); }
       const real=await fs.realpath(target);
-      if(real!==this.root&&!real.startsWith(this.root+path.sep)) throw inventoryError('路径越界');
+      if(!isInsidePath(this.root,real)) throw inventoryError('路径越界');
+      if(process.platform==='win32') await assertNoReparseTraversal(target);
       return target;
     };
     const walk=async(rel,parentFd=null,name='')=>{
       aborted(); let handle;
       try {
         const target=linux&&parentFd!==null?`/proc/self/fd/${parentFd}/${name}`:await safePath(rel);
-        handle=await this.directoryHandle(target);
-        const stat=await handle.stat({bigint:true}); if (!stat.isDirectory()) throw inventoryError('目录类型发生变化');
+        if(linux) handle=await this.directoryHandle(target);
+        const stat=linux?await handle.stat({bigint:true}):await fs.lstat(target,{bigint:true}); if (!stat.isDirectory()) throw inventoryError('目录类型发生变化');
         const prefix=linux?`/proc/self/fd/${handle.fd}`:target;
         const children=await fs.readdir(prefix,{withFileTypes:true}), names=children.map(e=>e.name).sort(compare); dirs.push({path:rel,signature:signature(stat),names:directoryNames(children)});
+        const reparse = linux ? new Set() : await reparseChildren(target);
         for (const child of names) {
           aborted(); const relative=rel?rel+'/'+child:child; record.discovered++;
           try {
+            if(reparse.has(child)) { record.excluded.push({path:relative,reason:'symlink'}); continue; }
             if(child.startsWith('.')) { record.excluded.push({path:relative,reason:'hidden'}); continue; }
             const s=await fs.lstat(path.join(prefix,child),{bigint:true}); observed.push({path:relative,signature:signature(s)});
             if(s.isSymbolicLink()) { record.excluded.push({path:relative,reason:'symlink'}); continue; }
-            if(s.isDirectory()) await walk(relative,handle.fd,child);
+            if(s.isDirectory()) await walk(relative,handle?.fd ?? null,child);
             else if(!s.isFile()) record.excluded.push({path:relative,reason:'not_regular_file'});
             else if(record.range.scope==='markdown'&&!/\.md$/i.test(child)) record.excluded.push({path:relative,reason:'outside_markdown_scope'});
             else files.push({path:relative,size:Number(s.size),mtimeMs:Number(s.mtimeNs)/1e6,mtime:new Date(Number(s.mtimeNs)/1e6).toISOString()});

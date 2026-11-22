@@ -1,10 +1,9 @@
 import crypto from 'node:crypto';
-import { constants as fsConstants } from 'node:fs';
-import fsp from 'node:fs/promises';
 import { isIP } from 'node:net';
 import path from 'node:path';
 import { domainToASCII } from 'node:url';
 import { markPublicMessage } from './public-errors.mjs';
+import { atomicPrivateFile, readPrivateFile, encodePrivateBytes, decodePrivateBytes } from '../platform/private-storage.mjs';
 
 import {
   UNIVERSAL_REASONING_EFFORTS,
@@ -1159,144 +1158,40 @@ function publicSnapshot(value) {
   };
 }
 
-function assertPrivateStat(stat, label) {
-  if (
-    !stat.isFile() || Number(stat.nlink) !== 1 || (Number(stat.mode) & 0o777) !== 0o600 ||
-    (typeof process.getuid === 'function' && Number(stat.uid) !== process.getuid())
-  ) {
-    fail(`${label} must be an owner-controlled 0600 regular file with one hard link.`,
-      'UNSAFE_RUNTIME_CONFIG_FILE', 500);
-  }
-  if (Number(stat.size) < 1 || Number(stat.size) > MAX_PRIVATE_JSON_BYTES) {
-    fail(`${label} is outside the permitted size bound.`,
-      'UNSAFE_RUNTIME_CONFIG_FILE', 500);
-  }
-}
-
-function sameStat(left, right) {
-  return left.dev === right.dev && left.ino === right.ino && left.size === right.size &&
-    left.mtimeNs === right.mtimeNs && left.ctimeNs === right.ctimeNs;
-}
-
-async function readPrivateJson(filename, label, { optional = false } = {}) {
+async function readPrivateJson(filename, label, { optional = false, encrypted = false } = {}) {
   if (!filename) return null;
-  if (!path.isAbsolute(filename)) {
-    fail(`${label} path must be absolute.`, 'UNSAFE_RUNTIME_CONFIG_PATH', 500);
-  }
-  const flags = fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW;
-  let handle;
+  if (!path.isAbsolute(filename)) fail(`${label} path must be absolute.`, 'UNSAFE_RUNTIME_CONFIG_PATH', 500);
+  let bytes;
   try {
-    handle = await fsp.open(filename, flags);
+    bytes = await readPrivateFile(filename, { optional, maxBytes: encrypted ? MAX_PRIVATE_JSON_BYTES * 2 : MAX_PRIVATE_JSON_BYTES });
+    if (bytes === null) return null;
+    if (encrypted) bytes = await decodePrivateBytes(bytes);
+    if (bytes.length > MAX_PRIVATE_JSON_BYTES) fail(`${label} is outside the permitted size bound.`, 'UNSAFE_RUNTIME_CONFIG_FILE', 500);
   } catch (error) {
-    if (optional && error?.code === 'ENOENT') return null;
-    fail(`${label} could not be opened safely.`, 'RUNTIME_CONFIG_FILE_UNAVAILABLE', 500, {
-      cause: error,
-    });
+    if (error instanceof RuntimeConfigError) throw error;
+    const code = error.code === 'PRIVATE_FILE_CHANGED' ? 'RUNTIME_CONFIG_FILE_CHANGED'
+      : error.code === 'UNSAFE_PRIVATE_FILE' ? 'UNSAFE_RUNTIME_CONFIG_FILE'
+      : 'RUNTIME_CONFIG_FILE_UNAVAILABLE';
+    fail(`${label} could not be opened safely.`, code, 500, { cause: error });
   }
-  try {
-    const before = await handle.stat({ bigint: true });
-    assertPrivateStat(before, label);
-    const bytes = await handle.readFile();
-    const after = await handle.stat({ bigint: true });
-    if (!sameStat(before, after)) {
-      fail(`${label} changed while it was being read.`, 'RUNTIME_CONFIG_FILE_CHANGED', 500);
-    }
-    let value;
-    try {
-      value = JSON.parse(bytes.toString('utf8'));
-    } catch (error) {
-      fail(`${label} is not valid JSON.`, 'INVALID_RUNTIME_CONFIG_JSON', 500, { cause: error });
-    }
-    return {
-      value,
-      semanticDigest: sha256(bytes),
-    };
-  } finally {
-    await handle.close().catch(() => {});
-  }
-}
-
-async function ensureSafeParent(filename) {
-  const directory = path.dirname(filename);
-  await fsp.mkdir(directory, { recursive: true, mode: 0o700 });
-  const [resolved, real] = await Promise.all([Promise.resolve(path.resolve(directory)), fsp.realpath(directory)]);
-  if (resolved !== real) {
-    fail('Managed runtime configuration directory must not traverse symbolic links.',
-      'UNSAFE_RUNTIME_CONFIG_PATH', 500);
-  }
-  const stat = await fsp.stat(directory);
-  if (
-    !stat.isDirectory() || (Number(stat.mode) & 0o022) !== 0 ||
-    (typeof process.getuid === 'function' && stat.uid !== process.getuid())
-  ) {
-    fail('Managed runtime configuration directory must be owner-controlled and not writable by group or other users.',
-      'UNSAFE_RUNTIME_CONFIG_PATH', 500);
-  }
-  return directory;
-}
-
-async function verifyExistingTarget(filename) {
-  let handle;
-  try {
-    handle = await fsp.open(filename, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
-  } catch (error) {
-    if (error?.code === 'ENOENT') return;
-    fail('Managed runtime configuration target could not be verified safely.',
-      'UNSAFE_RUNTIME_CONFIG_FILE', 500, { cause: error });
-  }
-  try {
-    assertPrivateStat(await handle.stat({ bigint: true }), 'Managed runtime configuration');
-  } finally {
-    await handle.close().catch(() => {});
-  }
+  try { return { value: JSON.parse(bytes.toString('utf8')), semanticDigest: sha256(bytes) }; }
+  catch (error) { fail(`${label} is not valid JSON.`, 'INVALID_RUNTIME_CONFIG_JSON', 500, { cause: error }); }
 }
 
 async function atomicPrivateJson(filename, value, options = {}) {
-  if (!path.isAbsolute(filename)) {
-    fail('Managed runtime configuration path must be absolute.',
-      'UNSAFE_RUNTIME_CONFIG_PATH', 500);
-  }
-  const directory = await ensureSafeParent(filename);
-  const temporary = path.join(directory, `.${path.basename(filename)}.${crypto.randomUUID()}.tmp`);
-  const flags = fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL |
-    fsConstants.O_NOFOLLOW;
-  let handle;
-  let directoryHandle;
-  let committed = false;
+  if (!path.isAbsolute(filename)) fail('Managed runtime configuration path must be absolute.', 'UNSAFE_RUNTIME_CONFIG_PATH', 500);
   try {
-    handle = await fsp.open(temporary, flags, 0o600);
-    await handle.chmod(0o600);
-    await handle.writeFile(`${JSON.stringify(value, null, 2)}\n`, 'utf8');
-    await handle.sync();
-    await handle.close();
-    handle = null;
-    await verifyExistingTarget(filename);
-    // Open the directory before the rename so every fallible preparation step
-    // occurs before the linearization point.
-    directoryHandle = await fsp.open(directory, fsConstants.O_RDONLY);
-    await fsp.rename(temporary, filename);
-    committed = true;
-    try {
-      const syncDirectory = typeof options.syncDirectory === 'function'
-        ? options.syncDirectory
-        : (target) => target.sync();
-      await syncDirectory(directoryHandle);
-    } catch {
-      // The rename is already visible and cannot be reported as a failed
-      // commit: callers could otherwise delete an index slot now referenced
-      // by this file. A later restart safely observes either the old or new
-      // directory entry if the host loses power before metadata is durable.
-    }
+    const raw = Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
+    const bytes = options.encrypted ? await encodePrivateBytes(raw) : raw;
+    await atomicPrivateFile(filename, bytes, options);
   } catch (error) {
-    await handle?.close().catch(() => {});
-    if (!committed) await fsp.unlink(temporary).catch(() => {});
     if (error instanceof RuntimeConfigError) throw error;
-    fail('Managed runtime configuration could not be written atomically.',
-      'RUNTIME_CONFIG_WRITE_FAILED', 500, { cause: error });
-  } finally {
-    await directoryHandle?.close().catch(() => {});
+    const code = error.code === 'UNSAFE_PRIVATE_PATH' ? 'UNSAFE_RUNTIME_CONFIG_PATH'
+      : error.code === 'UNSAFE_PRIVATE_FILE' ? 'UNSAFE_RUNTIME_CONFIG_FILE' : 'RUNTIME_CONFIG_WRITE_FAILED';
+    fail('Managed runtime configuration could not be written atomically.', code, 500, { cause: error });
   }
 }
+
 
 function applyModelPatch(models, patch) {
   if (patch === undefined) return models;
@@ -1647,7 +1542,7 @@ export class RuntimeConfigRegistry {
       candidate.managedRead && !candidate.recovered &&
       candidate.managed.revision !== this.backupRevision
     ) {
-      await atomicPrivateJson(this.backupFile, candidate.managed);
+      await atomicPrivateJson(this.backupFile, candidate.managed, { encrypted: true });
       this.backupRevision = candidate.managed.revision;
     } else if (candidate.recovered) {
       this.backupRevision = candidate.managed.revision;
@@ -1667,7 +1562,7 @@ export class RuntimeConfigRegistry {
       managedRead = await readPrivateJson(
         this.managedFile,
         'Managed runtime configuration',
-        { optional: true },
+        { optional: true, encrypted: true },
       );
     } catch (error) {
       primaryError = error;
@@ -1678,7 +1573,7 @@ export class RuntimeConfigRegistry {
         backupRead = await readPrivateJson(
           this.backupFile,
           'Last-known-good runtime configuration',
-          { optional: true },
+          { optional: true, encrypted: true },
         );
       } catch (backupError) {
         throw primaryError || backupError;
@@ -1881,7 +1776,7 @@ export class RuntimeConfigRegistry {
           },
         },
       });
-      await atomicPrivateJson(this.managedFile, document);
+      await atomicPrivateJson(this.managedFile, document, { encrypted: true });
       const candidate = await this.#loadCandidate();
       await this.#acceptCandidate(candidate);
       return publicSnapshot(this.current);
@@ -1977,7 +1872,7 @@ export class RuntimeConfigRegistry {
             'RUNTIME_CONFIG_REVISION_CONFLICT', 409);
         }
       }
-      await atomicPrivateJson(this.managedFile, document);
+      await atomicPrivateJson(this.managedFile, document, { encrypted: true });
       const candidate = await this.#loadCandidate();
       await this.#acceptCandidate(candidate);
       return publicSnapshot(this.current);

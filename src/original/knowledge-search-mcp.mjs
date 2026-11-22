@@ -1,3 +1,4 @@
+import { confirmPassage, registerEvidence } from './knowledge-evidence.mjs';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { KNOWLEDGE_SEARCH_TOOL } from './subagent-policy.mjs';
@@ -9,6 +10,17 @@ export function createKnowledgeSearchServer(store, task, options = {}) {
     instructions: '只读检索当前 Obsidian 知识库；返回相对路径、标题层级和行号范围。',
     alwaysLoad: true,
     tools: [
+      tool('CitePassage', '核对实际读到的原文并生成段落引用，把返回的标记原样贴在对应结论后。',
+        { path: z.string().min(1).max(4096), quote: z.string().min(1).max(640),
+          line: z.number().int().positive().optional() },
+        async (input) => {
+          try {
+            const marker = await confirmPassage(store, task, input);
+            return { content: [{ type: 'text', text: marker }] };
+          } catch (error) {
+            return { isError: true, content: [{ type: 'text', text: error.message }] };
+          }
+        }, { alwaysLoad: true }),
       tool(
         'KnowledgeSearch',
         '用新的检索表达式重新查询知识库。适合复杂追问、同义改写、跨文档核验和“列出全部”。不接受根目录或任务模式参数。',
@@ -49,6 +61,7 @@ export function createKnowledgeSearchServer(store, task, options = {}) {
               lineNumbers: item.lineNumbers,
               snippet: item.snippet,
               relatedPaths: item.relatedPaths || [],
+              passages: (item.passages || []).map((p) => ({ ...p, citation: registerEvidence(task, p) })),
             }));
             return {
               content: [{
@@ -78,3 +91,5 @@ export function createKnowledgeSearchServer(store, task, options = {}) {
 }
 
 export { KNOWLEDGE_SEARCH_TOOL };
+
+export const CITE_PASSAGE_TOOL = 'mcp__knowledge__CitePassage';

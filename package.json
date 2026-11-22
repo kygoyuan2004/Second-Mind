@@ -1,6 +1,6 @@
 {
   "name": "second-mind",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Self-hosted Obsidian knowledge workspace powered by the Claude Agent SDK",
   "type": "module",
   "license": "MIT",
@@ -22,7 +22,16 @@
     "security:ocr": "node scripts/scan-screenshot-ocr.mjs",
     "security:history": "node scripts/scan-history.mjs",
     "verify": "npm run check && npm test && npm run security:scan",
-    "postinstall": "node scripts/sync-vendor-assets.mjs"
+    "postinstall": "node scripts/sync-vendor-assets.mjs",
+    "start:server": "node src/bootstrap.mjs",
+    "test:desktop": "node --import ./test/test-environment.mjs --test test/desktop-backend.test.mjs test/desktop-shell.test.mjs test/platform/*.test.mjs",
+    "runtime:prepare": "python3 scripts/prepare-windows-runtime.py",
+    "dist:win": "node scripts/build-windows.mjs",
+    "desktop:build:win": "node scripts/build-windows.mjs",
+    "test:electron": "node --test test/desktop-shell.electron.mjs",
+    "test:runtime": "node scripts/run-tests.mjs --runtime-only",
+    "desktop:dev": "electron .",
+    "desktop:build:linux": "bash scripts/build-linux.sh"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.247",
@@ -34,6 +43,14 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "html-validate": "11.13.0"
-  }
+    "html-validate": "11.13.0",
+    "@playwright/test": "1.63.0",
+    "adm-zip": "0.6.1",
+    "electron": "44.4.3",
+    "electron-builder": "26.15.3",
+    "extract-zip": "2.0.1"
+  },
+  "main": "desktop/main.mjs",
+  "productName": "Second Mind",
+  "homepage": "https://github.com/kygoyuan2004/Second-Mind"
 }

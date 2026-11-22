@@ -35,6 +35,6 @@ export async function temporaryProject(prefix = 'vaultmind-test-') {
         jsonBodyBytes: 4 * 1024 * 1024,
       },
     },
-    cleanup: () => fsp.rm(root, { recursive: true, force: true }),
+    cleanup: () => fsp.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }),
   };
 }

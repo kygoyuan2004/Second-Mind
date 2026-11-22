@@ -77,3 +77,26 @@ public/vendor/
 
 !src/original/knowledge-inventory.mjs
 !public/knowledge-inventory.js
+
+!platform/
+!platform/private-storage.mjs
+!platform/process-tree.mjs
+!desktop/
+!desktop/resources.mjs
+!desktop/media-model.mjs
+!public/knowledge-passage.js
+!public/study-plan/
+!src/original/knowledge-evidence.mjs
+!src/original/knowledge-query.mjs
+!src/original/study-plan-store.mjs
+!src/scripts/media-model-lock.json
+!src/scripts/media_model.py
+!public/study-plan/daily.html
+!public/study-plan/daily.js
+!public/study-plan/daily.css
+!public/study-plan/knowledge-import.js
+!public/study-plan/plan-import.js
+!public/study-plan/store.js
+!public/study-plan/sync.css
+!src/original/local-asr.mjs
+!src/scripts/transcribe-qwen.py

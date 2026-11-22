@@ -1,26 +1,26 @@
 {
-  "baseline": "2026-09-15",
+  "baseline": "2026-11-22",
   "sdkVersion": "0.3.247",
   "files": [
     {
       "source": "lib/knowledge-agent.mjs",
       "target": "src/original/knowledge-agent.mjs",
-      "sha256": "fc4cadec10e1a907d44ba9b7dfa52e804f39a36f8d317e6c8987ab8ea2898781"
+      "sha256": "8484ee181113423e1d3d4eebc08a6bd7628e377ccd45f6f4018d1a76c44c5d0d"
     },
     {
       "source": "lib/knowledge-store.mjs",
       "target": "src/original/knowledge-store.mjs",
-      "sha256": "cf58b40e714ef3fc647fafd2c214e849a794995b7b51bcf26e96d7fea41cd851"
+      "sha256": "30846c6c46c6c747838f59691ddf53343dd09c4bc1d2ddb16359e700a5dff40d"
     },
     {
       "source": "lib/knowledge-index.mjs",
       "target": "src/original/knowledge-index.mjs",
-      "sha256": "d4bbed1e34799398c4c2fabd862657a23f438ebeb462381d0be8bcf98326cd1b"
+      "sha256": "5ae4e7e00a422052777b3f5e4ed63b4a5a2a54c291d82b5004174ca26ec6025d"
     },
     {
       "source": "lib/knowledge-search-mcp.mjs",
       "target": "src/original/knowledge-search-mcp.mjs",
-      "sha256": "15c74f2f147c9ebfec08739d6ff4b914f1fc62be7e4ae8ef39cd7e407b388655"
+      "sha256": "54123b03d0b85ea79a197dcb015f68a1cefd29887f79ebd227c44010605d860f"
     },
     {
       "source": "lib/bailian-retrieval.mjs",
@@ -40,7 +40,7 @@
     {
       "source": "lib/model-catalog.mjs",
       "target": "src/original/model-catalog.mjs",
-      "sha256": "1b55599e8da63b06fa50bb61ce7a98f54d04781c1f703fedeedf64f0c3b5a27e"
+      "sha256": "1d9ed4de688092f60b00e75e3b3854383e5092be92cd283e030702e88fb1d5cc"
     },
     {
       "source": "lib/task-modes.mjs",
@@ -55,7 +55,7 @@
     {
       "source": "lib/learning-review.mjs",
       "target": "src/original/learning-review.mjs",
-      "sha256": "8dfa90545c47d505c6014b3b78a78900da2a2b8f203abb1f2a5a9f8bb2558d95"
+      "sha256": "a2795b2ba3b0d5e777dc63299a449e4e40650ced703f10687f51bf806c2f8288"
     },
     {
       "source": "lib/source-resolver.mjs",
@@ -65,27 +65,27 @@
     {
       "source": "lib/knowledge-transcriber.mjs",
       "target": "src/original/knowledge-transcriber.mjs",
-      "sha256": "0244b5ffe4f8ba9e63631b4a7261d211e5f26c36ad1ba412710e6e3daee0a1f3"
+      "sha256": "ceba62c85ec23d088f1c8b53a18b7165d5c6a78f96c29793fff6640fb8d9f9e0"
     },
     {
       "source": "lib/knowledge-video.mjs",
       "target": "src/original/knowledge-video.mjs",
-      "sha256": "511cf1f843e943935c400b1d83ca51fa839376669f5953c1c74a0dadb31aaba7"
+      "sha256": "c9d8cf0e4fdb325e0cb7ab996cd8b826ae853801f8e38b945889adbb1dbe96c3"
     },
     {
       "source": "public/knowledge.html",
       "target": "public/knowledge.html",
-      "sha256": "d28295e384b2500c49b5ef0aacd1f3e899827b4941330ab0ee170039abe9bd9e"
+      "sha256": "54de33bab05529644004fb06c51867f4844f88c468949cc25a1c0114874c63d5"
     },
     {
       "source": "public/knowledge.js",
       "target": "public/knowledge.js",
-      "sha256": "8757559fe71ea3db2fe58631472021a4f0fff2a37ba668146d8995d6db1a18c4"
+      "sha256": "c3bb1b194a2c65d93b89c7e6adf6c4ac9f5592aa3c682bdf69952c26bf0b9e48"
     },
     {
       "source": "public/knowledge.css",
       "target": "public/knowledge.css",
-      "sha256": "68bbe51823a58d59ced3d06ce98377bf65ad0108a8bacfe74d0fa96c109a25c7"
+      "sha256": "bd7a149e317f1ea3f9cf1734691d406f2751b5ec4f0dcbc93413179718866219"
     },
     {
       "source": "public/knowledge-clipboard.js",
@@ -95,7 +95,7 @@
     {
       "source": "public/knowledge-sources.js",
       "target": "public/knowledge-sources.js",
-      "sha256": "f1d8332e3b65e957fcb975de963c9d17c4cecfdd41a50d25e1b70613580bbd59"
+      "sha256": "38a28783650c3047246516acbc33031c8cc35b7ce7bd89c5e77b3cb2dbc8683e"
     },
     {
       "source": "public/agent-render.js",
@@ -111,6 +111,41 @@
       "source": "public/overrides.css",
       "target": "public/overrides.css",
       "sha256": "9fb8002b068d4bd4b73bb464e8b580682237ea8883b7495562865ec3ed2642c0"
+    },
+    {
+      "source": "lib/knowledge-inventory.mjs",
+      "target": "src/original/knowledge-inventory.mjs",
+      "sha256": "cda447efaa0121a5d613186122910be6f4e1e5e66d72b5b998c72aa012b700d4"
+    },
+    {
+      "source": "lib/knowledge-query.mjs",
+      "target": "src/original/knowledge-query.mjs",
+      "sha256": "acaf0242a4e756dfe4f4388eba03ab3a4d17d7b4f3984cb7b1109bb9e98575ae"
+    },
+    {
+      "source": "lib/knowledge-evidence.mjs",
+      "target": "src/original/knowledge-evidence.mjs",
+      "sha256": "9a813b3cbe41fe286f4e47090783c5b59b9b05c7404065b743d145181bcb0da8"
+    },
+    {
+      "source": "lib/study-plan-store.mjs",
+      "target": "src/original/study-plan-store.mjs",
+      "sha256": "9f0de5c797d249989aa17a62d5dd15151d39eb2df0159a9fa0b824c6f211fb5e"
+    },
+    {
+      "source": "public/knowledge-passage.js",
+      "target": "public/knowledge-passage.js",
+      "sha256": "8b6f4ab2c0be63fb36d9b6cb2f54508d2a0f2e6460dd1bf11938acc1c7d84780"
+    },
+    {
+      "source": "public/study-plan/knowledge-import.js",
+      "target": "public/study-plan/knowledge-import.js",
+      "sha256": "59df1e51121d6b6eaa8fe09d2de41e6dc34fe9e3a4a7e40f885af4d1e2bc212d"
+    },
+    {
+      "source": "public/study-plan/plan-import.js",
+      "target": "public/study-plan/plan-import.js",
+      "sha256": "1d0e107353f500f7f47f296f4235e05980cb65ee0f5fe1f041d2303725057448"
     }
   ]
 }

@@ -1,3 +1,4 @@
+import { configuredQwenAsr } from './local-asr.mjs';
 import { markPublicMessage } from '../public-errors.mjs';
 import crypto from 'node:crypto';
 import dns from 'node:dns/promises';
@@ -5,7 +6,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawnHidden, terminateProcessTree } from '../../platform/process-tree.mjs';
 import { fileURLToPath } from 'node:url';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -145,7 +146,7 @@ function timestamp(seconds) {
 }
 
 async function canExecute(target) {
-  try { await fsp.access(target, fs.constants.X_OK); return true; }
+  try { await fsp.access(target, fs.constants.F_OK); return true; }
   catch { return false; }
 }
 
@@ -168,10 +169,11 @@ function processEnvironment(home) {
 
 function runProcess(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const child = spawnHidden(command, args, {
       cwd: options.cwd,
-      env: processEnvironment(options.home),
+      env: { ...processEnvironment(options.home), ...options.asrEnv },
       stdio: ['ignore', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32',
     });
     let stdout = '';
     let stderr = '';
@@ -181,8 +183,8 @@ function runProcess(command, args, options = {}) {
     const errorLimit = options.errorLimit || 12_000;
     const terminate = () => {
       aborted = true;
-      child.kill('SIGTERM');
-      const force = setTimeout(() => child.kill('SIGKILL'), 3000);
+      void terminateProcessTree(child, { force: false });
+      const force = setTimeout(() => { void terminateProcessTree(child); }, 3000);
       force.unref();
     };
     const onAbort = () => terminate();
@@ -190,7 +192,7 @@ function runProcess(command, args, options = {}) {
     if (options.signal?.aborted) terminate();
     const timer = options.timeoutMs ? setTimeout(() => {
       timedOut = true;
-      child.kill('SIGKILL');
+      void terminateProcessTree(child);
     }, options.timeoutMs) : null;
     timer?.unref();
     child.stdout.on('data', (chunk) => { if (stdout.length < outputLimit) stdout += String(chunk); });
@@ -218,12 +220,14 @@ export class KnowledgeVideoProcessor {
     this.home = path.join(this.tempRoot, 'home');
     this.uploadRoot = path.join(this.tempRoot, 'uploads');
     this.taskRoot = path.join(this.tempRoot, 'tasks');
+    this.asr = configuredQwenAsr();
     this.python = path.resolve(options.python || process.env.KNOWLEDGE_SPEECH_PYTHON || DEFAULT_PYTHON);
     this.inspectScript = path.resolve(options.inspectScript || process.env.KNOWLEDGE_VIDEO_INSPECT_SCRIPT || DEFAULT_INSPECT_SCRIPT);
-    this.transcribeScript = path.resolve(options.transcribeScript || process.env.KNOWLEDGE_VIDEO_TRANSCRIBE_SCRIPT || DEFAULT_TRANSCRIBE_SCRIPT);
+    this.transcribeScript = path.resolve(options.transcribeScript || this.asr?.script || process.env.KNOWLEDGE_VIDEO_TRANSCRIBE_SCRIPT || DEFAULT_TRANSCRIBE_SCRIPT);
     this.ytdlp = path.resolve(options.ytdlp || process.env.KNOWLEDGE_VIDEO_YTDLP || DEFAULT_YTDLP);
+    this.ytdlpModule = options.ytdlpModule ?? process.env.KNOWLEDGE_VIDEO_YTDLP_MODULE === '1';
     this.ffmpeg = path.resolve(options.ffmpeg || process.env.KNOWLEDGE_VIDEO_FFMPEG || DEFAULT_FFMPEG);
-    this.speechModel = String(options.speechModel || process.env.KNOWLEDGE_SPEECH_MODEL || 'small');
+    this.speechModel = String(options.speechModel || this.asr?.model || process.env.KNOWLEDGE_SPEECH_MODEL || 'small');
     this.maxUploadBytes = positiveInteger(options.maxUploadBytes || process.env.KNOWLEDGE_VIDEO_MAX_BYTES, DEFAULT_MAX_UPLOAD_BYTES);
     this.maxDurationSeconds = positiveInteger(options.maxDurationSeconds || process.env.KNOWLEDGE_VIDEO_MAX_DURATION_SECONDS, DEFAULT_MAX_DURATION_SECONDS);
     this.retentionMs = positiveInteger(options.retentionMs, DEFAULT_RETENTION_MS);
@@ -425,6 +429,8 @@ export class KnowledgeVideoProcessor {
   async platformDownload(url, directory, signal) {
     const output = path.join(directory, 'source.%(ext)s');
     const { stdout } = await this.runProcess(this.ytdlp, [
+      ...(this.ytdlpModule ? ['-B', '-X', 'utf8', '-m', 'yt_dlp'] : []),
+      ...(this.ytdlpModule ? ['--js-runtimes', `node:${process.execPath}`] : []),
       '--no-config', '--no-playlist', '--no-cache-dir', '--no-part',
       '--socket-timeout', '30', '--retries', '2', '--fragment-retries', '2',
       '--max-filesize', String(this.maxUploadBytes), '--merge-output-format', 'mp4',
@@ -459,7 +465,7 @@ export class KnowledgeVideoProcessor {
   }
 
   async inspect(source, signal) {
-    const { stdout } = await this.runProcess(this.python, [this.inspectScript, source], {
+    const { stdout } = await this.runProcess(this.python, ['-B', '-X', 'utf8', this.inspectScript, source], {
       cwd: path.dirname(source), signal, timeoutMs: 2 * 60_000, outputLimit: 40_000,
     });
     try { return JSON.parse(stdout); }
@@ -499,9 +505,10 @@ export class KnowledgeVideoProcessor {
 
   async transcribe(source, directory, signal) {
     const output = path.join(directory, 'transcript.json');
-    await this.runProcess(this.python, [
+    await this.runProcess(this.asr?.python || this.python, [
+      '-B', '-X', 'utf8',
       this.transcribeScript, source, '--output', output, '--model', this.speechModel, '--language', 'auto',
-    ], { cwd: directory, signal, timeoutMs: 4 * 60 * 60_000, errorLimit: 20_000 });
+    ], { cwd: directory, signal, asrEnv: this.asr?.env, timeoutMs: 4 * 60 * 60_000, errorLimit: 20_000 });
     const payload = JSON.parse(await fsp.readFile(output, 'utf8'));
     const segments = Array.isArray(payload.segments) ? payload.segments : [];
     let transcript = '';

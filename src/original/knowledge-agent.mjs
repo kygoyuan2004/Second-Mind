@@ -1,3 +1,4 @@
+import { registerEvidence, citedEvidence } from './knowledge-evidence.mjs';
 import { KnowledgeInventories, isInventoryRequest, inventoryRange, inventoryError } from './knowledge-inventory.mjs';
 import { markPublicMessage } from '../public-errors.mjs';
 import crypto from 'node:crypto';
@@ -13,14 +14,14 @@ import {
 import { KnowledgeStore } from './knowledge-store.mjs';
 import { KnowledgeIndex } from './knowledge-index.mjs';
 import {
-  KNOWLEDGE_SEARCH_TOOL,
+  KNOWLEDGE_SEARCH_TOOL, CITE_PASSAGE_TOOL,
   createKnowledgeSearchServer,
 } from './knowledge-search-mcp.mjs';
 import { KnowledgeTranscriber } from './knowledge-transcriber.mjs';
 import { KnowledgeVideoProcessor } from './knowledge-video.mjs';
 import {
   LEGACY_MODEL_ALIASES,
-  MODEL_CATALOG,
+  KNOWLEDGE_MODEL_CATALOG,
   MODEL_EFFORTS,
   normalizeStoredModelSelection,
   publicModelCatalog,
@@ -235,7 +236,6 @@ function sanitizedEnvironment() {
     CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '1',
     CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS: '2',
     // The SDK's 32,000 default conflicts with High's 32,768 thinking budget.
-    // qwen3.8-max supports up to 131,072 total output tokens.
     CLAUDE_CODE_MAX_OUTPUT_TOKENS: String(agentMaxOutputTokens()),
   };
 }
@@ -357,7 +357,7 @@ function promptWithAttachments(task) {
   })();
 }
 
-function candidateContext(results) {
+function candidateContext(results, task) {
   if (!results.length) return '混合检索没有找到候选文件。仍需使用 KnowledgeSearch/Glob/Grep 在全库复核。';
   let used = 0;
   const blocks = [];
@@ -369,6 +369,8 @@ function candidateContext(results) {
       result.lineNumbers?.length ? `   实时命中行：${result.lineNumbers.join('、')}` : '',
       result.relatedPaths?.length ? `   关联原文/整理版：${result.relatedPaths.join(' · ')}` : '',
       result.snippet ? `   片段：${result.snippet}` : '',
+      ...(result.passages || []).map((p) =>
+        `   ${registerEvidence(task, p)} ${p.headings.join(' › ')} 第${p.line}行：${p.quote}`),
     ].filter(Boolean).join('\n');
     if (used + block.length > 24_000) break;
     blocks.push(block);
@@ -425,7 +427,7 @@ function taskSystemPrompt(task) {
       knowledgeEvidencePolicy,
       '先参考服务端提供的混合检索候选，优先按开始行和结束行定点读取，不要默认整篇读取超长文档。',
       '低置信、多文档、跨时间或穷举问题，必须继续用 KnowledgeSearch/Glob/Grep 全库复查；核验事实或用户要求原始内容时，读取整理版和关联原文两份。',
-      '库内事实必须使用格式“〔来源：相对路径#标题〕”就近标注；没有标题时省略 #标题。',
+      '每项库内结论就近附上能支持它的逐字原文依据。优先从本轮候选或 KnowledgeSearch 的 passages 选择对应的〔依据：标识〕，原样复制。Read 找到更准确的内容时，调用 CitePassage 核对相对路径和逐字引文，使用返回的标记。仅有文件级依据时沿用〔来源：相对路径#标题〕并说明局限，不编造标识。',
       task.learningReview
         ? '当前为个人学习回顾，联网补充默认关闭；以实际读取的各类知识库笔记及其日期线索核验，不能用公开资料替代个人笔记依据。'
         : task.webSearch
@@ -467,7 +469,7 @@ export class KnowledgeAgentManager {
     this.now = options.now || (() => Date.now());
     this.timeZone = reviewTimeZone(options.timeZone || process.env.KNOWLEDGE_TIMEZONE || process.env.TZ);
     this.queryFn = options.queryFn || claudeQuery;
-    this.modelCatalog = options.modelCatalog || MODEL_CATALOG;
+    this.modelCatalog = options.modelCatalog || KNOWLEDGE_MODEL_CATALOG;
     this.store = options.store || new KnowledgeStore(options);
     this.hybridSearchEnabled = options.hybridSearchEnabled ?? deploymentFeatureEnabled(
       'KNOWLEDGE_HYBRID_SEARCH_ENABLED',
@@ -783,7 +785,7 @@ export class KnowledgeAgentManager {
     });
     this.validateTaskModel?.(userId, body, model, effort);
     if (kind === 'video' && !model.modalities?.includes('image')) {
-      throw agentError(400, '视频整理请选择 Qwen 3.8 Max。', 'VIDEO_MODEL_NOT_VISUAL');
+      throw agentError(400, '视频整理请选择 支持图像输入的模型。', 'VIDEO_MODEL_NOT_VISUAL');
     }
     const webSearch = kind === 'qa' && body.webSearch === true;
     const attachments = kind === 'video' ? [] : validateAttachments(body.attachments);
@@ -875,6 +877,8 @@ export class KnowledgeAgentManager {
       kind,
       prompt,
       taskPrompt,
+      previousInventoryQuestion: conversation.messages.at(-1)?.inventoryId && conversation.messages.at(-2)?.role === 'user'
+        ? conversation.messages.at(-2).text : null,
       model,
       effort,
       taskMode: learningReview ? { ...taskMode,
@@ -1059,12 +1063,12 @@ export class KnowledgeAgentManager {
     } : subagents?.hooks;
     const tools = task.kind === 'video'
       ? []
-      : ['Read', 'Glob', 'Grep', ...(qa ? [KNOWLEDGE_SEARCH_TOOL] : []), ...(enableSubagents ? ['Agent'] : [])];
+      : ['Read', 'Glob', 'Grep', ...(qa ? [KNOWLEDGE_SEARCH_TOOL, CITE_PASSAGE_TOOL] : []), ...(enableSubagents ? ['Agent'] : [])];
     const allowedTools = task.kind === 'video'
       ? []
-      : ['Read', 'Glob', 'Grep'].map((tool) => `${tool}(${task.root}/**)`);
+      : ['Read', 'Glob', 'Grep'].map((tool) => `${tool}(${task.root.split(path.sep).join('/')}/**)`);
     if (task.kind !== 'video') allowedTools.push('Read(./**)', 'Glob(./**)', 'Grep(./**)');
-    if (qa) allowedTools.push(KNOWLEDGE_SEARCH_TOOL);
+    if (qa) allowedTools.push(KNOWLEDGE_SEARCH_TOOL, CITE_PASSAGE_TOOL);
     if (enableSubagents) allowedTools.push('Agent');
     if (task.webSearch) allowedTools.push(TAVILY_SEARCH_TOOL, TAVILY_EXTRACT_TOOL);
     return {
@@ -1121,6 +1125,13 @@ export class KnowledgeAgentManager {
     task.events.push(event);
     if (task.events.length > 800) task.events.splice(0, task.events.length - 800);
     for (const client of task.clients) writeSse(client, event);
+  }
+
+  emitAnswerText(task, text) {
+    const tail = task.assistantText.slice(-32) + text;
+    task.assistantText += text;
+    const evidence = citedEvidence(task, tail);
+    this.emit(task, 'text', Object.keys(evidence).length ? { text, evidence } : { text });
   }
 
   handleSdkMessage(task, conversation, message) {
@@ -1184,8 +1195,7 @@ export class KnowledgeAgentManager {
       const text = message.event.delta.text || '';
       if (text) {
         task.hasStreamedText = true;
-        task.assistantText += text;
-        this.emit(task, 'text', { text });
+        this.emitAnswerText(task, text);
       }
       return;
     }
@@ -1200,9 +1210,8 @@ export class KnowledgeAgentManager {
     if (message.type === 'result') {
       task.finalResult = message;
       if (!task.hasStreamedText && message.subtype === 'success' && message.result) {
-        task.assistantText += String(message.result);
         task.hasStreamedText = true;
-        this.emit(task, 'text', { text: message.result });
+        this.emitAnswerText(task, String(message.result));
       }
     }
   }
@@ -1275,11 +1284,14 @@ export class KnowledgeAgentManager {
           task.prompt,
           '',
           `服务端检索路线：${retrieval.route || 'legacy'}${retrieval.exhaustive ? '（穷举）' : ''}`,
+          ...(retrieval.route === 'exact' && retrieval.diagnostics?.terms?.length ? [
+            `本轮匹配词：${retrieval.diagnostics.terms.join('、')}。用实际命中行说明笔记如何使用该词；若还询问定义、区别或对应概念，读取上下文并逐项回答，必要时另查相关概念。区分原文提及和原文给出定义。`,
+          ] : []),
           retrieval.exhaustive
             ? '以下是实时穷举命中。不要把截断后的提示上下文当成全部结果；需要时用 KnowledgeSearch 分页并以 Glob/Grep 复核。'
             : '以下候选用于定位原文；回答前必须用 Read 定点读取实际文件，复杂或低置信问题继续主动检索。',
           '',
-          candidateContext(task.candidates),
+          candidateContext(task.candidates, task),
         ].join('\n');
         this.emit(task, 'activity', {
           stage: 'completed',
@@ -1344,6 +1356,7 @@ export class KnowledgeAgentManager {
           toolName: 'VideoProcessor',
         });
       }
+      if (task.previousInventoryQuestion) task.taskPrompt += `\n上一轮用户原话：${JSON.stringify(task.previousInventoryQuestion)}。系统当时只返回了文件清单。如果本轮追问该问题，请阅读相关正文并补答；若已换题，以本轮问题为准。`;
       if (conversation.inventoryRange) task.taskPrompt += `\n已有后端文件清单：${JSON.stringify(conversation.inventoryRange)}。清单 ID：${conversation.lastInventoryId}。这是元数据观察，不证明首次创建或已学习；用户仍可在清单卡片翻页查看完整结果。需要解释时实际读取相关正文，不宣称已通读清单中的所有文件。`;
       await this.prepareSdkTask?.(task, conversation);
       if (task.status === 'cancelled' || task.status === 'timed_out') return;
@@ -1380,11 +1393,13 @@ export class KnowledgeAgentManager {
       const message = task.cancelReason || (task.status === 'completed' ? '任务已完成。' : '任务未能完成。');
       const savedAssistant = (task.assistantText.trim() || (task.status === 'completed' ? '' : message))
         .slice(0, MAX_MESSAGE_LENGTH);
+      const evidence = citedEvidence(task, savedAssistant);
       if (savedAssistant) {
         conversation.messages.push({
           id: crypto.randomUUID(),
           role: 'assistant',
           text: savedAssistant,
+          evidence,
           taskId: task.id,
           status: task.status,
           draftId: task.draftId,
@@ -1402,6 +1417,7 @@ export class KnowledgeAgentManager {
       task.attachments = task.attachments.map(({ name, type, kind, bytes }) => ({ name, type, kind, bytes }));
       task.videoFrames = task.videoFrames.map(({ name, type, bytes, timestamp }) => ({ name, type, bytes, timestamp }));
       this.emit(task, 'done', {
+        evidence,
         status: task.status,
         message,
         conversationId: conversation.id,
@@ -1495,6 +1511,6 @@ export const knowledgeAgentConstants = {
   MAX_ATTACHMENT_COUNT,
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENT_TOTAL_BYTES,
-  MODELS: MODEL_CATALOG,
+  MODELS: KNOWLEDGE_MODEL_CATALOG,
   EFFORTS: MODEL_EFFORTS,
 };

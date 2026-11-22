@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'release/desktop-web-parity']
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -307,9 +307,42 @@ jobs:
 
   publish:
     name: Publish verified multi-architecture image
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     needs: [node, history, container]
     permissions:
       contents: read
       packages: write
     uses: ./.github/workflows/container.yml
+
+  windows-desktop:
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/release/desktop-web-parity'
+    uses: ./.github/workflows/windows-build.yml
+
+  linux-desktop:
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/release/desktop-web-parity'
+    uses: ./.github/workflows/linux-desktop.yml
+
+  release-installers:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [publish, windows-desktop, linux-desktop]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: SecondMind-windows-x64
+          path: packages/windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: SecondMind-linux-x64
+          path: packages/linux
+      - name: Publish verified installers and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          (cd packages/windows && sha256sum -c SHA256SUMS.txt)
+          (cd packages/linux && sha256sum -c SHA256SUMS.txt)
+          cat packages/{windows,linux}/SHA256SUMS.txt > SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" --verify-tag --repo "$GITHUB_REPOSITORY" --generate-notes packages/windows/*.exe packages/linux/*.AppImage packages/linux/*.deb SHA256SUMS.txt

@@ -2,6 +2,7 @@ import { constants } from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import { atomicPrivateFile, ensurePrivateDirectory, protectPrivatePath } from '../platform/private-storage.mjs';
 
 const FORMAT = 1;
 const MANIFEST = 'vault-replica.json';
@@ -157,18 +158,14 @@ function publicStatus(value) {
 }
 
 async function atomicJson(filename, value) {
-  const temporary = `${filename}.${randomUUID()}.tmp`;
-  try {
-    await fsp.writeFile(temporary, `${JSON.stringify(value)}\n`, { flag: 'wx', mode: 0o600 });
-    await fsp.rename(temporary, filename);
-  } finally {
-    await fsp.rm(temporary, { force: true }).catch(() => {});
-  }
+  // Replica manifests can exceed the runtime configuration size limit. Their
+  // schema and previous contents are checked by the replica transaction.
+  await atomicPrivateFile(filename, Buffer.from(`${JSON.stringify(value)}\n`), { verifyTarget: false });
 }
 
 async function lockState(stateDir, operation) {
   const directory = await safePath(stateDir, { missing: true });
-  await fsp.mkdir(directory, { recursive: true, mode: 0o700 });
+  await ensurePrivateDirectory(directory);
   const pending = await fsp.lstat(path.join(directory, 'vault-replica-pending.json')).catch((error) => {
     if (error.code === 'ENOENT') return null;
     throw error;
@@ -181,6 +178,7 @@ async function lockState(stateDir, operation) {
     throw error;
   }
   try {
+    await protectPrivatePath(lock);
     await handle.writeFile(JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }));
     return await operation(directory);
   } finally {

@@ -43,6 +43,8 @@ COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
 # Copy only runtime code and browser assets. In particular, the optional
 # Obsidian Headless build recipe and every local deployment file stay outside
 # the main application image.
+COPY --chown=node:node platform ./platform
+COPY --chown=node:node desktop ./desktop
 COPY --chown=node:node src ./src
 COPY --chown=node:node public ./public
 COPY --chown=node:node scripts/sync-vendor-assets.mjs ./scripts/sync-vendor-assets.mjs

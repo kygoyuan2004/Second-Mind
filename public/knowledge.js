@@ -1,5 +1,6 @@
+import { mountKnowledgeImport } from './study-plan/knowledge-import.js?v=20260922-2';
 import { mountInventory } from './knowledge-inventory.js?v=1';
-import { enhanceSourceLinks, createSourcePreview } from './knowledge-sources.js?v=1';
+import { enhanceSourceLinks, createSourcePreview } from './knowledge-sources.js?v=4';
 import { filesFromClipboard } from './knowledge-clipboard.js?v=1';
 
 const state = {
@@ -648,13 +649,13 @@ function knowledgeFileLink(relativePath) {
   return knowledgeUrl(`/api/knowledge/file?path=${encodeURIComponent(relativePath)}`);
 }
 
-function renderMarkdown(target, source, basePath = '') {
+function renderMarkdown(target, source, basePath = '', evidence = {}) {
   if (!window.YuanAgentRenderer?.render) {
     target.textContent = source;
     return;
   }
   if (window.YuanAgentRenderer.render(target, source)) {
-    enhanceSourceLinks(target, { basePath, fileUrl: knowledgeFileLink, onOpen: openSource });
+    enhanceSourceLinks(target, { basePath, evidence, knowledgeBaseId, conversationId: state.conversationId, fileUrl: knowledgeFileLink, onOpen: openSource });
   }
 }
 
@@ -768,7 +769,7 @@ function appendMessage(role, text, options = {}) {
   label.textContent = role === 'user' ? 'YOU' : 'KNOWLEDGE AGENT';
   const content = document.createElement('div');
   content.className = 'knowledge-message-content';
-  if (role === 'assistant') renderMarkdown(content, text);
+  if (role === 'assistant') renderMarkdown(content, text, '', options.evidence);
   else content.textContent = text;
   article.append(label, content);
   if (options.draftId) {
@@ -917,7 +918,7 @@ async function openConversation(id) {
     for (const message of conversation.messages || []) {
       const names = message.role === 'user' && message.attachments?.length
         ? `\n\n附件：${message.attachments.join('、')}` : '';
-      const content=appendMessage(message.role, `${message.text}${names}`, { draftId: message.draftId });
+      const content=appendMessage(message.role, `${message.text}${names}`, { draftId: message.draftId, evidence: message.evidence });
       if(message.inventoryId) showInventory(content,message.inventoryId,conversation.id);
     }
     setStatus(unavailable ? 'error' : '', conversation.title, unavailable
@@ -985,6 +986,7 @@ function showInventory(content,id,conversationId) {
 }
 
 function connectTask(taskId) {
+  const evidence = {};
   state.taskId = taskId;
   state.source?.close();
   if (!state.processCard) startProcess('正在连接知识库 Agent');
@@ -1031,14 +1033,16 @@ function connectTask(taskId) {
     } else if(!['queued','scanning','verifying'].includes(data.status)) inventoryCard.refresh();
   });
   source.addEventListener('text', (event) => {
-    const text = parseEvent(event).text || '';
+    const delta = parseEvent(event);
+    const text = delta.text || '';
     if (!state.processGenerating) {
       appendProcessStep('正在生成回答', '答案会持续排版，完成后执行过程将自动收起。', 'generating');
       state.processGenerating = true;
     }
     if (!state.assistantNode) state.assistantNode = appendMessage('assistant', '');
     state.assistantText += text;
-    renderMarkdown(state.assistantNode, state.assistantText);
+    Object.assign(evidence, delta.evidence);
+    renderMarkdown(state.assistantNode, state.assistantText, '', evidence);
     scrollTranscript();
   });
   source.addEventListener('draft_ready', (event) => {
@@ -1054,6 +1058,9 @@ function connectTask(taskId) {
   });
   source.addEventListener('done', (event) => {
     const data = parseEvent(event);
+    if (data.evidence && state.assistantNode) {
+      renderMarkdown(state.assistantNode, state.assistantText, '', data.evidence);
+    }
     source.close();
     state.source = null;
     state.taskId = null;
@@ -1287,7 +1294,8 @@ function renderSearchResult(result, mode) {
     appendHighlightedText(snippet, result.snippet, terms);
     button.append(snippet);
   }
-  button.addEventListener('click', () => openSource(result.path));
+  const passage = mode === 'keyword' ? result.passages?.[0] : undefined;
+  button.addEventListener('click', () => openSource(result.path, passage ? '' : result.heading || '', passage));
   elements.searchResults.append(button);
 }
 
@@ -1389,9 +1397,35 @@ const sourcePreview = createSourcePreview({
   contextKey: () => state.session?.user?.id || '',
 });
 
-function openSource(relativePath, heading = '') {
-  return sourcePreview.open(relativePath, heading);
+function openSource(relativePath, heading = '', evidence) {
+  return sourcePreview.open(relativePath, heading, evidence);
 }
+
+const planImport = mountKnowledgeImport({
+  container: document.querySelector('#knowledge-plan-import'), textarea: elements.draftContent, api,
+  onError: (message) => { elements.draftError.textContent = message; },
+});
+elements.draftContent.addEventListener('plan-normalized', () => {
+  if (!elements.draftRendered.hidden) renderMarkdown(elements.draftRendered, elements.draftContent.value);
+});
+
+async function openLinkedSource() {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  if (params.has('source') && state.session?.permissions?.useKnowledge) {
+    const source = params.get('source');
+    const id = params.get('evidence');
+    let entry;
+    if (id && params.has('conversation')) {
+      try {
+        const conversation = await api(`/api/knowledge/conversations/${encodeURIComponent(params.get('conversation'))}`);
+        entry = conversation.messages.map((m) => m.evidence?.[id]).find((p) => p?.path === source);
+      } catch { /* A deleted conversation can still link to the current note. */ }
+      if (new URLSearchParams(window.location.hash.slice(1)).toString() !== params.toString()) return;
+    }
+    openSource(source, params.get('heading') || '', id ? entry || {} : undefined);
+  }
+}
+window.addEventListener('hashchange', openLinkedSource);
 
 function openDraft(draft) {
   state.draft = draft;
@@ -1399,6 +1433,9 @@ function openDraft(draft) {
   elements.draftTitle.value = draft.title || '';
   elements.draftTarget.textContent = draft.targetPath;
   elements.draftContent.value = draft.content || '';
+  planImport.open(draft);
+  elements.saveDraft.textContent = '确认保存 →';
+  elements.discardDraft.disabled = false;
   elements.draftError.textContent = '';
   showDraftView('edit');
   if (!elements.draftDialog.open) elements.draftDialog.showModal();
@@ -1420,26 +1457,58 @@ function showDraftView(view) {
 }
 
 async function saveCurrentDraft() {
-  if (!state.draft) return;
+  if (!state.draft || elements.saveDraft.disabled) return;
   elements.saveDraft.disabled = true;
   elements.draftError.textContent = '';
+  let selection;
+  const markPending = (result) => {
+    planImport.pending(result);
+    elements.saveDraft.textContent = '重试同步 →';
+    elements.discardDraft.disabled = true;
+  };
   try {
-    const result = await api(`/api/knowledge/drafts/${encodeURIComponent(state.draft.id)}/save`, {
-      method: 'POST',
-      body: JSON.stringify({
-        title: ['scratch', 'video'].includes(state.draft.kind) ? elements.draftTitle.value.trim() : undefined,
-        content: elements.draftContent.value,
-      }),
-    });
+    selection = planImport.prepare();
+    planImport.setSaving(true);
+    elements.discardDraft.disabled = true;
+    const result = selection.retryId ? await planImport.retry(selection.retryId)
+      : await api(`/api/knowledge/drafts/${encodeURIComponent(state.draft.id)}/save`, {
+        method: 'POST', body: JSON.stringify({
+          title: ['scratch', 'video'].includes(state.draft.kind) ? elements.draftTitle.value.trim() : undefined,
+          content: elements.draftContent.value, ...selection,
+        }),
+      });
+    if (result.schedule?.status === 'pending') {
+      markPending(result); elements.draftError.textContent = result.schedule.message; return;
+    }
     elements.draftDialog.close();
-    appendNotice(`已保存到 ${result.path}`);
-    toast(`已保存：${result.path}`);
+    const summary = result.schedule ? `；已加入 ${result.schedule.added} 项，跳过 ${result.schedule.skipped} 项重复安排` : '';
+    appendNotice(`已保存到 ${result.path}${summary}`);
+    if (result.schedule) {
+      const link = document.createElement('a');
+      link.href = `/study-plan/daily.html?date=${encodeURIComponent(result.date)}&knowledgeBaseId=${encodeURIComponent(knowledgeBaseId)}`;
+      link.textContent = '查看每日安排 ↗'; link.className = 'knowledge-open-draft';
+      elements.transcript.append(link);
+    }
+    toast(`已保存：${result.path}${summary}`);
     state.draft = null;
-    await loadConversations();
+    await loadConversations().catch((error) => toast(`计划已保存，但历史列表未刷新：${error.message}`));
   } catch (error) {
+    if (error.status === 409) {
+      if (selection?.retryId) {
+        planImport.open(state.draft);
+        elements.saveDraft.textContent = '确认保存 →';
+      }
+      planImport.invalidate();
+    } else if (selection?.retryId && error.status === 404) {
+      planImport.open(state.draft); elements.saveDraft.textContent = '确认保存 →'; elements.discardDraft.disabled = false;
+    } else if (selection?.operationId && ![400, 403, 404, 410, 413].includes(error.status)) {
+      markPending({ operationId: selection.operationId });
+    }
     elements.draftError.textContent = error.message;
   } finally {
     elements.saveDraft.disabled = false;
+    planImport.setSaving(false);
+    elements.discardDraft.disabled = planImport.hasPending();
   }
 }
 
@@ -1630,7 +1699,7 @@ function setupSpeech() {
     window.MediaRecorder,
   );
   elements.mic.hidden = false;
-  if (canRecord && isTouchDevice()) {
+  if (canRecord) {
     state.voiceMode = 'recording';
     setMicButton('开始口述');
     return;
@@ -1638,11 +1707,6 @@ function setupSpeech() {
   if (Recognition) {
     state.voiceMode = 'recognition';
     setupRecognition(Recognition);
-    setMicButton('开始口述');
-    return;
-  }
-  if (canRecord) {
-    state.voiceMode = 'recording';
     setMicButton('开始口述');
     return;
   }
@@ -1730,6 +1794,7 @@ async function initialize() {
     elements.app.hidden = false;
     if (state.voiceMode === 'none') setupSpeech();
     setKind('qa');
+    openLinkedSource();
     await loadConversations();
     if (state.status.activeTask) {
       setKind(state.status.activeTask.kind);

@@ -46,3 +46,7 @@ Web search is disabled by default. Bailian and Tavily credentials are independen
 The Docker image supplies Python, faster-whisper, yt-dlp, ffmpeg and ffprobe. `KNOWLEDGE_SPEECH_MODEL` can point to a predownloaded model directory; the default small model needs network access on first use. Media HOME/cache is private per Vault. Native source deployments can override `KNOWLEDGE_SPEECH_PYTHON`, `KNOWLEDGE_VIDEO_PYTHON`, `KNOWLEDGE_VIDEO_YT_DLP`, and relevant ffmpeg paths.
 
 The original task budgets and prompt/context behavior are fixed in `src/original/`. Old Pi context-window, research-round, and time-window settings do not control the new SDK loop.
+
+### Desktop and SDK connections
+
+Generation uses Anthropic Messages. The DeepSeek preset uses `https://api.deepseek.com/anthropic`. An existing OpenAI-format connection keeps its stored settings and displays a migration notice. Selecting the official Messages address requires re-entering the credential when the destination changes. Custom connections default to Messages and accept the authentication scheme required by that endpoint. Embedding has a separate protocol setting.

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+  <title>Second Mind</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="shell.js" defer></script>
+</head>
+<body>
+  <header class="toolbar">
+    <button id="home-button" class="brand" type="button" title="工作区与连接">Second Mind</button>
+    <span id="mode-label" class="mode-label">选择工作区</span>
+    <span id="connection-warning" class="connection-warning" hidden>HTTP · 录音请使用 HTTPS</span>
+    <div class="toolbar-actions">
+      <span id="toolbar-status" class="toolbar-status" role="status">本机后台未启动</span>
+      <button id="reload-button" type="button" title="刷新当前工作区">刷新页面</button>
+      <button id="connections-button" type="button">切换工作区</button>
+    </div>
+  </header>
+
+  <main id="home" class="home">
+    <div class="intro">
+      <p class="eyebrow">桌面工作区</p>
+      <h1>你的知识，随时继续。</h1>
+      <p>在这台电脑管理知识库，或连接已有的 Second Mind 服务器。</p>
+    </div>
+    <p id="error-message" class="message error" role="alert" hidden></p>
+    <p id="operation-message" class="message" role="status" hidden></p>
+
+    <div class="workspace-options">
+      <section class="workspace-panel" aria-labelledby="local-title">
+        <div class="panel-heading"><span class="mode-icon" aria-hidden="true">本机</span><h2 id="local-title">本机使用</h2></div>
+        <p>文件保存在你选择的文件夹中，任务在此电脑执行。模型与联网服务可进入工作区后配置。</p>
+        <ul id="vault-list" class="item-list" aria-label="已授权的知识库"></ul>
+        <p id="vault-empty" class="empty-note">先选择一个在 Obsidian 中打开过的 Vault 根文件夹。</p>
+        <div class="button-row">
+          <button id="choose-vault-button" type="button">选择知识库文件夹</button>
+          <button id="use-local-button" type="button" class="primary">进入本机工作区</button>
+        </div>
+        <p class="footnote">首次启动会建立关键词索引，不会自动调用付费模型。添加文件夹时，需等待本机任务完成。</p>
+      </section>
+
+      <section class="workspace-panel" aria-labelledby="remote-title">
+        <div class="panel-heading"><span class="mode-icon" aria-hidden="true">远程</span><h2 id="remote-title">连接服务器</h2></div>
+        <p>使用服务器上的知识库、账号和模型配置。各服务器独立登录，数据保留在服务器。</p>
+        <ul id="connection-list" class="item-list" aria-label="保存的服务器连接"></ul>
+        <form id="connection-form" class="connection-form">
+          <label for="connection-name">连接名称<input id="connection-name" name="name" maxlength="100" placeholder="例如：家里的服务器" autocomplete="off"></label>
+          <label for="connection-url">服务器地址<input id="connection-url" name="url" type="url" required placeholder="https://mind.example.com" autocomplete="url" spellcheck="false"></label>
+          <label class="checkbox-label"><input id="trusted-http" name="trustedHttp" type="checkbox">这是我信任的局域网 HTTP 服务器</label>
+          <p class="footnote">公网连接使用 HTTPS。局域网 HTTP 中的录音受浏览器限制。</p>
+          <button id="connect-button" type="submit" class="primary">保存并连接</button>
+        </form>
+      </section>
+    </div>
+
+    <section class="runtime-panel" aria-labelledby="media-title">
+      <div><h2 id="media-title">语音与视频转写</h2><p id="media-state">进入本机工作区后可下载语音模型。</p><p class="footnote">使用 small 模型在本机 CPU 上转写。首次使用需要下载模型；后续复用本机缓存。</p><progress id="media-progress" max="100" value="0" hidden aria-label="语音模型下载进度"></progress></div>
+      <button id="prepare-media-button" type="button" disabled>下载语音模型</button>
+    </section>
+    <section class="runtime-panel" aria-labelledby="runtime-title">
+      <div><h2 id="runtime-title">本机运行状态</h2><p id="runtime-state">后台尚未启动。</p><p class="footnote">切换到远程时，本机任务继续运行。关闭窗口后可从系统托盘恢复；退出软件会停止本机任务。</p></div>
+      <div class="button-row"><button id="restart-button" type="button">重启本机后台</button><button id="quit-button" type="button">退出软件</button></div>
+    </section>
+    <footer><span>本机与服务器之间不会自动同步数据。</span><span id="version"></span></footer>
+  </main>
+</body>
+</html>

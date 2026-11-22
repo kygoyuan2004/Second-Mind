@@ -26,6 +26,7 @@ const forbiddenFiles = [
 const contentPatterns = [
   { name: 'GitHub token', regex: /\b(?:ghp|gho|ghu|ghs|github_pat)_[A-Za-z0-9_]{20,}\b/g },
   { name: 'OpenAI-style secret', regex: /\bsk-[A-Za-z0-9_-]{20,}\b/g },
+  { name: 'Tavily credential', regex: /\btvly-[A-Za-z0-9_-]{20,}\b/g },
   { name: 'AWS access key', regex: /\bAKIA[0-9A-Z]{16}\b/g },
   { name: 'Google API key', regex: /\bAIza[0-9A-Za-z_-]{30,}\b/g },
   { name: 'Slack token', regex: /\bxox[baprs]-[0-9A-Za-z-]{10,}\b/g },

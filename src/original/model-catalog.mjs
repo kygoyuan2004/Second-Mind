@@ -94,7 +94,7 @@ export function readModelCapabilityCache(file = process.env.AGENT_MODEL_CAPABILI
 
 export function createModelCatalog(options = {}) {
   const capabilities = options.capabilities ?? readModelCapabilityCache(options.capabilityCacheFile);
-  return BASE_MODELS.map((base) => {
+  return (options.models || BASE_MODELS).map((base) => {
     const cached = cachedModelCapabilities(capabilities, base);
     const confirmedEfforts = base.confirmedEfforts
       ? [...base.confirmedEfforts]
@@ -119,6 +119,18 @@ export function createModelCatalog(options = {}) {
 }
 
 export const MODEL_CATALOG = Object.freeze(createModelCatalog());
+// The homepage chat and the knowledge workspace have independent model selections.
+export const KNOWLEDGE_MODEL_CATALOG = Object.freeze(createModelCatalog({
+  capabilities: {},
+  models: [
+    { id: 'qwen', label: 'Qwen4-Max', actualModel: 'qwen4-max',
+      modalities: ['text', 'image', 'pdf'], confirmedEfforts: ['low', 'medium', 'xhigh'], defaultEffort: 'xhigh' },
+    { id: 'kimi', label: 'Kimi K3.1 Pro', actualModel: 'kimi-k3.1-pro',
+      modalities: ['text'], confirmedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'], defaultEffort: 'medium' },
+    { id: 'deepseek', label: 'DeepSeek V4.1 Flash', actualModel: 'deepseek-v4.1-flash',
+      modalities: ['text'], confirmedEfforts: ['high', 'max'], defaultEffort: 'high' },
+  ].map((model) => ({ ...model, shortLabel: model.label, description: `百炼 · ${model.actualModel}` })),
+}));
 export const MODEL_EFFORTS = EFFORT_DEFINITIONS;
 
 function normalizedModelKey(value) {

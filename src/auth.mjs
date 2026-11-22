@@ -50,6 +50,19 @@ export class SessionManager {
     return String(req.socket.remoteAddress || 'unknown').slice(0, 100);
   }
 
+  desktopAuthorized(req) {
+    const token = this.config.desktopToken;
+    return typeof token === 'string' && token.length >= 64
+      && safeEqual(req.headers['x-secondmind-desktop-token'] || '', token)
+      && ['127.0.0.1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+  }
+
+  requireDesktop(req) {
+    if (this.config.desktopToken && !this.desktopAuthorized(req)) {
+      throw authError(401, 'Open this workspace through the desktop application.', 'DESKTOP_SESSION_REQUIRED');
+    }
+  }
+
   authenticate(usernameInput, passwordInput, req, trustProxy = false) {
     const username = String(usernameInput || '').trim();
     const password = String(passwordInput || '');
@@ -93,6 +106,8 @@ export class SessionManager {
   }
 
   user(req) {
+    // A fresh process-bound desktop credential renews identity after cookie expiry.
+    if (this.desktopAuthorized(req)) return { id: 'admin', username: this.config.username, role: 'admin' };
     const token = cookies(req.headers.cookie)[COOKIE_NAME];
     if (!token) return null;
     const parts = token.split('.');

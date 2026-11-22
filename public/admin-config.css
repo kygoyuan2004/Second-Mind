@@ -484,3 +484,14 @@ progress { width: 100%; height: 10px; border: 0; accent-color: var(--accent); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
 }
+
+/* Keep onboarding instructions visible only while the associated list is empty. */
+#connection-list:not(:empty) + .config-empty-hint,
+#model-list:not(:empty) + .config-empty-hint { display: none; }
+.config-empty-hint { color: var(--text-muted, #526077); line-height: 1.6; }
+
+.protocol-notice:not([hidden]) {
+  display: flex; align-items: center; flex-wrap: wrap; gap: .65rem 1rem;
+  padding: .8rem 1rem; border-inline-start: 3px solid #af600d; background: #fff6e5; color: #653c0f;
+}
+.endpoint-preview code { overflow-wrap: anywhere; min-width: 0; }

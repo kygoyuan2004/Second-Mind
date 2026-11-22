@@ -5,8 +5,12 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from faster_whisper import WhisperModel
+from media_model import prepare_model
 
 
 def main() -> int:
@@ -18,7 +22,7 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        model = WhisperModel(args.model, device="cpu", compute_type="int8")
+        model = WhisperModel(prepare_model(args.model), device="cpu", compute_type="int8")
         segments, info = model.transcribe(
             args.video_file,
             language=None if args.language == "auto" else args.language,

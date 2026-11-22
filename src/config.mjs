@@ -33,7 +33,8 @@ function loadDotEnv(file = path.join(PROJECT_ROOT, '.env')) {
   }
 }
 
-loadDotEnv(process.env.VAULTMIND_ENV_FILE || undefined);
+// Desktop bootstraps from explicit IPC configuration and must not import a server .env.
+if (process.env.SECOND_MIND_DESKTOP !== '1') loadDotEnv(process.env.VAULTMIND_ENV_FILE || undefined);
 
 function text(name, fallback = '') {
   const value = process.env[name];
@@ -224,7 +225,7 @@ export function createConfig(overrides = {}) {
     appName: text('APP_NAME', 'Second Mind'),
     vaultLabel: text('VAULT_LABEL', 'My Obsidian Vault'),
     host: text('HOST', '127.0.0.1'),
-    port: integer('PORT', 8787, { min: 1, max: 65_535 }),
+    port: overrides.port === 0 ? 0 : integer('PORT', 8787, { min: 1, max: 65_535 }),
     timezone: text('TIMEZONE', 'UTC'),
     trustProxy: bool('TRUST_PROXY', false),
     vaultPath: absolute('VAULT_PATH', './vault'),
@@ -379,6 +380,9 @@ export function createConfig(overrides = {}) {
     paths: { ...config.paths, ...(overrides.paths || {}) },
     templates: { ...config.templates, ...(overrides.templates || {}) },
   };
+  if (!Number.isSafeInteger(merged.port) || merged.port < 0 || merged.port > 65_535) {
+    throw new Error('port must be an integer between 0 and 65535.');
+  }
   merged.responsesFallback.endpoint = bailianResponsesEndpoint(
     merged.responsesFallback.apiBase,
     merged.responsesFallback.endpoint,

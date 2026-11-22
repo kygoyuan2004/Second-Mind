@@ -53,7 +53,7 @@
     <section class="hero shell" aria-labelledby="hero-title">
       <div class="hero-copy">
         <p class="eyebrow">Self-hosted knowledge workbench</p>
-        <h1 id="hero-title">Read notes.<br>Find evidence.</h1>
+        <h1 id="hero-title">What did your notes show this week?</h1>
         <p class="lede">Search your Obsidian notes, follow citations, and confirm changes before saving. Hosted on your infrastructure.</p>
         <div class="hero-actions">
           <a class="button button-primary" href="#quickstart">Start with Docker</a>
@@ -201,7 +201,7 @@
       <div class="section-heading offset-heading">
         <p class="eyebrow">Real product screenshots</p>
         <h2 id="screenshots-title">Actual runs on a public demonstration Vault</h2>
-        <p>These screenshots show the complete application running real Claude Agent SDK tasks on public demonstration notes. Qwen 3.8 Max through Bailian generated the learning review, diary, and plan. Diary and plan previews show edits that remove extra model explanations. No private Vault appears in these images.</p>
+        <p>DeepSeek ran these tasks through the Claude Agent SDK on public demo notes. The review links to the original passage. The daily schedule shows the two items selected in the plan preview.</p>
       </div>
       <div class="screenshot-ledger">
         <figure class="shot shot-wide asset-figure">
@@ -234,6 +234,8 @@
           <p class="asset-pending" hidden>The plan interface capture could not be loaded.</p>
           <figcaption><strong>Plan draft</strong><small>Approve content and target path</small></figcaption>
         </figure>
+        <figure class="shot shot-wide asset-figure"><img src="/Second-Mind/assets/second-mind-source.png" width="1440" height="1050" alt="Open the cited paragraph" loading="lazy"><figcaption><strong>Original passage</strong><small>Open the cited paragraph</small></figcaption></figure>
+        <figure class="shot shot-wide asset-figure"><img src="/Second-Mind/assets/second-mind-schedule.png" width="1280" height="960" alt="Review the selected entries after saving" loading="lazy"><figcaption><strong>Daily schedule</strong><small>Review the selected entries after saving</small></figcaption></figure>
       </div>
     </section>
 
@@ -241,8 +243,8 @@
       <div class="shell quickstart-layout">
         <div class="section-heading">
           <p class="eyebrow">Three-platform quick start</p>
-          <h2 id="quickstart-title">Bring Docker and choose a knowledge base directory</h2>
-          <p>The installer asks only for a Vault or knowledge-base parent, an administrator password, and a port. Its Node logic runs in a container, so the host needs no Node.js installation.</p>
+          <h2 id="quickstart-title">Open your Vault on desktop or deploy it on a server</h2><p>Download the Windows x64 installer, Linux x86_64 AppImage or Debian/Ubuntu package. Select a local Vault or connect to a server. The tabs below describe Docker Web.</p>
+          <a class="button button-primary" href="https://github.com/kygoyuan2004/Second-Mind/releases">Desktop downloads</a>
           <p class="quickstart-prereq"><strong>Prerequisites:</strong> Git; a conventional rootful Docker Engine with Compose v2 on Linux, or Docker Desktop on macOS and Windows. Rootless Docker or SELinux-enforcing hosts need an administrator-designed UID, volume-permission, and bind-mount relabel policy; the installer does not alter those boundaries automatically.</p>
         </div>
         <div class="install-terminal" data-tabs>

@@ -10,7 +10,15 @@ import { messageResponse, waitFor } from './sdk-test-helpers.mjs';
 
 test('browser config check/save/reload updates the full SDK app and preserves citation preview and session reload', { timeout: 90_000 }, async (t) => {
   const project = await temporaryProject('sdk-browser-');
-  t.after(() => project.cleanup());
+  let app;
+  t.after(async () => {
+    if (app) {
+      await app.knowledgeBaseHub.close();
+      app.server.closeAllConnections?.();
+      await new Promise((resolve) => app.server.close(resolve));
+    }
+    await project.cleanup();
+  });
   await fs.mkdir(path.join(project.vaultPath, '.obsidian'));
   await fs.writeFile(path.join(project.vaultPath, 'Evidence.md'), '# Evidence\n\n公开验收资料：browsermarker；计划尚未完成。\n');
   const requests = [];
@@ -31,8 +39,7 @@ test('browser config check/save/reload updates the full SDK app and preserves ci
       apiBase: 'https://dashscope.aliyuncs.com/apps/anthropic', apiKey: 'synthetic-initial-key', model: 'qwen3.8-max[1M]' },
     embedding: { provider: 'disabled' }, webSearch: { enabled: false },
   });
-  const app = await startApplication({ config, dependencies: { sdkFetch, runtimeLlmOptions: { fetch: sdkFetch } } });
-  t.after(async () => { await app.knowledgeBaseHub.close(); await new Promise((r) => app.server.close(r)); });
+  app = await startApplication({ config, dependencies: { sdkFetch, runtimeLlmOptions: { fetch: sdkFetch } } });
   const base = `http://127.0.0.1:${app.port}`;
   const browser = await sourceBrowser(t, `${base}/?knowledgeBaseId=default`);
   if (!browser) return;

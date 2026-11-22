@@ -1,90 +1,33 @@
-import { spawn } from 'node:child_process';
-import { once } from 'node:events';
-import fsp from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
+import fs from 'node:fs/promises';
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export async function sourceBrowser(t, url) {
-  const binary = process.env.SECOND_MIND_TEST_CHROME || '/usr/bin/google-chrome';
-  if (!globalThis.WebSocket || !await fsp.access(binary).then(() => true, () => false)) {
-    t.skip('Chrome and Node 22 WebSocket are required for browser tests.');
+  const executablePath = process.env.SECOND_MIND_TEST_CHROME || '/usr/bin/google-chrome';
+  if (!await fs.access(executablePath).then(() => true, () => false)) {
+    t.skip('The browser acceptance binary is unavailable.');
     return null;
   }
-  const profile = await fsp.mkdtemp(path.join(os.tmpdir(), 'source-preview-chrome-'));
-  const chrome = spawn(binary, ['--headless=new', '--no-sandbox', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--remote-debugging-port=0', `--user-data-dir=${profile}`, url], { stdio: 'ignore' });
-  let socket;
-  const pending = new Map();
-  t.after(async () => {
-    socket?.close();
-    for (const value of pending.values()) value.reject(new Error('Browser closed.'));
-    if (chrome.exitCode === null && chrome.signalCode === null) {
-      const exited = once(chrome, 'exit');
-      chrome.kill('SIGTERM');
-      await Promise.race([exited, delay(1500)]);
-      if (chrome.exitCode === null && chrome.signalCode === null) {
-        chrome.kill('SIGKILL');
-        await Promise.race([exited, delay(1500)]);
+  const { chromium } = await import('playwright');
+  const browser = await chromium.launch({ executablePath, headless: true,
+    args: ['--no-sandbox', '--disable-dev-shm-usage', '--no-proxy-server'] });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(url);
+  const session = await page.context().newCDPSession(page);
+  return {
+    call: (method, parameters) => session.send(method, parameters),
+    async evaluate(expression) {
+      const deadline = Date.now() + 6000;
+      while (true) {
+        try {
+          const value = await session.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true });
+          if (value.exceptionDetails) throw new Error(value.exceptionDetails.exception?.description || value.exceptionDetails.text);
+          return value.result.value;
+        } catch (error) {
+          if (!/Cannot find default execution context/u.test(error.message) || Date.now() > deadline) throw error;
+          await new Promise(resolve => setTimeout(resolve, 30));
+        }
       }
-    }
-    await fsp.rm(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
-  });
-  let port;
-  for (let attempt = 0; attempt < 100; attempt++) {
-    port = await fsp.readFile(path.join(profile, 'DevToolsActivePort'), 'utf8').then((s) => Number(s.split('\n')[0]), () => null);
-    if (port) break;
-    await delay(50);
-  }
-  if (!port) throw new Error('Chrome did not start.');
-  const pages = await fetch(`http://127.0.0.1:${port}/json/list`).then((r) => r.json());
-  socket = new WebSocket(pages.find((page) => page.type === 'page').webSocketDebuggerUrl);
-  await new Promise((resolve, reject) => {
-    socket.addEventListener('open', resolve, { once: true });
-    socket.addEventListener('error', reject, { once: true });
-  });
-  let sequence = 0;
-  socket.addEventListener('message', (event) => {
-    const message = JSON.parse(event.data);
-    const callback = pending.get(message.id);
-    if (!callback) return;
-    pending.delete(message.id);
-    if (message.error) callback.reject(new Error(message.error.message));
-    else callback.resolve(message.result);
-  });
-  const call = (method, params = {}) => new Promise((resolve, reject) => {
-    const id = ++sequence;
-    const timer = setTimeout(() => { pending.delete(id); reject(new Error(`Chrome timeout: ${method}`)); }, 8000);
-    pending.set(id, {
-      resolve: (value) => { clearTimeout(timer); resolve(value); },
-      reject: (error) => { clearTimeout(timer); reject(error); },
-    });
-    socket.send(JSON.stringify({ id, method, params }));
-  });
-  const evaluate = async (expression) => {
-    // Navigation briefly removes the default context. This CDP error happens
-    // before evaluation, so retry it without repeating an executed action.
-    const deadline = Date.now() + 6000;
-    while (true) {
-      try {
-        const result = await call('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true });
-        if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
-        return result.result?.value;
-      } catch (error) {
-        if (!/Cannot find default execution context/u.test(error.message) || Date.now() >= deadline) throw error;
-        await delay(50);
-      }
-    }
+    },
+    waitFor: expression => page.waitForFunction(expression, undefined, { timeout: 8000 }),
   };
-  const waitFor = async (expression) => {
-    for (let attempt = 0; attempt < 120; attempt++) {
-      try { if (await evaluate(expression)) return; }
-      catch (error) {
-        if (!/Execution context was destroyed/u.test(error.message)) throw error;
-      }
-      await delay(25);
-    }
-    const snapshot = await evaluate(`({path: document.querySelector('#path')?.textContent, content: document.querySelector('#content')?.innerHTML})`);
-    throw new Error(`Page condition not met: ${expression}; ${JSON.stringify(snapshot)}`);
-  };
-  return { call, evaluate, waitFor };
 }

@@ -127,7 +127,10 @@ export class SdkKnowledgeManager extends KnowledgeAgentManager {
       const pattern = input.tool_name === 'Glob' ? String(args.pattern || '') : '';
       const invalid = relative.startsWith('..') || path.isAbsolute(relative) || target.includes('\0')
         || pattern.replaceAll('\\', '/').split('/').includes('..')
-        || (path.isAbsolute(pattern) && !pattern.startsWith(`${task.root}/`));
+        || (path.isAbsolute(pattern) && (() => {
+          const relativePattern = path.relative(task.root, pattern);
+          return relativePattern === '..' || relativePattern.startsWith(`..${path.sep}`) || path.isAbsolute(relativePattern);
+        })());
       try {
         if (invalid) throw new Error('outside');
         if (relative) await this.store.assertPathNoSymlinks(relative.split(path.sep).join('/'));

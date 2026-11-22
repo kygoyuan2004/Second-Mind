@@ -33,7 +33,15 @@ export async function sdkApplication(t, options = {}) {
   const { createConfig } = await import('../src/config.mjs');
   const { startApplication } = await import('../src/bootstrap.mjs');
   const project = await temporaryProject('sdk-api-');
-  t.after(() => project.cleanup());
+  let app;
+  t.after(async () => {
+    if (app) {
+      await app.knowledgeBaseHub.close();
+      app.server.closeAllConnections?.();
+      await new Promise((resolve) => app.server.close(resolve));
+    }
+    await project.cleanup();
+  });
   await options.prepareProject?.(project);
   await fs.mkdir(path.join(project.vaultPath, '.obsidian'));
   await fs.writeFile(path.join(project.vaultPath, 'Evidence.md'), '# Evidence\n\n公开资料：sdkmarker，计划尚未完成。\n');
@@ -46,8 +54,7 @@ export async function sdkApplication(t, options = {}) {
     ...options.config,
   });
   const sdkFetch = options.fetch || (async () => messageResponse({ type: 'text', text: '公开回答。〔来源：Evidence.md#Evidence〕' }, 'end_turn'));
-  const app = await startApplication({ config, ...options.applicationOptions?.(project), dependencies: { sdkFetch, ...options.dependencies } });
-  t.after(async () => { await app.knowledgeBaseHub.close(); await new Promise((r) => app.server.close(r)); });
+  app = await startApplication({ config, ...options.applicationOptions?.(project), dependencies: { sdkFetch, ...options.dependencies } });
   const base = `http://127.0.0.1:${app.port}`;
   const login = await fetch(`${base}/api/login`, { method: 'POST', headers: { origin: base, 'content-type': 'application/json', 'x-vaultmind-request': '1' },
     body: JSON.stringify({ username: 'admin', password: config.auth.password }) });

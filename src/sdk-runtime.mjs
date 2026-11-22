@@ -7,6 +7,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import { createPinnedModelFetch } from './model-transport.mjs';
 import { markPublicMessage } from './public-errors.mjs';
 import { identifyModelProvider, resolveModelProvider, providerModelReasoningPolicy } from './model-provider-registry.mjs';
+import { protectPrivateDirectory } from '../platform/private-storage.mjs';
 
 function failure(code, message, status = 400) {
   return markPublicMessage(Object.assign(new Error(message), { code, status }));
@@ -29,7 +30,7 @@ export function sdkCatalog(snapshot) {
       label: source.label || source.displayName || source.actualModel,
       shortLabel: source.shortLabel || source.label || source.displayName || source.actualModel,
       value: source.actualModel,
-      modalities: /^qwen3\.8-max/.test(source.actualModel) ? ['text', 'image', 'pdf'] : ['text'],
+      modalities: /^qwen(?:3\.8|4)-max(?:$|\[|-)/i.test(source.actualModel) ? ['text', 'image', 'pdf'] : ['text'],
       efforts: native.efforts,
       defaultEffort: native.efforts.includes(source.defaultEffort) ? source.defaultEffort : native.defaultEffort,
       available: Boolean(connection && (connection.authMode === 'none' || connection.apiKey) && source.available !== false),
@@ -142,8 +143,7 @@ export async function openSdkTransport(binding, options = {}) {
 }
 
 export async function sdkEnvironment(root, transport) {
-  await fs.mkdir(root, { recursive: true, mode: 0o700 });
-  await fs.chmod(root, 0o700);
+  await protectPrivateDirectory(root);
   // A strict allowlist prevents host credentials, provider routing, user
   // plugins, proxy authentication and private Claude settings from inheriting.
   const env = {};

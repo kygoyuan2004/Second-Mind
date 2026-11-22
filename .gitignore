@@ -42,3 +42,11 @@ Thumbs.db
 compose.override.yaml
 docker-compose.override.yml
 deploy/local/
+
+# Platform build output and local acceptance data
+build/
+platform/native/*.exe
+__pycache__/
+*.pyc
+playwright-report/
+test-results/

@@ -1,3 +1,4 @@
+import { setTestPermissions } from '../platform-fixtures.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -18,7 +19,7 @@ async function record(service,range=full){return service.create('alice','convers
 test('enumeration includes root, deep, Chinese, spaces and >100 files; frozen paging and metadata invariance',async(t)=>{
  const {root,service,directory}=await fixture(t);const expected=[];const before=new Map();
  for(let i=0;i<127;i++){const rel=i%3?`多级/目录 带空格/file ${i}.MD`:`根目录 ${i}.md`;await fs.mkdir(path.dirname(path.join(root,rel)),{recursive:true});await fs.writeFile(path.join(root,rel),i===0?'':'# note '+i);await fs.utimes(path.join(root,rel),new Date('2026-09-01'),new Date('2026-09-01'));expected.push(rel);}
- await fs.mkdir(path.join(root,'.hidden'));await fs.writeFile(path.join(root,'.hidden/private.md'),'secret');await fs.writeFile(path.join(root,'image.png'),'image');await fs.symlink('/tmp',path.join(root,'outside'));await fs.symlink(path.join(root,expected[0]),path.join(root,'linked.md'));
+ await fs.mkdir(path.join(root,'.hidden'));await fs.writeFile(path.join(root,'.hidden/private.md'),'secret');await fs.writeFile(path.join(root,'image.png'),'image');await fs.symlink(os.tmpdir(),path.join(root,'outside'),process.platform==='win32'?'junction':'dir');await fs.symlink(process.platform==='win32'?os.tmpdir():path.join(root,expected[0]),path.join(root,'linked.md'),process.platform==='win32'?'junction':'file');
  for(const p of expected){const st=await fs.stat(path.join(root,p));before.set(p,[st.size,st.mtimeMs,await fs.readFile(path.join(root,p),'utf8')]);}
  const r=await record(service);await service.scan(r);assert.equal(r.status,'completed');assert.equal(r.entries.length,127);assert.deepEqual(r.entries.map(x=>x.path),expected.sort());
  assert.deepEqual(new Set(r.excluded.map(x=>x.reason)),new Set(['hidden','symlink','outside_markdown_scope']));
@@ -58,21 +59,27 @@ test('changes during enumeration are incomplete; directory additions/deletions a
 });
 
 test('unreadable directory is a reported gap; missing root fails; cancellation and restart never complete',async(t)=>{
- const f=await fixture(t);await fs.mkdir(path.join(f.root,'blocked'));await fs.writeFile(path.join(f.root,'blocked/note.md'),'private');await fs.chmod(path.join(f.root,'blocked'),0);t.after(()=>fs.chmod(path.join(f.root,'blocked'),0o700).catch(()=>{}));
- if(process.getuid?.()!==0){const r=await record(f.service);await f.service.scan(r);assert.equal(r.status,'incomplete');assert.ok(r.errors.some(x=>x.path==='blocked'));}
- await fs.chmod(path.join(f.root,'blocked'),0o700);
+ const f=await fixture(t);await fs.mkdir(path.join(f.root,'blocked'));await fs.writeFile(path.join(f.root,'blocked/note.md'),'private');await setTestPermissions(path.join(f.root,'blocked'),0);t.after(()=>setTestPermissions(path.join(f.root,'blocked'),0o700).catch(()=>{}));
+ if(process.getuid?.()!==0){
+  // Confirm the real permission fixture denies directory listing while metadata
+  // remains readable before attributing a scan result to the implementation.
+  assert.equal((await fs.lstat(path.join(f.root,'blocked'))).isDirectory(),true);
+  await assert.rejects(fs.readdir(path.join(f.root,'blocked')),(error)=>['EACCES','EPERM'].includes(error.code),'permission fixture must reject directory listing');
+  const r=await record(f.service);await f.service.scan(r);assert.equal(r.status,'incomplete');assert.ok(r.errors.some(x=>x.path==='blocked'));
+ }
+ await setTestPermissions(path.join(f.root,'blocked'),0o700);
  const r=await record(f.service);const abort=new AbortController();abort.abort();await f.service.scan(r,{signal:abort.signal});assert.equal(r.status,'cancelled');
  const pending=await record(f.service);const reload=new KnowledgeInventories({root:f.root,directory:f.directory});await reload.ready;assert.equal(reload.records.get(pending.id).status,'interrupted');
  await fs.rename(f.root,f.root+'-gone');const missing=await record(f.service);await f.service.scan(missing);assert.equal(missing.status,'failed');assert.ok(missing.errors.length);
 });
 
 test('symlink replacement during scan never enters external directory',async(t)=>{
- let changed=false;const f=await fixture(t,{onStep:async(rel)=>{if(!changed&&rel==='a.md'){changed=true;await fs.rm(path.join(f.root,'z'),{recursive:true});await fs.symlink(f.temp,path.join(f.root,'z'));}}});
+ let changed=false;const f=await fixture(t,{onStep:async(rel)=>{if(!changed&&rel==='a.md'){changed=true;await fs.rm(path.join(f.root,'z'),{recursive:true});await fs.symlink(f.temp,path.join(f.root,'z'),process.platform==='win32'?'junction':'dir');}}});
  await fs.writeFile(path.join(f.temp,'secret.md'),'secret');await fs.writeFile(path.join(f.root,'a.md'),'a');await fs.mkdir(path.join(f.root,'z'));await fs.writeFile(path.join(f.root,'z/old.md'),'old');const r=await record(f.service);await f.service.scan(r);assert.equal(r.status,'incomplete');assert.equal(r.entries.some(x=>x.path.includes('secret')),false);
 });
 
 test('task integration works without model, search or SDK; resumes snapshot history and cleans with conversation',async(t)=>{
- const {root,temp}=await fixture(t);await fs.writeFile(path.join(root,'root.md'),'untouched');await fs.symlink('/tmp',path.join(root,'link'));
+ const {root,temp}=await fixture(t);await fs.writeFile(path.join(root,'root.md'),'untouched');await fs.symlink(os.tmpdir(),path.join(root,'link'),process.platform==='win32'?'junction':'dir');
  const options={store:{root,realRoot:root,initialize:async()=>{},attachIndex(){},audit:async()=>{},assertNoSymlinks:async()=>{throw Error('ordinary-only guard');}},modelCatalog:[],queryFn:()=>{throw Error('SDK must not run');},index:false,conversationFile:path.join(temp,'history/conversations.json'),videoProcessor:{ready:Promise.resolve(),cleanupStale:async()=>{}},now:()=>Date.parse('2026-09-16T02:00:00Z')};
  const manager=new KnowledgeAgentManager(options);t.after(()=>manager.close());await manager.ready;
  const task=await manager.createTask('alice',{kind:'qa',prompt:'列出全部笔记'});await Promise.all([...manager.inventoryRuns]);

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { markPublicMessage } from './public-errors.mjs';
+import { assertNoReparseTraversal, atomicPrivateFile, readPrivateFile, ensurePrivateDirectory, isInsidePath, samePath, pathIdentity, isWindowsPathSegment } from '../platform/private-storage.mjs';
 
 const REGISTRY_VERSION = 1;
 const BINDING_VERSION = 1;
@@ -53,8 +54,7 @@ function mountId(value) {
 }
 
 function insideOrEqual(root, target) {
-  const relative = path.relative(root, target);
-  return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+  return isInsidePath(root, target);
 }
 
 function overlaps(left, right) {
@@ -64,7 +64,7 @@ function overlaps(left, right) {
 function relativeVaultPath(value) {
   const raw = boundedText(value ?? '.', 'relativePath', 1_024).replaceAll('\\', '/');
   if (raw === '.' || raw === './') return '.';
-  if (raw.startsWith('/') || /^[A-Za-z]:\//u.test(raw)) {
+  if (raw.startsWith('/') || /^[A-Za-z]:/u.test(raw) || (process.platform === 'win32' && raw.split('/').some((part) => part !== '.' && part !== '..' && !isWindowsPathSegment(part)))) {
     fail('relativePath must be relative to an allowed mount.', 'KNOWLEDGE_BASE_PATH_OUTSIDE_MOUNT');
   }
   const normalized = path.posix.normalize(raw).replace(/^\.\//u, '').replace(/\/$/u, '');
@@ -88,7 +88,9 @@ async function canonicalExistingDirectory(input, label) {
   } catch (error) {
     fail(`${label} is unavailable.`, 'KNOWLEDGE_BASE_PATH_UNAVAILABLE', 400, error);
   }
-  if (stat.isSymbolicLink() || real !== resolved) {
+  try { await assertNoReparseTraversal(resolved); }
+  catch (error) { fail(`${label} cannot contain a symbolic-link traversal.`, 'KNOWLEDGE_BASE_PATH_SYMLINK', 400, error); }
+  if (stat.isSymbolicLink() || !samePath(real, resolved)) {
     fail(`${label} cannot contain a symbolic-link traversal.`, 'KNOWLEDGE_BASE_PATH_SYMLINK');
   }
   if (!stat.isDirectory()) fail(`${label} must be a directory.`, 'KNOWLEDGE_BASE_PATH_NOT_DIRECTORY');
@@ -146,12 +148,12 @@ function statePaths(stateRoot) {
 }
 
 function managedStateRoot(stateDir, knowledgeBaseId, rootPath) {
-  const binding = digest({ knowledgeBaseId, rootPath }).slice(0, 16);
+  const binding = digest({ knowledgeBaseId, rootPath: pathIdentity(rootPath) }).slice(0, 16);
   return path.join(stateDir, 'knowledge-bases', `${knowledgeBaseId}-${binding}`);
 }
 
 function rootBinding(rootPath) {
-  return digest({ rootPath: path.resolve(rootPath) });
+  return digest({ rootPath: pathIdentity(rootPath) });
 }
 
 function bindingDocument(bindings) {
@@ -183,65 +185,25 @@ function legacyStatePaths(legacy, fallbackRoot) {
   });
 }
 
-async function ensurePrivateParent(filename) {
-  const parent = path.dirname(filename);
-  await fsp.mkdir(parent, { recursive: true, mode: 0o700 });
-  const stat = await fsp.lstat(parent);
-  if (!stat.isDirectory() || stat.isSymbolicLink()) {
-    fail('Knowledge-base registry parent is unsafe.', 'UNSAFE_KNOWLEDGE_BASE_REGISTRY_PATH', 500);
-  }
-  if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) {
-    await fsp.chmod(parent, 0o700);
-  }
-}
-
 async function readPrivateJson(filename, { optional = false } = {}) {
-  let stat;
-  try {
-    stat = await fsp.lstat(filename);
-  } catch (error) {
-    if (optional && error?.code === 'ENOENT') return null;
-    throw error;
+  let raw;
+  try { raw = await readPrivateFile(filename, { optional }); }
+  catch (error) {
+    if (error.code === 'UNSAFE_PRIVATE_FILE') fail('Knowledge-base registry file permissions or type are unsafe.', 'UNSAFE_KNOWLEDGE_BASE_REGISTRY_MODE', 500, error);
+    fail('Knowledge-base registry file is unsafe.', 'UNSAFE_KNOWLEDGE_BASE_REGISTRY_PATH', 500, error);
   }
-  if (!stat.isFile() || stat.isSymbolicLink()) {
-    fail('Knowledge-base registry file is unsafe.', 'UNSAFE_KNOWLEDGE_BASE_REGISTRY_PATH', 500);
-  }
-  if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) {
-    fail('Knowledge-base registry file permissions are too broad.', 'UNSAFE_KNOWLEDGE_BASE_REGISTRY_MODE', 500);
-  }
-  const raw = await fsp.readFile(filename, 'utf8');
-  let value;
-  try {
-    value = JSON.parse(raw);
-  } catch (error) {
-    fail('Knowledge-base registry is malformed.', 'INVALID_KNOWLEDGE_BASE_REGISTRY', 500, error);
-  }
-  return { value, digest: digest(value) };
+  if (raw === null) return null;
+  try { const value = JSON.parse(raw.toString('utf8')); return { value, digest: digest(value) }; }
+  catch (error) { fail('Knowledge-base registry is malformed.', 'INVALID_KNOWLEDGE_BASE_REGISTRY', 500, error); }
 }
 
 async function atomicPrivateJson(filename, value, { backup = true } = {}) {
-  await ensurePrivateParent(filename);
-  const previous = `${filename}.previous`;
-  const temporary = `${filename}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  await ensurePrivateDirectory(path.dirname(filename));
   if (backup) {
     const current = await readPrivateJson(filename, { optional: true });
-    if (current) {
-      const backupTemporary = `${previous}.${process.pid}.${crypto.randomUUID()}.tmp`;
-      await fsp.writeFile(backupTemporary, `${JSON.stringify(current.value, null, 2)}\n`, {
-        mode: 0o600,
-        flag: 'wx',
-      });
-      await fsp.rename(backupTemporary, previous);
-    }
+    if (current) await atomicPrivateFile(`${filename}.previous`, Buffer.from(`${JSON.stringify(current.value, null, 2)}\n`));
   }
-  await fsp.writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
-  await fsp.rename(temporary, filename);
-  const handle = await fsp.open(path.dirname(filename), 'r');
-  try {
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
+  await atomicPrivateFile(filename, Buffer.from(`${JSON.stringify(value, null, 2)}\n`));
 }
 
 function publicEntry(entry) {
@@ -313,6 +275,9 @@ export class KnowledgeBaseRegistry {
     this.stateDir = path.resolve(options.stateDir);
     this.legacy = plainObject(options.legacy) ? { ...options.legacy } : null;
     this.mountInputs = Array.isArray(options.allowedRoots) ? options.allowedRoots.slice() : [];
+    this.initialKnowledgeBases = Array.isArray(options.initialKnowledgeBases)
+      ? structuredClone(options.initialKnowledgeBases) : [];
+    this.reconcileMounts = options.reconcileMounts === true;
     const suppliedPrivateState = Array.isArray(options.privateStatePaths)
       ? options.privateStatePaths
       : [];
@@ -519,7 +484,7 @@ export class KnowledgeBaseRegistry {
       }
       const legacyState = Boolean(this.legacy?.vaultPath) &&
         id === stableId(this.legacy?.knowledgeBaseId || 'default') &&
-        rootPath === path.resolve(this.legacy.vaultPath);
+        samePath(rootPath, this.legacy.vaultPath);
       const paths = legacyState
         ? legacyStatePaths(this.legacy || {}, this.stateDir)
         : statePaths(managedStateRoot(this.stateDir, id, rootPath));
@@ -638,6 +603,9 @@ export class KnowledgeBaseRegistry {
     await this.#prepareBoundaries();
     await this.#loadBindings();
     try {
+      if ((this.reconcileMounts || this.initialKnowledgeBases.length) && await this.#reconcileInitialMounts()) {
+        return publicSnapshot(this.current);
+      }
       const managed = await this.#candidate(this.managedFile, 'managed');
       if (managed) {
         await this.#bindSnapshot(managed.snapshot);
@@ -666,6 +634,53 @@ export class KnowledgeBaseRegistry {
     await this.#bindSnapshot(this.current);
     this.lastDigest = '';
     return publicSnapshot(this.current);
+  }
+
+  async #reconcileInitialMounts() {
+    const stored = await readPrivateJson(this.managedFile, { optional: true });
+    if (stored && !this.reconcileMounts) return false;
+    const raw = stored?.value;
+    if (raw && (!plainObject(raw) || raw.version !== REGISTRY_VERSION ||
+        !Array.isArray(raw.knowledgeBases) || raw.knowledgeBases.length < 1 || raw.knowledgeBases.length > 32)) {
+      fail('Knowledge-base registry schema is invalid.', 'INVALID_KNOWLEDGE_BASE_REGISTRY', 500);
+    }
+    if (raw) boundedText(raw.revision, 'registry revision', 120);
+    const allowed = new Set(this.mounts.map((entry) => entry.id));
+    const entries = [];
+    const ids = new Set();
+    for (const value of raw?.knowledgeBases || []) {
+      if (!plainObject(value)) fail('Knowledge-base entry is invalid.', 'INVALID_KNOWLEDGE_BASE_CONFIG');
+      const id = stableId(value.knowledgeBaseId), mount = mountId(value.mountId);
+      boundedText(value.name, 'knowledge-base name', 120);
+      relativeVaultPath(value.relativePath);
+      if (ids.has(id)) fail('knowledgeBaseId values must be unique.', 'DUPLICATE_KNOWLEDGE_BASE_ID');
+      ids.add(id);
+      if (allowed.has(mount)) entries.push({ ...value });
+    }
+    for (const initial of this.initialKnowledgeBases) {
+      if (!plainObject(initial)) fail('Initial knowledge-base entry is invalid.', 'INVALID_KNOWLEDGE_BASE_CONFIG');
+      const id = stableId(initial.knowledgeBaseId);
+      if (!allowed.has(mountId(initial.mountId))) fail('Initial knowledge-base mount is not allowed.', 'KNOWLEDGE_BASE_MOUNT_NOT_ALLOWED');
+      // A retired binding also records a deliberate administrator deletion.
+      // Native folder grants do not silently resurrect deleted registrations.
+      if (!entries.some((entry) => stableId(entry.knowledgeBaseId) === id) && !this.bindings.has(id)) {
+        entries.push({ ...initial });
+      }
+    }
+    if (raw && JSON.stringify(entries) === JSON.stringify(raw.knowledgeBases)) return false;
+    if (!entries.length) fail('No active knowledge-base registration remains. Select a new Vault authorization.', 'KNOWLEDGE_BASE_REQUIRED', 500);
+    let selected = entries.find((entry) => entry.enabled !== false && entry.default === true)
+      || entries.find((entry) => entry.enabled !== false);
+    if (!selected) { selected = entries[0]; selected.enabled = true; }
+    for (const entry of entries) entry.default = entry === selected;
+    const document = registryDocument(entries);
+    const candidate = await this.#normalizeDocument(document, 'managed', { allowUnavailable: true });
+    await this.#assertManagedFileUnchanged(stored?.digest || '', raw?.revision || '');
+    await this.#bindSnapshot(candidate);
+    await atomicPrivateJson(this.managedFile, document);
+    this.current = candidate;
+    this.lastDigest = digest(document);
+    return true;
   }
 
   async refresh() {

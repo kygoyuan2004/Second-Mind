@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const roots = ['src', 'scripts', 'public', 'test'];
+const roots = ['src', 'scripts', 'public', 'test', 'desktop', 'platform'];
 const files = [];
 
 async function walk(directory) {
@@ -13,7 +13,7 @@ async function walk(directory) {
     if (['node_modules', 'vendor'].includes(entry.name)) continue;
     const target = path.join(directory, entry.name);
     if (entry.isDirectory()) await walk(target);
-    else if (entry.isFile() && /\.(?:m?js)$/.test(entry.name)) files.push(target);
+    else if (entry.isFile() && /\.(?:[cm]?js)$/.test(entry.name)) files.push(target);
   }
 }
 

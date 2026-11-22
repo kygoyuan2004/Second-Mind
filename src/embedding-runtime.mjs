@@ -81,7 +81,7 @@ async function readActiveManifest(filename) {
   const loaded = await runtimeConfigInternals.readPrivateJson(
     filename,
     'Active embedding profile',
-    { optional: true },
+    { optional: true, encrypted: true },
   );
   if (!loaded) return { version: ACTIVE_PROFILE_VERSION, current: null, previous: null };
   const value = loaded.value;
@@ -464,7 +464,7 @@ export async function promotePreviousEmbedding(options = {}) {
     },
     previous: manifest.current,
   };
-  await runtimeConfigInternals.atomicPrivateJson(filename, next);
+  await runtimeConfigInternals.atomicPrivateJson(filename, next, { encrypted: true });
   return {
     revision: next.current.revision,
     slotId: next.current.slotId,
@@ -699,7 +699,7 @@ export class EmbeddingRuntime {
     const previous = this.manifest.current || this.manifest.previous || null;
     const superseded = this.manifest.previous || null;
     const next = { version: ACTIVE_PROFILE_VERSION, current, previous };
-    await runtimeConfigInternals.atomicPrivateJson(this.activeProfileFile, next);
+    await runtimeConfigInternals.atomicPrivateJson(this.activeProfileFile, next, { encrypted: true });
     this.manifest = next;
     this.profiles.delete(pointer.revision);
     this.scheduleSupersededDiscard(superseded, next);

@@ -1,4 +1,7 @@
 import { markPublicMessage } from '../public-errors.mjs';
+import { noteTermLookup, matchedLineExcerpt } from './knowledge-query.mjs';
+import { passageHeadings } from '../../public/knowledge-passage.js';
+import { normalizePlanMarkdown } from '../../public/study-plan/plan-import.js';
 import { resolveSource } from './source-resolver.mjs';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -155,65 +158,17 @@ function makeSnippet(content, terms, length = 260) {
   return `${start > 0 ? '…' : ''}${text}${start + length < content.length ? '…' : ''}`;
 }
 
-function keywordSurfaceVariants(term) {
-  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(term);
-  if (!date) return [term];
-  const [, year, paddedMonth, paddedDay] = date;
-  const month = String(Number(paddedMonth));
-  const day = String(Number(paddedDay));
-  return [
-    term,
-    `${year}-${month}-${day}`,
-    `${year}/${paddedMonth}/${paddedDay}`,
-    `${year}/${month}/${day}`,
-    `${year}.${paddedMonth}.${paddedDay}`,
-    `${year}.${month}.${day}`,
-    `${year}年${paddedMonth}月${paddedDay}日`,
-    `${year}年${month}月${day}日`,
-  ];
-}
-
-function normalizedDisplayMap(value) {
-  let normalized = '';
-  const starts = [];
-  let offset = 0;
-  for (const symbol of String(value || '')) {
-    const start = offset;
-    offset += symbol.length;
-    const folded = normalizeSearch(symbol);
-    normalized += folded;
-    for (let index = 0; index < folded.length; index += 1) starts.push(start);
+function firstKeywordPassage(content, terms, preferBody) {
+  const lines = content.split(/\r?\n/u);
+  let firstHeadingHit = null;
+  for (const [index, line] of lines.entries()) {
+    const folded = normalizeKeywordSearch(line);
+    if (!terms.some(term => folded.includes(term))) continue;
+    const hit = { line: index + 1, ...matchedLineExcerpt(line, terms) };
+    if (!preferBody || !/^ {0,3}#{1,6}\s/u.test(line)) return hit;
+    firstHeadingHit ??= hit;
   }
-  return { normalized, starts };
-}
-
-function keywordSurfaceIndex(line, matchedTerms) {
-  const display = normalizedDisplayMap(line);
-  let earliest = -1;
-  for (const term of matchedTerms) {
-    for (const variant of keywordSurfaceVariants(term)) {
-      const found = display.normalized.indexOf(normalizeSearch(variant));
-      if (found < 0) continue;
-      const original = display.starts[found] ?? found;
-      if (earliest < 0 || original < earliest) earliest = original;
-    }
-  }
-  return earliest;
-}
-
-function makeKeywordSnippet(content, matchedTerms, length = 260) {
-  const lines = String(content || '').split(/\r?\n/);
-  for (const line of lines) {
-    const normalized = normalizeKeywordSearch(line);
-    if (!matchedTerms.some((term) => normalized.includes(term))) continue;
-    const matchIndex = keywordSurfaceIndex(line, matchedTerms);
-    const start = Math.max(0, (matchIndex < 0 ? 0 : matchIndex) - Math.floor(length / 3));
-    const raw = line.slice(start, start + length);
-    const text = raw.replace(/\s+/g, ' ').trim();
-    if (!text) continue;
-    return `${start > 0 ? '…' : ''}${text}${start + length < line.length ? '…' : ''}`;
-  }
-  return '';
+  return firstHeadingHit;
 }
 
 function firstHeading(content) {
@@ -368,6 +323,15 @@ export class KnowledgeStore {
     if (isInside(this.realRoot, realDraftRoot)) {
       throw knowledgeError(500, '临时草稿目录不能位于 Obsidian 知识库内。', 'UNSAFE_DRAFT_ROOT');
     }
+    const planTemplate = await fsp.lstat(path.join(this.root, this.templates.plan)).catch(() => null);
+    if (!planTemplate) {
+      const dailyPlanTemplate = 'daily_doc/计划/日计划/模板 1.md';
+      const movedTemplate = await fsp.lstat(path.join(this.root, dailyPlanTemplate)).catch(() => null);
+      if (movedTemplate?.isFile()) {
+        await this.existingFile(dailyPlanTemplate);
+        this.templates.plan = dailyPlanTemplate;
+      }
+    }
     for (const relative of [...Object.values(this.paths), ...Object.values(this.templates)]) {
       const target = path.join(this.root, relative);
       const stat = await fsp.lstat(target).catch(() => null);
@@ -468,6 +432,7 @@ export class KnowledgeStore {
     if (query.length > 200 && !allowLongQuery) {
       throw knowledgeError(413, '检索词最多 200 个字符。', 'SEARCH_QUERY_TOO_LONG');
     }
+    if (noteTermLookup(query)) return this.keywordSearch(query, options);
     const terms = searchTerms(query, {
       includeWholeQuery: query.length <= 200,
     });
@@ -518,11 +483,12 @@ export class KnowledgeStore {
   async keywordSearch(queryInput, options = {}) {
     const query = String(queryInput || '').trim();
     if (!query) return [];
-    if (query.length > 200) {
+    if (query.length > 200 && !options.allowLongQuery) {
       throw knowledgeError(413, '检索词最多 200 个字符。', 'SEARCH_QUERY_TOO_LONG');
     }
-    const phrase = normalizeKeywordSearch(query);
-    const terms = keywordSearchTerms(query);
+    const lookup = noteTermLookup(query);
+    const terms = lookup ? lookup.terms.map(normalizeKeywordSearch) : keywordSearchTerms(query);
+    const phrase = lookup ? terms.join(' ') : normalizeKeywordSearch(query);
     const limit = Math.max(1, Math.min(30, Number(options.limit) || 30));
     const results = [];
     for await (const relative of this.walk()) {
@@ -549,6 +515,7 @@ export class KnowledgeStore {
         terms.length && terms.every((term) => fields.some((field) => field.includes(term))),
       );
       if (!phraseMatched && !allTermsMatched) continue;
+      if (lookup?.inNotes && !terms.every(term => normalizedContent.includes(term))) continue;
       const matchedTerms = [...new Set([
         ...(phraseMatched ? [phrase] : []),
         ...terms.filter((term) => fields.some((field) => field.includes(term))),
@@ -565,14 +532,16 @@ export class KnowledgeStore {
         if (normalizedHeading.includes(term)) score += 10;
         if (normalizedContent.includes(term)) score += 3;
       }
+      const hit = contentMatchedTerms.length ? firstKeywordPassage(content, contentMatchedTerms, lookup?.inNotes) : null;
+      const headings = hit && extension === '.md' ? passageHeadings(content, hit.line) : [];
+      const passage = hit && { path: relative, line: hit.line, headings, quote: hit.quote };
       results.push({
         path: relative,
         name,
-        heading,
+        heading: headings.at(-1) || heading,
+        passages: passage ? [passage] : [],
         mime: INLINE_MIME_TYPES.get(extension) || 'application/octet-stream',
-        snippet: contentMatchedTerms.length
-          ? makeKeywordSnippet(content, contentMatchedTerms)
-          : '',
+        snippet: hit?.snippet || '',
         matchedTerms,
         score,
       });
@@ -691,7 +660,7 @@ export class KnowledgeStore {
     if (!DRAFT_KINDS.has(kind)) {
       throw knowledgeError(400, '只有日记、计划、随心记和视频整理可以生成草稿。', 'INVALID_DRAFT_KIND');
     }
-    let normalizedContent = stripMarkdownFence(content);
+    let normalizedContent = kind === 'plan' ? normalizePlanMarkdown(content).content : stripMarkdownFence(content);
     if (!normalizedContent.trim()) {
       throw knowledgeError(502, 'AI 没有生成可保存的 Markdown。', 'EMPTY_DRAFT');
     }
@@ -865,8 +834,32 @@ export class KnowledgeStore {
   }
 
   async saveDraft(userId, id, changes = {}) {
+    const pending = (this.saveQueue || Promise.resolve()).catch(() => {}).then(() => this.saveDraftSerial(userId, id, changes));
+    this.saveQueue = pending;
+    return pending;
+  }
+
+  async saveDraftSerial(userId, id, changes = {}) {
+    // A receipt written before rename lets retries recover a successful file write
+    // even if the process exited before removing the draft or replying to the caller.
+    let receiptFile;
+    if (changes.operationId) {
+      if (!/^[a-f0-9-]{36}$/i.test(changes.operationId)) throw knowledgeError(400, '保存编号无效。', 'INVALID_OPERATION');
+      receiptFile = path.join(this.draftRoot, '.save-receipts', `${sha256(Buffer.from(userId))}-${changes.operationId}.json`);
+      const receipt = await fsp.readFile(receiptFile, 'utf8').then(JSON.parse, (error) => { if (error.code === 'ENOENT') return null; throw error; });
+      if (receipt) {
+        if (receipt.draftId !== id || receipt.inputHash !== sha256(Buffer.from(String(changes.content)))) throw knowledgeError(409, '重试内容与原保存操作不一致。', 'DRAFT_CONFLICT');
+        if (receipt.committed || await this.currentHash(receipt.result.path) === receipt.result.hash) {
+          await fsp.rm(this.draftDirectory(id), { recursive: true, force: true });
+          this.index?.updatePaths([receipt.result.path]).catch(() => {});
+          return receipt.result;
+        }
+      }
+    }
     const { directory: draftDirectory, draft } = await this.readDraft(userId, id);
-    let content = stripMarkdownFence(changes.content ?? draft.content);
+    const planContent = draft.kind === 'plan' ? normalizePlanMarkdown(changes.content ?? draft.content) : null;
+    if (planContent?.ambiguous) throw knowledgeError(400, planContent.warning, 'INVALID_PLAN_CONTENT');
+    let content = planContent?.content ?? stripMarkdownFence(changes.content ?? draft.content);
     if (!content.trim() || Buffer.byteLength(content) > MAX_DRAFT_TEXT_BYTES) {
       throw knowledgeError(413, '草稿内容为空或超过 512 KB。', 'INVALID_DRAFT_CONTENT');
     }
@@ -919,10 +912,20 @@ export class KnowledgeStore {
       throw knowledgeError(403, '草稿目标不在允许写入的目录中。', 'KNOWLEDGE_WRITE_DENIED');
     }
 
+    if (receiptFile) {
+      await fsp.mkdir(path.dirname(receiptFile), { recursive: true, mode: 0o700 });
+      const receipt = { draftId: id, inputHash: sha256(Buffer.from(String(changes.content))),
+        result: { ok: true, path: targetRelative, hash: sha256(Buffer.from(content)), title } };
+      const temporary = `${receiptFile}.tmp`;
+      const handle = await fsp.open(temporary, 'w', 0o600);
+      try { await handle.writeFile(JSON.stringify(receipt)); await handle.sync(); } finally { await handle.close(); }
+      await fsp.rename(temporary, receiptFile);
+    }
     const noteTemporary = path.join(targetParent, `.yuan-knowledge-${id}.tmp`);
     let finalAssetDirectory = '';
     let createdAssetDirectory = false;
     const copiedAttachments = [];
+    if (receiptFile) await fsp.rm(noteTemporary, { force: true });
     await fsp.writeFile(noteTemporary, content, { mode: 0o640, flag: 'wx' });
     try {
       if (draft.attachments.length) {
@@ -953,6 +956,11 @@ export class KnowledgeStore {
         }
         for (const attachment of draft.attachments) {
           const destination = path.join(realFinalAssetDirectory, attachment.finalName);
+          if (receiptFile && await fsp.lstat(destination).then((stat) => stat.isFile() && !stat.isSymbolicLink(), (error) => { if (error.code === 'ENOENT') return false; throw error; })) {
+            const previous = await fsp.readFile(destination);
+            const expected = await fsp.readFile(path.join(draftDirectory, attachment.tempName));
+            if (sha256(previous) === sha256(expected)) continue;
+          }
           await fsp.copyFile(
             path.join(draftDirectory, attachment.tempName),
             destination,
@@ -972,6 +980,13 @@ export class KnowledgeStore {
         throw knowledgeError(409, '附件名称发生冲突，请重新生成草稿。', 'DRAFT_CONFLICT');
       }
       throw error;
+    }
+    if (receiptFile) {
+      const receipt = JSON.parse(await fsp.readFile(receiptFile, 'utf8'));
+      receipt.committed = true;
+      const handle = await fsp.open(`${receiptFile}.tmp`, 'w', 0o600);
+      try { await handle.writeFile(JSON.stringify(receipt)); await handle.sync(); } finally { await handle.close(); }
+      await fsp.rename(`${receiptFile}.tmp`, receiptFile);
     }
     const finalHash = sha256(Buffer.from(content));
     await fsp.rm(draftDirectory, { recursive: true, force: true });

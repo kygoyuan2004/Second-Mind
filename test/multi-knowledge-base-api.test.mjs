@@ -1,3 +1,4 @@
+import { setTestPermissions } from './platform-fixtures.mjs';
 import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -314,7 +315,7 @@ async function fixture() {
   await Promise.all([
     fsp.mkdir(path.join(alpha, '.obsidian'), { recursive: true }),
     fsp.mkdir(path.join(beta, '.obsidian'), { recursive: true }),
-    fsp.mkdir(state, { recursive: true, mode: 0o700 }),
+    fsp.mkdir(state, { recursive: true, mode: 0o700 }).then(() => setTestPermissions(state, 0o700)),
   ]);
   await Promise.all([
     fsp.writeFile(path.join(alpha, 'Alpha-only.md'), '# Alpha\n\nsharedterm alpha-secret-marker\n'),
@@ -712,7 +713,7 @@ test('admin knowledge-base API enforces CAS and rejects nested and symlink targe
 
   const linked = path.join(value.mounts, 'linked-beta');
   try {
-    await fsp.symlink(value.beta, linked, 'dir');
+    await fsp.symlink(value.beta, linked, process.platform === 'win32' ? 'junction' : 'dir');
   } catch (error) {
     if (process.platform === 'win32' && ['EPERM', 'EACCES'].includes(error.code)) {
       t.diagnostic('Skipping the symlink HTTP assertion: directory symlinks are not permitted.');

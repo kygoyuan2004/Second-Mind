@@ -40,8 +40,14 @@ export class SdkKnowledgeStore extends KnowledgeStore {
       sourceHash: target.exists ? crypto.createHash('sha256').update(current).digest('hex') : null };
   }
 
-  async saveDraft(userId, id, changes = {}) {
-    const { draft } = await this.readDraft(userId, id);
+  async saveDraftSerial(userId, id, changes = {}) {
+    let record;
+    try { record = await this.readDraft(userId, id); }
+    catch (error) {
+      if (changes.operationId && error.status === 404) return super.saveDraftSerial(userId, id, changes);
+      throw error;
+    }
+    const { draft } = record;
     if (draft.legacyDraft) {
       // Compatibility is restricted to old drafts. New generation and search
       // always use the original SDK implementation.
@@ -79,6 +85,6 @@ export class SdkKnowledgeStore extends KnowledgeStore {
         createdAt: new Date().toISOString(), sha256: crypto.createHash('sha256').update(content).digest('hex'),
       }), { flag: 'wx', mode: 0o600 });
     }
-    return super.saveDraft(userId, id, changes);
+    return super.saveDraftSerial(userId, id, changes);
   }
 }

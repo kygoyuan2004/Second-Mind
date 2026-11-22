@@ -4,6 +4,13 @@ const RECAP = /总结|回顾|汇总|盘点|学(?:习)?了什么|学过什么|学
 const LEARNING = /学习|学过|学了|复习|读书|阅读记录|\b(?:my learning|my studies|what i learned)\b/iu;
 const PUBLIC_RESEARCH = /(?:机器学习|深度学习|强化学习|研究|论文|行业|领域|学术).{0,12}(?:最新|进展|趋势|动态|发展)|(?:最新|前沿).{0,12}(?:研究|论文|进展|趋势)/u;
 const OWNED = /(?:我的|本人|自己|知识库|笔记|日记|我(?:最近|过去|这|本|上|在|学|复习|读))/u;
+const PERSONAL_ACTIVITY = /(?:做|干|忙|完成)(?:了|过)?(?:些?什么(?!\s*(?:笔记|文件))|哪些(?:事情?|工作|学习|研究|实验|项目|任务)|哪几件事)/u;
+const STUDY_QUESTION = /(?:学(?:习)?(?:了|过)?(?:些?什么|哪些(?:内容|知识|东西|方向)?)|(?:学习|科研)(?:主要|的)?(?:侧重|重心|重点在哪|方向如何|进度如何)|(?:评价|评估)(?:一下)?我(?:的)?(?:学习|科研))/u;
+
+export function asksForPersonalReview(text) {
+  return /我(?:的|最近|近期|过去|近来|今天|昨天|[这本上]|都|在|学|做|忙|科研|主要)|本人|自己/u.test(text)
+    && (PERSONAL_ACTIVITY.test(text) || STUDY_QUESTION.test(text));
+}
 
 export const learningReviewExecutionBudget = Object.freeze({
   maxTurns: 50, timeoutMs: 30 * 60_000, maxToolCalls: 40,
@@ -20,6 +27,7 @@ export const knowledgeEvidencePolicy = [
 
 const REVIEW_EVIDENCE_RULES = Object.freeze([
   knowledgeEvidencePolicy,
+  '逐项回答原问题。先用读到的正文说明具体活动和证据，再归纳反复出现的学习方向；用户要求评价时，结合其学习阶段给出判断、理由和可行建议，区分笔记事实和你的判断。文件清单、覆盖统计不能代替回答。',
   '有期内整理日期和实质内容的技术笔记可以纳入本期回顾，无须日记佐证；表述为笔记记录、整理或涉及的学习内容，不自动推断已经掌握、实践或完成全部任务。',
   '日期不明确的相关笔记可以列出并概述，注明“时间待核”，不将其断言为本期完成；日期或记录有冲突时说明冲突，不编造不存在的文件、图片、附件或时间。',
   '覆盖统计按文件去重且类别互斥：候选记录数 = 完整处理数 + 部分处理数 + 读取失败数 + 预算未覆盖数。每个文件只能归入其中一类；补充资料单独统计。空文件成功 Read 应计完整处理并注明“无有效内容”，不能同时计读取失败；没有学习事件不等于读取失败。',
@@ -129,10 +137,11 @@ function validDate(year, month, day) {
 
 export function createLearningReview(question, { now = Date.now(), timeZone = 'Asia/Shanghai' } = {}) {
   const text = String(question || '').trim();
-  if (!RECAP.test(text) || !LEARNING.test(text)) return null;
+  const personalQuestion = asksForPersonalReview(text);
+  if (!personalQuestion && !(RECAP.test(text) && LEARNING.test(text))) return null;
   if (PUBLIC_RESEARCH.test(text) && !OWNED.test(text)) return null;
   // Queries about files changing retain their original retrieval semantics.
-  if (/(?:修改|更新|新增|创建).{0,8}(?:文件|笔记)|(?:文件|笔记).{0,8}(?:修改|更新|新增|创建)/u.test(text)) return null;
+  if (!personalQuestion && /(?:修改|更新|新增|创建).{0,8}(?:文件|笔记)|(?:文件|笔记).{0,8}(?:修改|更新|新增|创建)/u.test(text)) return null;
   const nowMs = new Date(now).getTime();
   if (!Number.isFinite(nowMs)) return null;
   const zone = reviewTimeZone(timeZone);
@@ -197,8 +206,20 @@ export function normalizeLearningReview(value) {
 }
 
 export function resolveLearningReview(question, conversation, options = {}) {
-  if (!ALL_SCOPE.test(String(question || '').trim())) return createLearningReview(question, options);
   const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
+  const text = String(question || '').trim();
+  if (!ALL_SCOPE.test(text)) {
+    const current = createLearningReview(text, options);
+    if (current) return current;
+    // An inventory never reaches the model. Recover the unanswered question
+    // only for an explicit continuation of the immediately preceding scan.
+    const previous = messages.at(-2);
+    if (messages.at(-1)?.inventoryId && previous?.role === 'user' &&
+      /^(?:(?:请|麻烦你)?(?:继续(?:分析|回答)?|(?:重新|直接)?回答(?:一下)?(?:我)?(?:上一个|刚才的?|原来?的?|前面的?)问题|阅读正文并回答)|你有(?:没有)?帮我解决(?:了)?(?:这个)?问题(?:了)?吗)[。？！!?\s]*$/u.test(text)) {
+      return createLearningReview(previous.text, { ...options, now: previous.createdAt });
+    }
+    return null;
+  }
   const users = messages.filter((message) => message.role === 'user');
   // Prefer the latest turn's context: a newer unrelated question must not revive
   // a stale review. Historical conversations can reconstruct from the timestamp

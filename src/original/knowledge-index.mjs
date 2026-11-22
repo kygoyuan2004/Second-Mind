@@ -1,3 +1,5 @@
+import { noteTermLookup, matchedLineExcerpt } from './knowledge-query.mjs';
+import { passageHeadings } from '../../public/knowledge-passage.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -29,14 +31,14 @@ const RECONCILE_INTERVAL_MS = 10 * 60_000;
 const RRF_K = 60;
 const QUERY_CONTEXT_LIMIT = 500;
 const QUERY_INDEFINITE_PATTERN = /(?:它|这个|这些|上面|上述|前者|后者|那个|其中|刚才)/;
-const EXHAUSTIVE_PATTERN = /(?:全部|所有|列出|穷举|一个不漏|出现在哪|出现于哪|哪些文件)/i;
+const EXHAUSTIVE_PATTERN = /(?:全部|所有|列出|穷举|一个不漏|出现在哪|出现于哪|哪些(?:文件|笔记|文档))/i;
 const ROUTE_EXACT_PATTERN = new RegExp([
   String.raw`\d{4}\s*(?:年|[-/.])\s*\d{1,2}\s*(?:月|[-/.])\s*\d{1,2}\s*日?`,
   String.raw`(?:^|\s|[“”"'「」【】])[^\s"'“”「」【】]*[/\\][^\s"'“”「」【】]+`,
   String.raw`\.[a-z0-9]{1,10}(?:\b|$)`,
   String.raw`[“”"'「」【】][^\n“”"'「」【】]+[“”"'「」【】]`,
   String.raw`\x60[^\n\x60]+\x60`,
-  String.raw`\b(?:[A-Za-z_$][\w$]*_[\w$]+|[A-Za-z_$]+[A-Z][\w$]*|[A-Za-z_$][\w$]*\([^)]*\)|[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*)\b`,
+  String.raw`\b(?:[A-Za-z_$][\w$]*_[\w$]+|[A-Za-z_$][\w$]*\([^)]*\)|[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*)\b`,
   String.raw`(?:全部|所有|列出|穷举|出现在哪|出现于哪|哪些文件)`,
 ].join('|'), 'iu');
 const SEARCH_COMMAND_PATTERN = /(?:请|帮我|查找|搜索|检索|列出|穷举|全部|所有|包含|提到|出现在哪(?:些)?|出现于哪(?:些)?|哪些文件|文件中|的文件)/g;
@@ -421,6 +423,51 @@ function dedupeLogicalDocuments(items, allPaths, limit) {
   )).slice(0, limit);
 }
 
+// Re-rank actual paragraphs inside the selected notes. The file list stays
+// diverse while distinct sections can supply independent evidence.
+function sectionPassages(content, relative, query, rankedChunks = []) {
+  const blocks = [];
+  for (const block of markdownBlocks(content)) {
+    if (block.kind === 'heading') continue;
+    let line = block.startLine;
+    let pos = 0;
+    while (pos < block.text.length) {
+      let end = Math.min(pos + 320, block.text.length);
+      if (end < block.text.length) {
+        const boundary = Math.max(block.text.lastIndexOf('。', end - 1), block.text.lastIndexOf('\n', end - 1));
+        if (boundary >= pos + 80) end = boundary + 1;
+      }
+      const raw = block.text.slice(pos, end);
+      const nextLine = line + (raw.match(/\n/g) || []).length;
+      const quote = raw.trim();
+      if (quote) {
+        const firstLine = line + (raw.slice(0, raw.indexOf(quote)).match(/\n/g) || []).length;
+        // Rank by both the section title and its text, but quote only the source excerpt.
+        const searchable = [...block.headings, quote].join('\n');
+        blocks.push({ content: searchable, quote, startLine: firstLine, endLine: nextLine, path: relative, headings: block.headings });
+      }
+      line = nextLine;
+      pos = end;
+    }
+  }
+  const lexical = bm25Search(query, blocks, blocks.length);
+  const ranked = [...lexical];
+  for (const chunk of rankedChunks.slice(0, 40)) {
+    const block = blocks.find((b) => b.endLine >= chunk.startLine && b.startLine <= chunk.endLine);
+    if (block) ranked.push(block);
+  }
+  const seen = new Set();
+  const passages = [];
+  for (const block of ranked) {
+    const section = JSON.stringify(block.headings.length ? block.headings : [block.startLine]);
+    if (seen.has(section)) continue;
+    seen.add(section);
+    passages.push({ path: relative, headings: block.headings, line: block.startLine, quote: block.quote });
+    if (passages.length === 3) break;
+  }
+  return passages;
+}
+
 function publicResult(item) {
   return {
     path: item.path,
@@ -436,13 +483,14 @@ function publicResult(item) {
     score: Number(item.rerankScore ?? item.rrfScore ?? item.bm25Score ?? item.score ?? 0),
     logicalKey: item.logicalKey || logicalDocumentKey(item.path),
     relatedPaths: item.relatedPaths || [],
+    passages: item.passages || [],
   };
 }
 
 export function routeKnowledgeQuery(query) {
   const value = String(query || '').trim();
   return {
-    route: ROUTE_EXACT_PATTERN.test(value) ? 'exact' : 'semantic',
+    route: noteTermLookup(value) || ROUTE_EXACT_PATTERN.test(value) || /\b[a-z][a-z0-9]*[A-Z]\w*/u.test(value) ? 'exact' : 'semantic',
     exhaustive: EXHAUSTIVE_PATTERN.test(value),
   };
 }
@@ -465,7 +513,7 @@ function lineMatches(content, terms) {
   for (let index = 0; index < lines.length; index += 1) {
     const normalized = normalizeText(lines[index]);
     if (!terms.some((term) => normalized.includes(term))) continue;
-    matches.push({ line: index + 1, text: lines[index].trim().slice(0, 500) });
+    matches.push({ line: index + 1, text: matchedLineExcerpt(lines[index], terms, 320).quote });
   }
   return matches;
 }
@@ -670,20 +718,22 @@ export class KnowledgeIndex {
     }
   }
 
-  async readFileChunks(relative) {
+  async readDocument(relative) {
     if (!indexedExtension(relative) || shouldSkip(relative)) return null;
     const target = path.join(this.root, relative);
+    if (await fsp.realpath(target).catch(() => null) !== target) return null;
     const stat = await fsp.lstat(target).catch(() => null);
     if (!stat?.isFile() || stat.isSymbolicLink() || stat.size > MAX_TEXT_BYTES) return null;
     const buffer = await fsp.readFile(target).catch(() => null);
     if (!buffer || buffer.includes(0)) return null;
-    const content = buffer.toString('utf8');
-    return {
-      stat,
-      hash: sha256(buffer),
-      content,
-      chunks: chunkDocument(relative, content),
-    };
+    return { stat, buffer };
+  }
+
+  async readFileChunks(relative) {
+    const loaded = await this.readDocument(relative);
+    if (!loaded) return null;
+    const content = loaded.buffer.toString('utf8');
+    return { stat: loaded.stat, hash: sha256(loaded.buffer), content, chunks: chunkDocument(relative, content) };
   }
 
   async embedMissing(chunks, oldChunks = [], signal) {
@@ -864,7 +914,8 @@ export class KnowledgeIndex {
   }
 
   async exactSearch(query, options = {}) {
-    const terms = exactTerms(query);
+    const lookup = noteTermLookup(query);
+    const terms = lookup ? lookup.terms.map(normalizeText) : exactTerms(query);
     if (!terms.length) {
       return {
         route: 'exact',
@@ -885,39 +936,57 @@ export class KnowledgeIndex {
       const loaded = await this.readFileChunks(relative);
       if (!loaded) continue;
       const content = loaded.content;
-      liveChunks.push(...loaded.chunks);
       const normalizedPath = normalizeText(relative);
       const normalizedContent = normalizeText(content);
       const pathHits = terms.filter((term) => normalizedPath.includes(term));
       const contentHits = terms.filter((term) => normalizedContent.includes(term));
-      if (!pathHits.length && !contentHits.length) continue;
+      if (!contentHits.length && (!pathHits.length || lookup?.inNotes)) continue;
+      liveChunks.push(...loaded.chunks);
       const matches = lineMatches(content, terms);
+      const prose = lookup?.inNotes ? matches.filter(m => !/^ {0,3}#{1,6}\s/u.test(m.text)) : [];
+      const firstHits = new Set([...prose.slice(0, 3), ...matches.slice(0, 3)]);
+      const passages = lookup
+        ? [...firstHits].slice(0, 3).map(m => ({
+          path: relative, line: m.line, quote: m.text, headings: /\.md$/iu.test(relative) ? passageHeadings(content, m.line) : [],
+        }))
+        : sectionPassages(content, relative, query, matches.map(m => ({ startLine: m.line, endLine: m.line })));
       const bestChunk = loaded.chunks[0];
       results.push({
         ...(bestChunk || { path: relative, name: path.basename(relative), content: '' }),
         path: relative,
         name: path.basename(relative),
         matches,
+        hasProse: prose.length > 0,
+        passages,
         lineNumbers: matches.map((match) => match.line),
         score: pathHits.length * 20 + contentHits.length * 8 + matches.length,
       });
     }
     const rankedByPath = new Map();
-    for (const chunk of bm25Search(normalizeDates(query), liveChunks, liveChunks.length)) {
+    for (const chunk of bm25Search(lookup ? terms.join(' ') : normalizeDates(query), liveChunks, liveChunks.length)) {
       if (!rankedByPath.has(chunk.path)) rankedByPath.set(chunk.path, chunk);
     }
     for (const result of results) {
       const ranked = rankedByPath.get(result.path);
-      if (!ranked) continue;
-      result.heading = ranked.heading;
-      result.headings = ranked.headings;
-      result.startLine = ranked.startLine;
-      result.endLine = ranked.endLine;
-      result.content = ranked.content;
-      result.score += ranked.bm25Score * 10;
-      result.bm25Score = undefined;
+      if (ranked) {
+        result.heading = ranked.heading;
+        result.headings = ranked.headings;
+        result.startLine = ranked.startLine;
+        result.endLine = ranked.endLine;
+        result.content = ranked.content;
+        result.score += ranked.bm25Score * 10;
+        result.bm25Score = undefined;
+      }
+      const passage = lookup && result.passages[0];
+      if (passage) {
+        result.startLine = result.endLine = passage.line;
+        result.heading = passage.headings.at(-1) || '';
+        result.headings = passage.headings;
+        result.snippet = passage.quote;
+      }
     }
-    results.sort((left, right) => right.score - left.score || left.path.localeCompare(right.path, 'zh-CN'));
+    results.sort((left, right) => Number(right.hasProse) - Number(left.hasProse) ||
+      right.score - left.score || left.path.localeCompare(right.path, 'zh-CN'));
     const associations = associatedPaths(walked.files);
     const publicResults = results.map((item) => publicResult({
       ...item,
@@ -956,6 +1025,18 @@ export class KnowledgeIndex {
     return { vector, source: 'api' };
   }
 
+  async withPassages(items, query, chunks, signal) {
+    const results = [];
+    for (const item of items) {
+      signal?.throwIfAborted?.();
+      const loaded = await this.readDocument(item.path);
+      if (!loaded) continue;
+      const ranges = chunks.filter((chunk) => chunk.path === item.path);
+      results.push(publicResult({ ...item, passages: sectionPassages(loaded.buffer.toString('utf8'), item.path, query, ranges) }));
+    }
+    return results;
+  }
+
   async semanticSearch(query, options = {}) {
     const taskMode = options.taskMode === 'deep' ? 'deep' : 'normal';
     const recallLimit = taskMode === 'deep' ? 60 : 30;
@@ -964,7 +1045,7 @@ export class KnowledgeIndex {
     const retrievalQuery = contextualQuery(query, options);
     const live = await this.collectLiveChunks(options.signal);
     const queryHash = sha256(retrievalQuery);
-    const rankingKey = `${queryHash}:${this.generation.generation}:${taskMode}`;
+    const rankingKey = `passages-v2:${queryHash}:${this.generation.generation}:${taskMode}`;
     const cached = this.rankingCache.get(rankingKey);
     if (!live.hasChanges && cached && Date.now() - cached.at <= RANKING_CACHE_TTL_MS) {
       return {
@@ -999,7 +1080,7 @@ export class KnowledgeIndex {
     const embeddingApiSucceeded = queryVectorSource === 'api';
     const queryVectorCacheHit = queryVectorSource === 'query-cache';
     if (!vector.length) {
-      const fallback = dedupeLogicalDocuments(bm25, live.paths, resultLimit).map(publicResult);
+      const fallback = await this.withPassages(dedupeLogicalDocuments(bm25, live.paths, resultLimit), retrievalQuery, bm25, options.signal);
       const value = {
         route: 'semantic',
         query: retrievalQuery,
@@ -1045,7 +1126,7 @@ export class KnowledgeIndex {
         rerankerError = error;
       }
     }
-    const results = candidates.slice(0, resultLimit).map(publicResult);
+    const results = await this.withPassages(candidates.slice(0, resultLimit), retrievalQuery, fused, options.signal);
     const value = {
       route: 'semantic',
       query: retrievalQuery,

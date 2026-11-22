@@ -9,7 +9,8 @@
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/overrides.css?v=9">
     <link rel="stylesheet" href="/vendor/katex/katex.min.css?v=0.18.1">
-    <link rel="stylesheet" href="/knowledge.css?v=19">
+    <link rel="stylesheet" href="/knowledge.css?v=21">
+    <link rel="stylesheet" href="/study-plan/sync.css?v=20260922-1">
     <link rel="stylesheet" href="/knowledge-config-entry.css">
   </head>
   <body class="knowledge-body">
@@ -23,7 +24,7 @@
 
     <header class="site-header subpage-header knowledge-header">
       <nav class="subpage-nav" aria-label="知识库导航">
-        <a class="knowledge-drive-back" href="/admin-config.html?knowledgeBaseId=default">配置管理</a>
+        <a class="knowledge-drive-back" href="/admin-config.html">配置管理</a>
         <label class="knowledge-base-control" hidden>知识库
           <select id="knowledge-base-select" aria-label="选择知识库"></select>
         </label>
@@ -56,7 +57,7 @@
           </form>
           <div class="knowledge-gate-actions">
             <button id="knowledge-retry" class="kb-action--secondary" type="button" hidden>重新连接</button>
-            <a id="knowledge-gate-link" href="/admin-config.html?knowledgeBaseId=default" hidden>配置管理</a>
+            <a id="knowledge-gate-link" href="/admin-config.html" hidden>配置管理</a>
           </div>
           <p id="knowledge-login-error" class="form-error" role="alert"></p>
         </div>
@@ -264,6 +265,7 @@
         </div>
         <textarea id="knowledge-draft-content" rows="18" maxlength="524288"></textarea>
         <div id="knowledge-draft-rendered" class="knowledge-rendered" hidden></div>
+        <div id="knowledge-plan-import" class="plan-import-panel" hidden></div>
         <p id="knowledge-draft-error" class="form-error" role="alert"></p>
         <footer>
           <button id="knowledge-discard-draft" type="button" class="quiet">放弃草稿</button>
@@ -286,7 +288,7 @@
     <div id="knowledge-toast" class="knowledge-toast" role="status" aria-live="polite"></div>
 
     <footer class="drive-footer knowledge-footer">
-      <a href="/admin-config.html?knowledgeBaseId=default">配置管理</a>
+      <a href="/admin-config.html">配置管理</a>
       <p>© <span id="year"></span> Second Mind · Personal Knowledge Base</p>
       <p class="server-mark"><span></span> OBSIDIAN CONNECTED</p>
     </footer>
@@ -297,6 +299,6 @@
     <script src="/vendor/katex/katex.min.js?v=0.18.1"></script>
     <script src="/vendor/katex/auto-render.min.js?v=0.18.1"></script>
     <script src="/agent-render.js?v=2"></script>
-    <script type="module" src="/knowledge.js?v=19"></script>
+    <script type="module" src="/knowledge.js?v=20261120-search"></script>
   </body>
 </html>

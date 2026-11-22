@@ -7,7 +7,7 @@ import {
   KnowledgeAgentManager,
   retrievalEmbeddingEvent,
 } from '../../src/original/knowledge-agent.mjs';
-import { createKnowledgeSearchServer } from '../../src/original/knowledge-search-mcp.mjs';
+import { createKnowledgeSearchServer, CITE_PASSAGE_TOOL } from '../../src/original/knowledge-search-mcp.mjs';
 import { KnowledgeStore } from '../../src/original/knowledge-store.mjs';
 import { KNOWLEDGE_SEARCH_TOOL } from '../../src/original/subagent-policy.mjs';
 
@@ -696,7 +696,7 @@ test('知识库 Agent 始终只读、按开关开放 Tavily MCP，历史与草�
   assert.equal(activity.some((event) => event.data.toolName === 'Grep'), true);
   assert.equal(activity.some((event) => /搜索正文/.test(event.data.title)), true);
   assert.equal(activity.some((event) => event.data.title === '词法回退已启用'), true);
-  assert.deepEqual(captured[0].tools, ['Read', 'Glob', 'Grep', KNOWLEDGE_SEARCH_TOOL]);
+  assert.deepEqual(captured[0].tools, ['Read', 'Glob', 'Grep', KNOWLEDGE_SEARCH_TOOL, CITE_PASSAGE_TOOL]);
   assert.equal(captured[0].allowedTools.some((tool) => /Write|Edit|Bash/.test(tool)), false);
   assert.equal(captured[0].allowedTools.includes(KNOWLEDGE_SEARCH_TOOL), true);
   assert.deepEqual(captured[0].disallowedTools, ['WebSearch', 'WebFetch']);
@@ -712,7 +712,7 @@ test('知识库 Agent 始终只读、按开关开放 Tavily MCP，历史与草�
     kind: 'qa', prompt: '补充外部资料', model: 'default', effort: 'high', webSearch: true,
   });
   await waitFor(() => manager.getTask('user-12345678', second.taskId).status === 'completed');
-  assert.deepEqual(captured[1].tools, ['Read', 'Glob', 'Grep', KNOWLEDGE_SEARCH_TOOL]);
+  assert.deepEqual(captured[1].tools, ['Read', 'Glob', 'Grep', KNOWLEDGE_SEARCH_TOOL, CITE_PASSAGE_TOOL]);
   assert.equal(captured[1].allowedTools.includes('mcp__tavily__tavily_search'), true);
   assert.equal(captured[1].allowedTools.includes('mcp__tavily__tavily_extract'), true);
   assert.equal('maxBudgetUsd' in captured[1], false);
@@ -811,7 +811,7 @@ test('知识库 Agent 始终只读、按开关开放 Tavily MCP，历史与草�
   assert.equal('maxBudgetUsd' in deepOptions, false);
   assert.deepEqual(
     deepOptions.tools,
-    ['Read', 'Glob', 'Grep', KNOWLEDGE_SEARCH_TOOL, 'Agent'],
+    ['Read', 'Glob', 'Grep', KNOWLEDGE_SEARCH_TOOL, CITE_PASSAGE_TOOL, 'Agent'],
   );
   assert.deepEqual(Object.keys(deepOptions.agents), ['vault-researcher', 'source-verifier']);
   assert.equal(Array.isArray(deepOptions.hooks.PreToolUse), true);

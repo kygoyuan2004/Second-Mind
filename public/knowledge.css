@@ -1866,3 +1866,25 @@ html[data-no-backdrop] .knowledge-console-header {
 .inventory-actions button:disabled { opacity: 0.5; cursor: default; }
 .knowledge-inventory details { margin-top: 8px; overflow-wrap: anywhere; }
 .knowledge-inventory details ul { max-height: 240px; overflow: auto; }
+
+.knowledge-source-content .knowledge-cited-heading {
+  background: #fff1bb;
+  border-inline-start: 3px solid #a76c19;
+  padding-inline-start: .5em;
+  scroll-margin-top: .5rem;
+}
+.knowledge-source-path select { max-width: 100%; }
+[data-knowledge-source] { text-decoration: underline; text-underline-offset: .15em; }
+
+.knowledge-source-raw { white-space: pre-wrap; overflow-wrap: anywhere; }
+.knowledge-cited-passage, .knowledge-source-raw mark { background: #ffe38a; color: #362900; }
+
+/* Keep long answers readable while leaving code and source previews scrollable. */
+.knowledge-message.assistant .knowledge-message-content { line-height: 1.75; }
+.knowledge-message-content :is(p, ul, ol) { max-inline-size: 76ch; }
+.knowledge-message-content h2, .knowledge-message-content h3 { line-height: 1.35; margin-block-start: 1.4em; }
+.knowledge-source-path, .knowledge-target code { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .knowledge-draft-dialog footer { position: sticky; bottom: 0; background: var(--kb-surface, #fff); padding-block: .6rem; }
+  .knowledge-source-dialog button, .knowledge-draft-dialog footer button { min-height: 44px; }
+}

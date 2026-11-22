@@ -52,7 +52,7 @@ test('migration preserves bytes, conversations, drafts and survives a missing fi
 test('migration rejects symlink attachments and resumes once the unsafe source is removed', async (t) => {
   const { p, config, draftId } = await fixture(t);
   const bad = path.join(p.config.draftDir, draftId, 'linked.bin');
-  await fs.symlink(p.config.conversationFile, bad);
+  await fs.symlink(process.platform === 'win32' ? path.dirname(p.config.conversationFile) : p.config.conversationFile, bad, process.platform === 'win32' ? 'junction' : 'file');
   await assert.rejects(migrateSdkState(p.config, config), /LEGACY_DRAFT_UNSAFE_FILE/);
   await fs.rm(bad);
   const receipt = await migrateSdkState(p.config, config);

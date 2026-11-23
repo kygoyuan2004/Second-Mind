@@ -1,42 +1,49 @@
-<p align="center">
-  <a href="docs/assets/second-mind-hero.png">
-    <img src="docs/assets/second-mind-hero.png" alt="Second Mind 自托管知识工作台项目插画" width="100%">
-  </a>
-</p>
-
 <h1 align="center">Second Mind</h1>
 
-<p align="center"><strong>用自己的 Obsidian 笔记回顾一周：核对原文，区分计划与进展，再把选中的事项加入每日安排。</strong></p>
+<p align="center">面向单管理员的自托管 Obsidian 工作台，用 Claude Agent SDK 查笔记、核对原文，草稿经你确认后才写回 Vault。</p>
 
 <p align="center">
-  <a href="README.en.md">English</a> ·
-  <a href="https://kygoyuan2004.github.io/Second-Mind/">项目展示</a> ·
-  <a href="#桌面软件下载">安装</a> ·
-  <a href="docs/configuration.md">配置</a> ·
-  <a href="docs/claude-sdk-migration.md">迁移与验收</a>
+  <a href="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml"><img alt="CI 工作流状态" src="https://img.shields.io/github/actions/workflow/status/kygoyuan2004/Second-Mind/ci.yml?branch=main&amp;label=CI&amp;style=flat-square"></a>
+  <a href="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/pages.yml"><img alt="Pages 部署状态" src="https://img.shields.io/github/actions/workflow/status/kygoyuan2004/Second-Mind/pages.yml?branch=main&amp;label=Pages&amp;style=flat-square"></a>
+  <a href="https://github.com/kygoyuan2004/Second-Mind/releases"><img alt="最新发行版" src="https://img.shields.io/github/v/release/kygoyuan2004/Second-Mind?label=Release&amp;style=flat-square"></a>
+  <a href="LICENSE"><img alt="MIT 许可证" src="https://img.shields.io/badge/License-MIT-546579?style=flat-square"></a>
+  <a href="package.json"><img alt="Node.js 版本要求 ^22.22.0 或 >=24.8.0" src="https://img.shields.io/badge/Node.js-%5E22.22.0%20%7C%7C%20%3E%3D24.8.0-417e38?style=flat-square"></a>
+  <a href="docs/deployment.md"><img alt="Docker 镜像支持 amd64 和 arm64" src="https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-24618e?style=flat-square"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml">
-    <img src="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml/badge.svg" alt="CI">
-  </a>
-  <a href="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/pages.yml">
-    <img src="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/pages.yml/badge.svg" alt="Pages">
-  </a>
+  <a href="README.en.md">English</a> |
+  <a href="https://kygoyuan2004.github.io/Second-Mind/">项目展示</a> |
+  <a href="#快速开始">快速开始</a> |
+  <a href="#核心能力">核心能力</a> |
+  <a href="#架构与边界">架构与边界</a> |
+  <a href="#开发与文档">文档</a>
 </p>
 
-![真实 SDK 问答与来源，使用公开演示资料](docs/assets/second-mind-qa.png)
+![真实问答示例，学习回顾区分已完成的基线和待确认的复现，并附上笔记来源](docs/assets/second-mind-qa.png)
 
-Second Mind 是单管理员、自托管知识工作台。Claude Agent SDK 负责真实的检索、读取、工具循环和多轮会话；日记、计划、随心记与视频笔记先生成草稿，编辑并确认后才写入 Vault。
+## 快速开始
 
-## 桌面软件下载
+<a name="桌面软件下载"></a>
 
-Windows x64 安装包、Linux x86_64 AppImage 和 Debian/Ubuntu 安装包都支持本机知识库和远程服务器连接。桌面版自带 Node、Python 和 FFmpeg。Linux 桌面使用系统密钥环。打开本地 Vault 和连接远程服务器各自使用独立的数据与会话。[GitHub Releases](https://github.com/kygoyuan2004/Second-Mind/releases) · [平台验收记录](docs/desktop-web-release.md)
+### 方式一：桌面客户端（开箱即用）
 
-## Docker 网页版
+从 [GitHub Releases](https://github.com/kygoyuan2004/Second-Mind/releases) 下载对应的安装包。首次打开时，选择本机 Obsidian Vault，或连接已有的 Second Mind HTTPS 服务器。
 
+| 系统 | 下载文件 |
+| --- | --- |
+| Windows x64 | `.exe` 安装程序 |
+| Linux x86_64 | `.AppImage`，或适用于 Debian / Ubuntu 的 `.deb` 包 |
 
-准备 Git 和 Docker。Linux 使用 Docker Engine 与 Compose v2；Windows、macOS 使用 Docker Desktop 的 Linux 容器。
+桌面版自带 Node.js、Python 和 FFmpeg。本机与远程工作区各自保存数据和会话。Linux 保存桌面凭据需要已解锁的系统密钥环。
+
+<a name="docker-网页版"></a>
+
+### 方式二：Docker 网页版（自托管部署）
+
+先安装 Git 并启动 Docker。Linux 使用 Docker Engine 和 Compose v2，Windows 和 macOS 使用 Docker Desktop 的 Linux 容器。
+
+#### Linux / macOS
 
 ```bash
 git clone https://github.com/kygoyuan2004/Second-Mind.git
@@ -44,7 +51,7 @@ cd Second-Mind
 ./install.sh
 ```
 
-Windows PowerShell：
+#### Windows PowerShell
 
 ```powershell
 git clone https://github.com/kygoyuan2004/Second-Mind.git
@@ -52,50 +59,95 @@ cd Second-Mind
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-安装器配置 Vault 目录、端口和管理员密码。宿主机不需要 Node.js。首次启动后，在配置管理中添加模型连接；未配置模型时仍可登录和进行本地关键词检索。
+按提示选择 Vault、端口和管理员密码。登录后即可进行本地关键词检索。要开始问答，在「配置管理」中添加模型连接。Docker 部署所需的 Node.js 已包含在镜像中。[配置指南](docs/configuration.md)
 
-[Windows 10/11](docs/quickstart-windows.md) · [macOS Intel / Apple Silicon](docs/quickstart-macos.md) · [Linux amd64 / arm64](docs/quickstart-linux.md) · [Docker 与备份](docs/deployment.md)
+<details>
+<summary>各平台安装指南与实测范围</summary>
 
-支持矩阵与实测范围见[验收记录](docs/claude-sdk-migration.md)。支持声明与平台实测结果分别记录。
+[Windows 10/11](docs/quickstart-windows.md) · [macOS Intel / Apple Silicon](docs/quickstart-macos.md) · [Linux amd64 / arm64](docs/quickstart-linux.md) · [Docker 部署与备份](docs/deployment.md)
 
-## 可以做什么
+Windows 11 x64 已实测本地与远程问答，Windows 10 x64 桌面安装待实测。Linux 桌面包已在 Ubuntu 和 Debian 环境中分别验收。Docker 安装、升级、备份与恢复已在 Linux amd64 实测，Windows 与 macOS 上的 Docker Desktop 完整安装和升级流程待实测。[桌面与 Docker 验收记录](docs/desktop-web-release.md) · [SDK 迁移验收矩阵](docs/claude-sdk-migration.md)
 
-| 场景 | 实际行为 |
-| --- | --- |
-| 问答与来源 | 关键词、语义或混合检索，按需读取原文，点击引用预览笔记 |
-| 普通 / 深度 | 普通最多 20 轮、10 分钟；深度最多 50 轮、30 分钟，按条件使用最多两个只读子 Agent |
-| 学习回顾 | 固定日期范围，先枚举再读原文，区分计划、进行中和已完成，报告覆盖缺口 |
-| 日记 / 计划 / 随心记 | 生成 Markdown，预览和编辑后确认保存；并发修改检查及覆盖前恢复副本 |
-| 图片 / PDF / 音视频 | Qwen 3.8 Max 支持图片和 PDF；语音转写、视频关键帧和转写在容器中处理 |
-| 多知识库 | 独立索引、会话、任务、草稿、引用与写入；从页面切换 |
-| 配置管理 | 模型、默认模型、原生思考等级、联网、Embedding、索引构建、名称和知识库注册 |
-| 会话 | 刷新后从历史列表重新打开；重启可续接 SDK 会话；模型、思考等级或联网设置变化时新建对话 |
+</details>
+
+<a name="可以做什么"></a>
+
+## 核心能力
+
+- **检索与原文定位**　用关键词、语义或混合检索找到笔记，点击搜索结果或回答引用即可定位到原文段落。
+- **普通与深度问答**　普通问答最多 20 轮、10 分钟。深度问答最多 50 轮、30 分钟，必要时可调用最多两个只读子 Agent。刷新后可从历史记录重开对话，重启后可续接 SDK 会话。
+- **回顾学习**　按指定日期先列出候选笔记，再读原文。回顾区分已完成、进行中和计划，并说明哪些材料尚未覆盖。
+- **草稿确认写入**　日记、计划、随心记和视频笔记先生成 **Markdown 草稿**。可编辑正文、勾选计划事项，确认后才写入 Vault 并将选中事项加入对应日期的安排。保存时检查并发修改，覆盖已有笔记前保留恢复副本。
+- **多模态附件**　Qwen 3.8 Max 支持图片和 PDF。音视频可在本地转写，视频还可提取关键帧供模型分析。
+- **多知识库**　每个 Vault 独立保存索引、会话、任务、草稿和引用，写入目标随当前知识库切换。
+- **自带密钥（BYOK）**　在配置页管理连接、默认模型、思考等级、联网搜索和 Embedding 索引，也可修改工作台名称、注册知识库。更换模型、思考等级或联网设置时，界面会开启新对话。
 
 ## 实际使用截图
 
-以下截图来自隔离演示库与真实 DeepSeek SDK 任务。学习回顾区分已跑通的基线与待确认的完整复现，计划经过预览和确认后写入两项日程。
+以下界面来自独立演示库。点击缩略图可查看原图，核对真实 DeepSeek 问答的工具记录，或查看草稿保存前的内容。
 
 | 执行过程 | 配置管理 |
 | --- | --- |
-| ![真实检索和读取工具事件](docs/assets/second-mind-execution.png) | ![管理员配置真实服务，凭据不回显](docs/assets/second-mind-provider-config.png) |
+| [![展开的 SDK 执行过程](docs/assets/second-mind-execution.png)](docs/assets/second-mind-execution.png)<br>展开一次问答，查看 Agent 搜索和读取笔记的顺序。 | [![管理员配置模型连接](docs/assets/second-mind-provider-config.png)](docs/assets/second-mind-provider-config.png)<br>核对模型实际请求的地址，逐个检查供应商连接。 |
 
 | 日记草稿 | 计划草稿 |
 | --- | --- |
-| ![编辑后的日记预览与确认入口](docs/assets/second-mind-diary.png) | ![编辑后的计划预览与确认入口](docs/assets/second-mind-plan.png) |
+| [![日记草稿的 Markdown 预览](docs/assets/second-mind-diary.png)](docs/assets/second-mind-diary.png)<br>对照日期检查编辑后的日记，再决定是否写入。 | [![计划草稿的预览和日程选项](docs/assets/second-mind-plan.png)](docs/assets/second-mind-plan.png)<br>检查计划正文，选择是否将事项加入每日安排。 |
 
-[查看定位到原文段落的效果](docs/assets/second-mind-source.png) · [查看确认后的每日安排](docs/assets/second-mind-schedule.png)
+<details>
+<summary>展开查看更多界面 · 原文段落定位 · 每日安排 · 移动端适配</summary>
 
-## 模型与数据边界
+**原文段落定位**　从回答引用打开笔记，可直接看到高亮的证据段落。
 
-固定使用 `@anthropic-ai/claude-agent-sdk@0.3.247`。百炼、DeepSeek、Kimi 和自定义连接均已在独立演示库完成两轮真实 SDK 问答。自定义连接使用 DeepSeek 的官方 Messages 接口。模型 ID 按输入原样发送。[本版验收记录](docs/desktop-web-release.md)
+<a href="docs/assets/second-mind-source.png"><img src="docs/assets/second-mind-source.png" alt="原文预览中高亮的实验记录段落" width="680"></a>
 
-服务端按任务固定连接和凭据。真实 Key 不交给浏览器或 SDK 子进程；SDK 使用独立私有状态目录，不读取宿主机的 `~/.claude`。模型仍会收到问题、附件和工具返回的笔记片段，远程 Embedding 会收到索引文本；自托管不等于模型处理全部留在本机。[数据流](docs/data-flow.md) · [安全边界](docs/security.md)
+**每日安排**　计划确认后，两个选中的事项出现在目标日期下，可分别调整开始时间和时长。
 
-[v0.2.1 源码归档](https://github.com/kygoyuan2004/Second-Mind/tree/v0.2.1/archive/pi)保留了旧 Pi 执行器、文档和测试。升级保留旧会话、草稿和原始状态，新 SDK 状态使用独立目录。
+<a href="docs/assets/second-mind-schedule.png"><img src="docs/assets/second-mind-schedule.png" alt="同一天的两项日程及可编辑的时间" width="680"></a>
+
+**移动端**　窄屏上的学习回顾仍保留模式切换、回答正文和追问输入框。
+
+<a href="docs/assets/second-mind-mobile.png"><img src="docs/assets/second-mind-mobile.png" alt="手机单栏布局中的学习回顾与追问入口" width="270"></a>
+
+[查看项目插画](docs/assets/second-mind-hero.png)
+
+</details>
+
+## 架构与边界
+
+桌面本机模式与 Docker 网页版共用同一套后端。连接远程工作区时，所选 Vault 的检索、会话和草稿均由远程服务处理。
+
+```mermaid
+flowchart TD
+  app["Second Mind 服务<br/>本机或服务器"] --> sdk["Claude Agent SDK"]
+  sdk -->|只读检索| vault["所选知识库<br/>Obsidian Vault"]
+  sdk --> relay["服务端转发<br/>本地回环连接"]
+  relay -->|BYOK| model["模型服务<br/>Anthropic Messages"]
+  app -->|生成草稿| draft["私有草稿<br/>位于 Vault 外"]
+  draft --> review["预览、编辑<br/>管理员确认"]
+  review -->|应用校验后写入| vault
+```
+
+### 模型与数据边界
+
+- **运行时**　固定使用 `@anthropic-ai/claude-agent-sdk@0.3.247`。生成模型须支持 Anthropic Messages。旧 OpenAI Chat Completions 配置可在管理页迁移。[配置指南](docs/configuration.md)
+- **实测连接**　百炼、DeepSeek、Kimi 及自定义连接均已在演示库完成连续两轮真实 SDK 问答。自定义项测试的是 DeepSeek 官方 Messages 端点，其他兼容端点需单独检查。[验收记录](docs/desktop-web-release.md)
+
+> [!IMPORTANT]
+> **凭据与状态**　服务端为每个任务固定模型连接，只在发往已配置端点的 HTTPS 请求上附加真实 Key。浏览器读取配置时只看到密钥是否已设置，SDK 子进程只拿到临时本地令牌。每个库的 SDK 状态保存在 Vault 外的私有目录，宿主机的 `~/.claude` 配置不会被加载。
+>
+> **数据出站**　外部模型会收到问题、会话上下文、提交的附件和工具读到的笔记片段。构建远程 Embedding 索引可能发送所选库中所有符合索引条件的笔记片段。启用联网搜索后，查询词和待提取的网址可能发往搜索服务。个人学习回顾跳过联网搜索。[数据流](docs/data-flow.md) · [安全边界](docs/security.md)
+
+<details>
+<summary>从旧版 Pi 升级</summary>
+
+旧 Pi 执行器、测试和文档保存在 [v0.2.1 源码归档](https://github.com/kygoyuan2004/Second-Mind/tree/v0.2.1/archive/pi)。升级保留原会话、草稿和状态文件，SDK 在独立目录中建立新状态。[迁移说明](docs/claude-sdk-migration.md)
+
+</details>
 
 ## 开发与文档
 
-本地源码运行需要 Node.js 22.22+（或 24.8+），音视频建议通过 Docker 验证。
+从源码开发时，Node.js 版本需满足 `^22.22.0 || >=24.8.0`。可使用 Docker 验证音视频所需的运行环境。
 
 ```bash
 npm ci
@@ -104,12 +156,18 @@ npm test
 npm run site:check
 ```
 
-- [架构与源码映射](docs/architecture.md)
-- [配置与保存生效规则](docs/configuration.md)
-- [HTTP / SSE 接口](docs/api.md)
-- [学习回顾](docs/learning-review.md)
-- [迁移差异、验证范围与限制](docs/claude-sdk-migration.md)
-- [部署与回滚](docs/deployment.md)
-- [同步方式](docs/sync.md)
+| 文档 | 内容简介 |
+| --- | --- |
+| [架构与源码](docs/architecture.md) | 从 HTTP / SSE 服务找到 SDK、检索工具、状态存储和写入逻辑的实现。 |
+| [配置指南](docs/configuration.md) | 连接模型、检查凭据、启用联网搜索，以及为选中的库构建和激活语义索引。 |
+| [HTTP / SSE 接口](docs/api.md) | 查阅认证要求、任务事件流、草稿确认和错误响应。 |
+| [学习回顾](docs/learning-review.md) | 了解日期范围如何确定、哪些笔记能作为证据，以及如何解读覆盖情况。 |
+| [SDK 迁移与验收](docs/claude-sdk-migration.md) | 对照旧版行为、迁移后的差异、平台验证结果与限制。 |
+| [部署与回滚](docs/deployment.md) | 安装和更新 Docker 实例，备份状态与 Vault，并在独立目录中恢复。 |
+| [知识库同步](docs/sync.md) | 配置独立同步进程或 Obsidian Headless，处理写入冲突和备份。 |
 
-MIT License。当前面向一个可信管理员，不提供多租户权限或跨库联合检索。
+---
+
+Second Mind 面向一位可信管理员，笔记的读取和写入都限定在当前选中的知识库内。
+
+[贡献指南](CONTRIBUTING.md) · [安全问题反馈](SECURITY.md) · [更新日志](CHANGELOG.md) · [MIT License](LICENSE)

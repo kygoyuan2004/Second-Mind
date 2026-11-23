@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="216" viewBox="0 0 820 216" role="img" aria-labelledby="title desc">
+  <title id="title">Second Mind · 检索与写入 / Retrieval and writes</title>
+  <desc id="desc">The local or hosted service runs read-only retrieval against the selected Vault and forwards model requests to the configured provider. Drafts stay outside the Vault until the administrator confirms and the application validates the write.</desc>
+  <style>
+    svg { --canvas: #f6f8fa; --node: #ffffff; --border: #b9c5ce; --ink: #182633; --muted: #405565; --arrow: #476878; }
+    @media (prefers-color-scheme: dark) {
+      svg { --canvas: #111820; --node: #1d2934; --border: #536978; --ink: #eef4f8; --muted: #c0cdd7; --arrow: #95baca; }
+    }
+    .canvas { fill: var(--canvas); }
+    .node { fill: var(--node); stroke: var(--border); }
+    .edge { fill: none; stroke: var(--arrow); stroke-width: 1.6; marker-end: url(#tip); }
+    text { text-anchor: middle; font-family: system-ui, "Microsoft YaHei", sans-serif; fill: var(--ink); font-size: 17px; font-weight: 600; }
+    .sub, .caption { font-size: 13px; font-weight: 400; fill: var(--muted); }
+  </style>
+  <defs>
+    <marker id="tip" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 8 4 0 8z" fill="var(--arrow)"/>
+    </marker>
+  </defs>
+  <rect class="canvas" width="820" height="216" rx="12"/>
+  <g class="node">
+    <rect x="18" y="16" width="204" height="60" rx="8"/>
+    <rect x="308" y="16" width="204" height="60" rx="8"/>
+    <rect x="598" y="16" width="204" height="60" rx="8"/>
+    <rect x="18" y="140" width="204" height="60" rx="8"/>
+    <rect x="308" y="140" width="204" height="60" rx="8"/>
+    <rect x="598" y="140" width="204" height="60" rx="8"/>
+  </g>
+  <g class="edge">
+    <path d="M223 46h82"/>
+    <path d="M513 46h82"/>
+    <path d="M120 77v60"/>
+    <path d="M410 77v30h290v30"/>
+    <path d="M223 170h82"/>
+    <path d="M513 170h82"/>
+  </g>
+  <text x="120" y="41">Second Mind</text>
+  <text class="sub" x="120" y="62">本机或服务器 · Local or hosted</text>
+  <text x="410" y="41">Claude Agent SDK</text>
+  <text class="sub" x="410" y="62">只读工具 · Read-only tools</text>
+  <text x="700" y="41">模型服务 · BYOK</text>
+  <text class="sub" x="700" y="62">External Messages API</text>
+  <text class="caption" x="555" y="33">本地转发</text>
+  <text class="caption" x="555" y="65">Loopback</text>
+  <text class="caption" x="555" y="100">检索笔记 · Read notes</text>
+  <text x="120" y="165">库外草稿</text>
+  <text class="sub" x="120" y="186">Draft outside the Vault</text>
+  <text x="410" y="165">管理员编辑并确认</text>
+  <text class="sub" x="410" y="186">Admin reviews and confirms</text>
+  <text class="caption" x="555" y="158">校验后写入</text>
+  <text class="caption" x="555" y="189">Check &amp; save</text>
+  <text x="700" y="165">所选知识库</text>
+  <text class="sub" x="700" y="186">Selected Obsidian Vault</text>
+</svg>

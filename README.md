@@ -1,13 +1,15 @@
-<h1 align="center">Second Mind</h1>
+<p align="center">
+  <a href="docs/assets/second-mind-hero.png"><img src="docs/assets/second-mind-hero.png" alt="Second Mind · 紫色星空中的猫头鹰与笔记" width="820"></a>
+</p>
 
-<p align="center">面向单管理员的自托管 Obsidian 工作台，用 Claude Agent SDK 查笔记、核对原文，草稿经你确认后才写回 Vault。</p>
+<p align="center"><strong>在自己的笔记里提问，沿着引文核对原文。</strong></p>
 
 <p align="center">
   <a href="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml"><img alt="CI 工作流状态" src="https://img.shields.io/github/actions/workflow/status/kygoyuan2004/Second-Mind/ci.yml?branch=main&amp;label=CI&amp;style=flat-square"></a>
   <a href="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/pages.yml"><img alt="Pages 部署状态" src="https://img.shields.io/github/actions/workflow/status/kygoyuan2004/Second-Mind/pages.yml?branch=main&amp;label=Pages&amp;style=flat-square"></a>
   <a href="https://github.com/kygoyuan2004/Second-Mind/releases"><img alt="最新发行版" src="https://img.shields.io/github/v/release/kygoyuan2004/Second-Mind?label=Release&amp;style=flat-square"></a>
   <a href="LICENSE"><img alt="MIT 许可证" src="https://img.shields.io/badge/License-MIT-546579?style=flat-square"></a>
-  <a href="package.json"><img alt="Node.js 版本要求 ^22.22.0 或 >=24.8.0" src="https://img.shields.io/badge/Node.js-%5E22.22.0%20%7C%7C%20%3E%3D24.8.0-417e38?style=flat-square"></a>
+  <a href="package.json"><img alt="Node.js 版本要求 ^22.22.0 或 >=24.8.0" src="https://img.shields.io/badge/Node.js-22.22%2B%20%7C%2024.8%2B-417e38?style=flat-square"></a>
   <a href="docs/deployment.md"><img alt="Docker 镜像支持 amd64 和 arm64" src="https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-24618e?style=flat-square"></a>
 </p>
 
@@ -20,11 +22,11 @@
   <a href="#开发与文档">文档</a>
 </p>
 
+Second Mind 是面向单管理员的自托管 Obsidian 工作台。Claude Agent SDK 在所选知识库中检索和读取笔记。日记、计划和随心记先生成草稿，经你确认后才写回 Vault。
+
 ![真实问答示例，学习回顾区分已完成的基线和待确认的复现，并附上笔记来源](docs/assets/second-mind-qa.png)
 
 ## 快速开始
-
-<a name="桌面软件下载"></a>
 
 ### 方式一：桌面客户端（开箱即用）
 
@@ -86,30 +88,55 @@ Windows 11 x64 已实测本地与远程问答，Windows 10 x64 桌面安装待�
 
 以下界面来自独立演示库。点击缩略图可查看原图，核对真实 DeepSeek 问答的工具记录，或查看草稿保存前的内容。
 
-| 执行过程 | 配置管理 |
-| --- | --- |
-| [![展开的 SDK 执行过程](docs/assets/second-mind-execution.png)](docs/assets/second-mind-execution.png)<br>展开一次问答，查看 Agent 搜索和读取笔记的顺序。 | [![管理员配置模型连接](docs/assets/second-mind-provider-config.png)](docs/assets/second-mind-provider-config.png)<br>核对模型实际请求的地址，逐个检查供应商连接。 |
-
-| 日记草稿 | 计划草稿 |
-| --- | --- |
-| [![日记草稿的 Markdown 预览](docs/assets/second-mind-diary.png)](docs/assets/second-mind-diary.png)<br>对照日期检查编辑后的日记，再决定是否写入。 | [![计划草稿的预览和日程选项](docs/assets/second-mind-plan.png)](docs/assets/second-mind-plan.png)<br>检查计划正文，选择是否将事项加入每日安排。 |
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>执行过程</strong><br>
+      <a href="docs/assets/second-mind-execution.png"><img src="docs/assets/second-mind-execution.png" alt="搜索和读取笔记的工具记录" width="380"></a><br>
+      展开问答记录，查看搜索和读取笔记的顺序。
+    </td>
+    <td width="50%" valign="top">
+      <strong>配置管理</strong><br>
+      <a href="docs/assets/second-mind-provider-config.png"><img src="docs/assets/second-mind-provider-config.png" alt="管理员配置模型连接" width="380"></a><br>
+      核对实际请求地址，逐个检查模型连接。
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>日记草稿</strong><br>
+      <a href="docs/assets/second-mind-diary.png"><img src="docs/assets/second-mind-diary.png" alt="日记的 Markdown 预览" width="380"></a><br>
+      核对日期和正文，再决定是否保存。
+    </td>
+    <td width="50%" valign="top">
+      <strong>计划草稿</strong><br>
+      <a href="docs/assets/second-mind-plan.png"><img src="docs/assets/second-mind-plan.png" alt="计划预览和日程选项" width="380"></a><br>
+      检查计划正文，选择要加入每日安排的事项。
+    </td>
+  </tr>
+</table>
 
 <details>
 <summary>展开查看更多界面 · 原文段落定位 · 每日安排 · 移动端适配</summary>
 
-**原文段落定位**　从回答引用打开笔记，可直接看到高亮的证据段落。
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>原文段落定位</strong><br>
+      <a href="docs/assets/second-mind-source.png"><img src="docs/assets/second-mind-source.png" alt="原文预览中高亮的实验记录段落" width="380"></a><br>
+      点开回答引用，直接核对高亮的证据段落。
+    </td>
+    <td width="50%" valign="top">
+      <strong>每日安排</strong><br>
+      <a href="docs/assets/second-mind-schedule.png"><img src="docs/assets/second-mind-schedule.png" alt="同一天的两项日程及可编辑的时间" width="380"></a><br>
+      两项已确认的计划可分别调整开始时间和时长。
+    </td>
+  </tr>
+</table>
 
-<a href="docs/assets/second-mind-source.png"><img src="docs/assets/second-mind-source.png" alt="原文预览中高亮的实验记录段落" width="680"></a>
-
-**每日安排**　计划确认后，两个选中的事项出现在目标日期下，可分别调整开始时间和时长。
-
-<a href="docs/assets/second-mind-schedule.png"><img src="docs/assets/second-mind-schedule.png" alt="同一天的两项日程及可编辑的时间" width="680"></a>
-
-**移动端**　窄屏上的学习回顾仍保留模式切换、回答正文和追问输入框。
-
-<a href="docs/assets/second-mind-mobile.png"><img src="docs/assets/second-mind-mobile.png" alt="手机单栏布局中的学习回顾与追问入口" width="270"></a>
-
-[查看项目插画](docs/assets/second-mind-hero.png)
+<p align="center">
+  <a href="docs/assets/second-mind-mobile.png"><img src="docs/assets/second-mind-mobile.png" alt="手机单栏布局中的学习回顾与追问入口" width="280"></a>
+</p>
+<p align="center">移动端 · 在单栏视图中阅读回顾并继续追问。</p>
 
 </details>
 
@@ -117,16 +144,7 @@ Windows 11 x64 已实测本地与远程问答，Windows 10 x64 桌面安装待�
 
 桌面本机模式与 Docker 网页版共用同一套后端。连接远程工作区时，所选 Vault 的检索、会话和草稿均由远程服务处理。
 
-```mermaid
-flowchart TD
-  app["Second Mind 服务<br/>本机或服务器"] --> sdk["Claude Agent SDK"]
-  sdk -->|只读检索| vault["所选知识库<br/>Obsidian Vault"]
-  sdk --> relay["服务端转发<br/>本地回环连接"]
-  relay -->|BYOK| model["模型服务<br/>Anthropic Messages"]
-  app -->|生成草稿| draft["私有草稿<br/>位于 Vault 外"]
-  draft --> review["预览、编辑<br/>管理员确认"]
-  review -->|应用校验后写入| vault
-```
+[![Second Mind 工作流。只读工具检索所选 Vault，模型请求由服务端转发。库外草稿由管理员确认，应用校验后写回同一 Vault。](docs/assets/second-mind-workflow.svg)](docs/assets/second-mind-workflow.svg)
 
 ### 模型与数据边界
 

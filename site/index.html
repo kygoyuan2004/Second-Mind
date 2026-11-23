@@ -48,7 +48,7 @@
           <div class="hero-spread">
             <div>
               <p class="release-line">
-                <span>v0.2.1</span> · Claude Agent SDK <span class="release-context">· Self-Hosted Obsidian Workspace</span></p>
+                <span>v0.2.1</span> · <span class="release-context">自托管 Obsidian 知识工作台</span></p>
               <h1 id="hero-title">让每个答案<br>都<mark>可核验</mark>。</h1>
               <p class="lede">在自己的 Obsidian 知识库里提问。回到引用的那一行，核对本周的进展，再决定把什么写进明天。</p>
               <div class="actions">
@@ -127,7 +127,7 @@
         <article id="qa-replay" class="replay card" aria-labelledby="replay-title">
           <div class="replay-bar">
             <div><span class="book-sign" aria-hidden="true">▤</span><strong>LLM 推理技术学习</strong><code>deepseek-v4-pro-0813</code></div>
-            <span class="record-label">基于真实 SDK 轨迹采样 · 本地静态回放</span>
+            <span class="record-label">真实检索记录 · 本地回放</span>
           </div>
           <div class="replay-command interactive">
             <span class="replay-prompt-label" aria-hidden="true">采样问题</span>
@@ -190,7 +190,7 @@
                 <p class="file-path">LLM 推理技术学习 &gt; 投机解码.md &gt; 第 283-285 行</p>
                 <h4>[1] 候选生成</h4>
                 <div class="note-line"><b>283</b><span lang="zh-CN">一轮的完整过程是：</span></div>
-                <div class="note-line"><b>284</b><span lang="zh-CN"><mark>Draft：草稿模型自回归生成 $x_1,\ldots,x_\gamma$，并保存每一步的 $q_i(x)$。</mark></span></div>
+                <div class="note-line"><b>284</b><span lang="zh-CN"><mark>Draft：草稿模型自回归生成 x₁, …, xᵧ，并保存每一步的 qᵢ(x)。</mark></span></div>
                 <div class="note-line"><b>285</b><span lang="zh-CN">Verify：目标模型对整个候选块运行一次前向，得到：</span></div>
               </div>
               <div class="passage" role="group" id="passage-2" tabindex="-1" aria-label="引文 2">
@@ -414,7 +414,7 @@
       </section>
       <section id="privacy" class="section shell" data-sync-key="privacy" aria-labelledby="privacy-title">
         <h2 id="privacy-title">自己的密钥，自己的选择</h2>
-        <p class="intro">BYOK · 保存的 API Key 仅留在服务端，不回传浏览器，也不交给 SDK 子进程。</p>
+        <p class="intro">BYOK · 密钥保存在服务端。浏览器只显示是否已配置，服务端向所选供应商发起请求时才附上密钥。</p>
         <div class="provider card" data-tabs>
           <div class="tablist provider-tabs" role="tablist" aria-label="选择服务">
             <button type="button" role="tab" id="provider-tab-deepseek" aria-controls="provider-deepseek" aria-selected="true" tabindex="0">DeepSeek 官方</button>
@@ -455,13 +455,13 @@
         <h2 id="architecture-title">一条有边界的执行链</h2>
         <p class="intro">从浏览器或桌面应用发起请求，跟着这条线查看认证、检索和写入分别在哪里发生。</p>
         <div class="architecture card">
-          <svg viewBox="0 0 780 324" width="780" height="324" role="img" aria-label="本地客户端经认证访问 Second Mind，SDK 使用受限检索。只有服务端连接外部服务">
+          <svg viewBox="0 0 780 324" width="780" height="324" role="img" aria-label="客户端经认证访问 Second Mind，检索工具只读所选知识库。外部服务由服务端连接。">
             <path class="track" d="M44 39V283 M302 158H452Q468 158 468 142V113Q468 98 484 98H519"/>
             <path class="pulse" d="M44 39V283 M302 158H452Q468 158 468 142V113Q468 98 484 98H519"/>
             <circle class="node" cx="44" cy="35" r="7"/><text x="65" y="35" class="node-title">Browser / Desktop</text><text x="65" y="54">浏览器会话或本机桌面客户端</text>
             <circle class="node" cx="44" cy="96" r="7"/><text x="65" y="96" class="node-title">Auth &amp; Loopback Token</text><text x="65" y="115">管理员认证 / 桌面本机令牌</text>
             <circle class="node" cx="44" cy="157" r="7"/><text x="65" y="157" class="node-title">Second Mind Server</text><text x="65" y="176">凭据代理 · 任务编排 · 审核写入</text>
-            <circle class="node" cx="44" cy="218" r="7"/><text x="65" y="218" class="node-title">Claude Agent SDK</text><text x="65" y="237">sdk-v1 · 无 Bash / Write 工具</text>
+            <circle class="node" cx="44" cy="218" r="7"/><text x="65" y="218" class="node-title">受控检索引擎</text><text x="65" y="237">只读检索 · 无命令执行或直接写入权限</text>
             <circle class="node" cx="44" cy="279" r="7"/><text x="65" y="279" class="node-title">Index / Obsidian Vault</text><text x="65" y="298">独立索引 · 受控的笔记读取</text>
             <rect class="boundary" x="520" y="51" width="233" height="94" rx="7"/>
             <text x="536" y="81" class="node-title">External API Boundary</text><text x="536" y="109">LLM / Embedding / Search</text><text x="536" y="128">按配置发送</text>
@@ -474,7 +474,7 @@
             <li>
               <strong>Second Mind Server</strong><small>凭据代理 · 任务编排 · 审核写入</small></li>
             <li>
-              <strong>Claude Agent SDK</strong><small>sdk-v1 · 无 Bash / Write 工具</small></li>
+              <strong>受控检索引擎</strong><small>只读检索 · 无命令执行或直接写入权限</small></li>
             <li>
               <strong>Index / Obsidian Vault</strong><small>独立索引 · 受控的笔记读取</small></li>
             <li>

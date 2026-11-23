@@ -1,13 +1,15 @@
-<h1 align="center">Second Mind</h1>
+<p align="center">
+  <a href="docs/assets/second-mind-hero.png"><img src="docs/assets/second-mind-hero.png" alt="Second Mind · An owl among notes under a purple sky" width="820"></a>
+</p>
 
-<p align="center">A self-hosted Obsidian workspace where one administrator can search notes with the Claude Agent SDK, follow citations to the original passage, and review drafts before saving them to the Vault.</p>
+<p align="center"><strong>Ask your notes a question and follow the citations back to the source.</strong></p>
 
 <p align="center">
   <a href="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/ci.yml"><img alt="CI workflow status" src="https://img.shields.io/github/actions/workflow/status/kygoyuan2004/Second-Mind/ci.yml?branch=main&amp;label=CI&amp;style=flat-square"></a>
   <a href="https://github.com/kygoyuan2004/Second-Mind/actions/workflows/pages.yml"><img alt="Pages deployment status" src="https://img.shields.io/github/actions/workflow/status/kygoyuan2004/Second-Mind/pages.yml?branch=main&amp;label=Pages&amp;style=flat-square"></a>
   <a href="https://github.com/kygoyuan2004/Second-Mind/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/kygoyuan2004/Second-Mind?label=Release&amp;style=flat-square"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/License-MIT-546579?style=flat-square"></a>
-  <a href="package.json"><img alt="Node.js requirement ^22.22.0 or >=24.8.0" src="https://img.shields.io/badge/Node.js-%5E22.22.0%20%7C%7C%20%3E%3D24.8.0-417e38?style=flat-square"></a>
+  <a href="package.json"><img alt="Node.js requirement ^22.22.0 or >=24.8.0" src="https://img.shields.io/badge/Node.js-22.22%2B%20%7C%2024.8%2B-417e38?style=flat-square"></a>
   <a href="docs/deployment.md"><img alt="Docker images for amd64 and arm64" src="https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-24618e?style=flat-square"></a>
 </p>
 
@@ -20,11 +22,11 @@
   <a href="#development-and-docs">Docs</a>
 </p>
 
+Second Mind is a self-hosted Obsidian workspace for one administrator. The Claude Agent SDK searches and reads notes in the selected Vault. Diaries, plans and scratch notes start as drafts and reach the Vault only after you confirm.
+
 ![A learning review distinguishes a working baseline from an unconfirmed reproduction and cites the original demo notes](docs/assets/second-mind-qa.png)
 
 ## Quick start
-
-<a name="desktop-downloads"></a>
 
 ### Desktop app
 
@@ -86,30 +88,55 @@ Local and remote Q&A were tested on Windows 11 x64. Windows 10 x64 desktop insta
 
 These examples come from an isolated demo Vault. Open a thumbnail to inspect the tool calls from a real DeepSeek session or read a draft before it was saved.
 
-| Tool execution | Provider settings |
-| --- | --- |
-| [![Expanded SDK execution trace](docs/assets/second-mind-execution.png)](docs/assets/second-mind-execution.png)<br>Follow the order in which the agent searched for and read notes. | [![Administrator model connection settings](docs/assets/second-mind-provider-config.png)](docs/assets/second-mind-provider-config.png)<br>Inspect the request endpoint and check each provider connection. |
-
-| Diary draft | Plan draft |
-| --- | --- |
-| [![Markdown preview of an edited diary](docs/assets/second-mind-diary.png)](docs/assets/second-mind-diary.png)<br>Check the date and edited entry before saving the diary. | [![Plan preview with scheduling options](docs/assets/second-mind-plan.png)](docs/assets/second-mind-plan.png)<br>Read the plan and choose whether to add items to the daily schedule. |
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Tool execution</strong><br>
+      <a href="docs/assets/second-mind-execution.png"><img src="docs/assets/second-mind-execution.png" alt="Search and read events in order" width="380"></a><br>
+      Follow the order in which notes were found and read.
+    </td>
+    <td width="50%" valign="top">
+      <strong>Provider settings</strong><br>
+      <a href="docs/assets/second-mind-provider-config.png"><img src="docs/assets/second-mind-provider-config.png" alt="Administrator model connection settings" width="380"></a><br>
+      Check the request endpoint and test each connection.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Diary draft</strong><br>
+      <a href="docs/assets/second-mind-diary.png"><img src="docs/assets/second-mind-diary.png" alt="Markdown preview of an edited diary" width="380"></a><br>
+      Review the date and entry before saving.
+    </td>
+    <td width="50%" valign="top">
+      <strong>Plan draft</strong><br>
+      <a href="docs/assets/second-mind-plan.png"><img src="docs/assets/second-mind-plan.png" alt="Plan preview with scheduling options" width="380"></a><br>
+      Review the plan and choose items for the daily schedule.
+    </td>
+  </tr>
+</table>
 
 <details>
 <summary>More views · Source passages · Daily schedule · Mobile layout</summary>
 
-**Source passage.** Opening a citation highlights the supporting passage in the original note.
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Source passage</strong><br>
+      <a href="docs/assets/second-mind-source.png"><img src="docs/assets/second-mind-source.png" alt="Highlighted evidence in an experiment note" width="380"></a><br>
+      Open a citation to see the supporting passage highlighted.
+    </td>
+    <td width="50%" valign="top">
+      <strong>Daily schedule</strong><br>
+      <a href="docs/assets/second-mind-schedule.png"><img src="docs/assets/second-mind-schedule.png" alt="Two scheduled items with editable times" width="380"></a><br>
+      Adjust the start time and duration of each confirmed item.
+    </td>
+  </tr>
+</table>
 
-<a href="docs/assets/second-mind-source.png"><img src="docs/assets/second-mind-source.png" alt="Highlighted evidence in an experiment note" width="680"></a>
-
-**Daily schedule.** Two confirmed items appear under their target date, each with its own start time and duration.
-
-<a href="docs/assets/second-mind-schedule.png"><img src="docs/assets/second-mind-schedule.png" alt="Two scheduled items with editable times" width="680"></a>
-
-**Mobile layout.** The single-column review keeps the mode switcher, answer and follow-up field together.
-
-<a href="docs/assets/second-mind-mobile.png"><img src="docs/assets/second-mind-mobile.png" alt="Learning review and follow-up field on a phone" width="270"></a>
-
-[View the project illustration](docs/assets/second-mind-hero.png)
+<p align="center">
+  <a href="docs/assets/second-mind-mobile.png"><img src="docs/assets/second-mind-mobile.png" alt="Learning review and follow-up field on a phone" width="280"></a>
+</p>
+<p align="center">Mobile view · Read a review and ask a follow-up in one column.</p>
 
 </details>
 
@@ -117,16 +144,7 @@ These examples come from an isolated demo Vault. Open a thumbnail to inspect the
 
 Local desktop mode and Docker Web share the same backend. When you connect to a remote workspace, its server handles retrieval, sessions and drafts for the selected Vault.
 
-```mermaid
-flowchart TD
-  app["Second Mind server<br/>Local or hosted"] --> sdk["Claude Agent SDK"]
-  sdk -->|Read-only tools| vault["Selected<br/>Obsidian Vault"]
-  sdk --> relay["Server transport<br/>over loopback"]
-  relay -->|BYOK| model["Model provider<br/>Anthropic Messages"]
-  app -->|Generate draft| draft["Private draft<br/>outside the Vault"]
-  draft --> review["Admin reviews, edits<br/>and confirms"]
-  review -->|Validated write| vault
-```
+[![Second Mind workflow. Read-only tools search the selected Vault. The server forwards model requests. An administrator reviews drafts outside the Vault before the app validates and saves them.](docs/assets/second-mind-workflow.svg)](docs/assets/second-mind-workflow.svg)
 
 ### Runtime and privacy
 

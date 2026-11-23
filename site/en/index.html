@@ -48,7 +48,7 @@
           <div class="hero-spread">
             <div>
               <p class="release-line">
-                <span>v0.2.1</span> · Claude Agent SDK <span class="release-context">· Self-Hosted Obsidian Workspace</span></p>
+                <span>v0.2.1</span> · <span class="release-context">Self-hosted Obsidian workspace</span></p>
               <h1 id="hero-title">Your notes.<br><mark>Verifiable</mark> answers.</h1>
               <p class="lede">Ask your Obsidian Vault a question. Trace the answer to the exact line, review your week, and decide what belongs in tomorrow’s plan.</p>
               <div class="actions">
@@ -127,7 +127,7 @@
         <article id="qa-replay" class="replay card" aria-labelledby="replay-title">
           <div class="replay-bar">
             <div><span class="book-sign" aria-hidden="true">▤</span><strong>LLM inference notes</strong><code>deepseek-v4-pro-0813</code></div>
-            <span class="record-label">Sampled from real SDK trace · Static replay</span>
+            <span class="record-label">Recorded search · Local replay</span>
           </div>
           <div class="replay-command interactive">
             <span class="replay-prompt-label" aria-hidden="true">Recorded question</span>
@@ -190,7 +190,7 @@
                 <p class="file-path">LLM inference notes &gt; speculative-decoding.md &gt; Lines 283-285</p>
                 <h4>[1] Draft generation</h4>
                 <div class="note-line"><b>283</b><span>A full iteration runs as follows:</span></div>
-                <div class="note-line"><b>284</b><span><mark>Draft: the draft model autoregressively generates $x_1,\ldots,x_\gamma$ and saves $q_i(x)$ at each step.</mark></span></div>
+                <div class="note-line"><b>284</b><span><mark>Draft: the draft model autoregressively generates x₁, …, xᵧ and saves qᵢ(x) at each step.</mark></span></div>
                 <div class="note-line"><b>285</b><span>Verify: the target model runs one forward pass over the candidate block to obtain:</span></div>
                 <p class="translation"><strong>Trace note</strong> Translated from the sampled Vault note with original line numbers preserved.</p>
               </div>
@@ -417,7 +417,7 @@
       </section>
       <section id="privacy" class="section shell" data-sync-key="privacy" aria-labelledby="privacy-title">
         <h2 id="privacy-title">Bring your own keys</h2>
-        <p class="intro">BYOK · Stored API keys stay on your server. The browser cannot read them back, and SDK subprocesses receive a temporary local token.</p>
+        <p class="intro">BYOK · Stored API keys stay on your server. The browser can only check whether a key is configured. Only the server attaches it to requests to your provider.</p>
         <div class="provider card" data-tabs>
           <div class="tablist provider-tabs" role="tablist" aria-label="Explore services">
             <button type="button" role="tab" id="provider-tab-deepseek" aria-controls="provider-deepseek" aria-selected="true" tabindex="0">DeepSeek</button>
@@ -458,13 +458,13 @@
         <h2 id="architecture-title">Where a request travels</h2>
         <p class="intro">Follow a request from the browser or desktop app through authentication, scoped reads and a confirmed write.</p>
         <div class="architecture card">
-          <svg viewBox="0 0 780 324" width="780" height="324" role="img" aria-label="Authenticated clients reach Second Mind and scoped SDK tools. The server connects to optional external services.">
+          <svg viewBox="0 0 780 324" width="780" height="324" role="img" aria-label="Authenticated clients reach Second Mind. Retrieval tools read the selected Vault. The server connects to optional external services.">
             <path class="track" d="M44 39V283 M302 158H452Q468 158 468 142V113Q468 98 484 98H519"/>
             <path class="pulse" d="M44 39V283 M302 158H452Q468 158 468 142V113Q468 98 484 98H519"/>
             <circle class="node" cx="44" cy="35" r="7"/><text x="65" y="35" class="node-title">Browser / Desktop</text><text x="65" y="54">Browser session or desktop client</text>
             <circle class="node" cx="44" cy="96" r="7"/><text x="65" y="96" class="node-title">Auth &amp; Loopback Token</text><text x="65" y="115">Admin authentication / desktop loopback token</text>
             <circle class="node" cx="44" cy="157" r="7"/><text x="65" y="157" class="node-title">Second Mind Server</text><text x="65" y="176">Credential proxy · tasks · approved writes</text>
-            <circle class="node" cx="44" cy="218" r="7"/><text x="65" y="218" class="node-title">Claude Agent SDK</text><text x="65" y="237">sdk-v1 · no Bash / Write tools</text>
+            <circle class="node" cx="44" cy="218" r="7"/><text x="65" y="218" class="node-title">Scoped retrieval engine</text><text x="65" y="237">Read-only · No shell or direct writes</text>
             <circle class="node" cx="44" cy="279" r="7"/><text x="65" y="279" class="node-title">Index / Obsidian Vault</text><text x="65" y="298">Isolated index · bounded note reads</text>
             <rect class="boundary" x="520" y="51" width="233" height="94" rx="7"/>
             <text x="536" y="81" class="node-title">External API Boundary</text><text x="536" y="109">LLM / Embedding / Search</text><text x="536" y="128">Enabled by configuration</text>
@@ -477,7 +477,7 @@
             <li>
               <strong>Second Mind Server</strong><small>Credential proxy · tasks · approved writes</small></li>
             <li>
-              <strong>Claude Agent SDK</strong><small>sdk-v1 · no Bash / Write tools</small></li>
+              <strong>Scoped retrieval engine</strong><small>Read-only · No shell or direct writes</small></li>
             <li>
               <strong>Index / Obsidian Vault</strong><small>Isolated index · bounded note reads</small></li>
             <li>

@@ -130,8 +130,8 @@
             <span class="record-label">基于真实 SDK 轨迹采样 · 本地静态回放</span>
           </div>
           <div class="replay-command interactive">
-            <label for="replay-question">采样问题</label>
-            <input type="text" id="replay-question" readonly value="投机解码是什么？">
+            <span class="replay-prompt-label" aria-hidden="true">采样问题</span>
+            <p class="replay-prompt"><span class="sr-only">采样问题：</span>投机解码是什么？</p>
             <button type="button" class="button primary" data-send>发送</button>
             <button type="button" class="button" data-skip hidden>跳到结果</button>
           </div>
@@ -144,7 +144,7 @@
               </div>
               <p class="question-bubble">投机解码是什么？</p>
               <details class="sample-log" open>
-                <summary>执行日志 <span>任务总耗时 55.5 s</span></summary>
+                <summary><span class="log-heading">执行日志</span><span class="log-meta">6 步调用 · 实采 55.5 s (加速回放)</span><span class="log-toggle-hint" aria-hidden="true"></span></summary>
                 <ol>
                   <li data-outcome="ok">
                     <span class="log-state" aria-hidden="true"></span><span><code>KnowledgeSearch</code> <small>203 ms</small><span class="log-detail">词法匹配 + BM25 · 11 个候选，跳过向量检索</span></span><span class="sr-only">完成</span>
@@ -187,20 +187,20 @@
                 <ol><li><span>候选生成</span><code>L284</code></li><li><span>并行验证</span><code>L267</code></li><li><span>加速边界</span><code>L241</code></li></ol>
               </div>
               <div class="passage" role="group" id="passage-1" tabindex="-1" aria-label="引文 1">
-                <p class="file-path">learning_doc/项目/LLM推理技术学习/投机解码.md · L283-285</p>
+                <p class="file-path">LLM 推理技术学习 &gt; 投机解码.md &gt; 第 283-285 行</p>
                 <h4>[1] 候选生成</h4>
                 <div class="note-line"><b>283</b><span lang="zh-CN">一轮的完整过程是：</span></div>
                 <div class="note-line"><b>284</b><span lang="zh-CN"><mark>Draft：草稿模型自回归生成 $x_1,\ldots,x_\gamma$，并保存每一步的 $q_i(x)$。</mark></span></div>
                 <div class="note-line"><b>285</b><span lang="zh-CN">Verify：目标模型对整个候选块运行一次前向，得到：</span></div>
               </div>
               <div class="passage" role="group" id="passage-2" tabindex="-1" aria-label="引文 2">
-                <p class="file-path">learning_doc/项目/LLM推理技术学习/投机解码.md · L267-268</p>
+                <p class="file-path">LLM 推理技术学习 &gt; 投机解码.md &gt; 第 267-268 行</p>
                 <h4>[2] 并行验证</h4>
                 <div class="note-line"><b>267</b><span lang="zh-CN">草稿一旦给出，目标模型就暂时获得了一个完整的“假设前缀”。<mark>Transformer 可以在 causal mask 下，把这些已知候选位置组成一个 block，在一次前向中并行算出每个位置的目标分布。</mark></span></div>
                 <div class="note-line"><b>268</b><span lang="zh-CN">这类似 CPU 的分支预测：先沿着可能的路径执行，再验证这条路径是否正确。</span></div>
               </div>
               <div class="passage" role="group" id="passage-3" tabindex="-1" aria-label="引文 3">
-                <p class="file-path">learning_doc/项目/LLM推理技术学习/投机解码.md · L241-243</p>
+                <p class="file-path">LLM 推理技术学习 &gt; 投机解码.md &gt; 第 241-243 行</p>
                 <h4>[3] 加速边界</h4>
                 <div class="note-line"><b>241</b><span lang="zh-CN">它主要优化 Decode 的 TPOT/ITL，不会明显加速 Prefill。<mark>低并发、长输出、访存受限时最容易获益；大 batch、高并发、Prefill 占主导时收益会下降，甚至变慢。</mark></span></div>
                 <div class="note-line"><b>242</b><span lang="zh-CN">---</span></div>

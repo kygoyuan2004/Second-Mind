@@ -130,8 +130,8 @@
             <span class="record-label">Sampled from real SDK trace · Static replay</span>
           </div>
           <div class="replay-command interactive">
-            <label for="replay-question">Recorded question</label>
-            <input type="text" id="replay-question" readonly value="What is speculative decoding?">
+            <span class="replay-prompt-label" aria-hidden="true">Recorded question</span>
+            <p class="replay-prompt"><span class="sr-only">Recorded question: </span>What is speculative decoding?</p>
             <button type="button" class="button primary" data-send>Send</button>
             <button type="button" class="button" data-skip hidden>Skip</button>
           </div>
@@ -144,70 +144,70 @@
               </div>
               <p class="question-bubble">What is speculative decoding?</p>
               <details class="sample-log" open>
-                <summary>Tool trace <span>Full run 55.5 s</span></summary>
+                <summary><span class="log-heading">Tool trace</span><span class="log-meta">6 calls · 55.5 s run (accelerated)</span><span class="log-toggle-hint" aria-hidden="true"></span></summary>
                 <ol>
                   <li data-outcome="ok">
                     <span class="log-state" aria-hidden="true"></span><span><code>KnowledgeSearch</code> <small>203 ms</small><span class="log-detail">Lexical match + BM25 · 11 candidates, embedding skipped</span></span><span class="sr-only">Completed</span>
                   </li>
                   <li data-outcome="ok">
-                    <span class="log-state" aria-hidden="true"></span><span><code>Read</code> <small>21 ms</small><span class="log-detail">投机解码.md · lines 1 to 621</span></span><span class="sr-only">Completed</span>
+                    <span class="log-state" aria-hidden="true"></span><span><code>Read</code> <small>21 ms</small><span class="log-detail">speculative-decoding.md · lines 1 to 621</span></span><span class="sr-only">Completed</span>
                   </li>
                   <li data-outcome="ok">
-                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>9 ms</small><span class="log-detail">投机解码.md · line 284</span></span><span class="sr-only">Completed</span>
+                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>9 ms</small><span class="log-detail">speculative-decoding.md · line 284</span></span><span class="sr-only">Completed</span>
                   </li>
                   <li data-outcome="ok">
-                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>6 ms</small><span class="log-detail">投机解码.md · line 267</span></span><span class="sr-only">Completed</span>
+                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>6 ms</small><span class="log-detail">speculative-decoding.md · line 267</span></span><span class="sr-only">Completed</span>
                   </li>
                   <li data-outcome="retry">
                     <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>10 ms</small><span class="log-detail">Quote did not match a continuous passage. Retry requested.</span></span><span class="sr-only">Retry required</span>
                   </li>
                   <li data-outcome="ok">
-                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>4 ms</small><span class="log-detail">投机解码.md · matched on retry at line 241</span></span><span class="sr-only">Completed</span>
+                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>4 ms</small><span class="log-detail">speculative-decoding.md · matched on retry at line 241</span></span><span class="sr-only">Completed</span>
                   </li>
                 </ol>
               </details>
               <div class="recorded-answer">
                 <h4>Recorded answer</h4>
-                <p data-answer-block><strong>Draft generation</strong> A low-cost draft model (distribution q) proposes a sequence of tokens autoregressively. This gives the target model a hypothetical prefix to verify. The draft model introduces parallelism. Its quality affects the acceptance rate but leaves the final distribution intact. <a class="ref" href="#passage-1" aria-label="Inspect source 1">[1]</a></p>
-                <p data-answer-block><strong>Parallel verification</strong> With the candidate tokens in place, the target model (distribution p) can evaluate a whole block in one forward pass. A causal mask lets it compute the target distribution at each candidate position in parallel, using one read of the weights across several positions. <a class="ref" href="#passage-2" aria-label="Inspect source 2">[2]</a></p>
+                <p data-answer-block><strong>Draft generation</strong> A low-cost draft model (distribution <var>q</var>) proposes a sequence of tokens autoregressively. This gives the target model a hypothetical prefix to verify. The draft model introduces parallelism. Its quality affects the acceptance rate but leaves the final distribution intact. <a class="ref" href="#passage-1" aria-label="Inspect source 1">[1]</a></p>
+                <p data-answer-block><strong>Parallel verification</strong> With the candidate tokens in place, the target model (distribution <var>p</var>) can evaluate a whole block in one forward pass. A causal mask lets it compute the target distribution at each candidate position in parallel, using one read of the weights across several positions. <a class="ref" href="#passage-2" aria-label="Inspect source 2">[2]</a></p>
                 <p data-answer-block><strong>Limits to the speedup</strong> Speculative decoding tackles the memory bottleneck during decoding. The sampled answer says that fewer sequential steps and weight reads lower time to first token. It also says total FLOPs do not fall, prefill is unaffected, and gains are greatest at low concurrency with long, memory-bound outputs. At large batch sizes or high concurrency, the gain can shrink or reverse. <a class="ref" href="#passage-3" aria-label="Inspect source 3">[3]</a></p>
                 <p class="editor-note" data-answer-block><strong>Source check</strong> The answer mentions time to first token. Line 241 identifies time per output token (TPOT/ITL) as the gain and says prefill sees little speedup. <a class="ref" href="#passage-3" aria-label="Inspect source 3">[3]</a></p>
                 <div class="source-links" role="group" aria-label="Cited passages">
-                  <a href="#passage-1">[1] 投机解码.md · L284</a>
-                  <a href="#passage-2">[2] 投机解码.md · L267</a>
-                  <a href="#passage-3">[3] 投机解码.md · L241</a>
+                  <a href="#passage-1">[1] speculative-decoding.md · L284</a>
+                  <a href="#passage-2">[2] speculative-decoding.md · L267</a>
+                  <a href="#passage-3">[3] speculative-decoding.md · L241</a>
                 </div>
               </div>
             </div>
             <div class="proof" role="group" aria-label="Source verification">
               <p class="proof-label">Knowledge source</p>
               <div class="source-cover interactive">
-                <p class="cover-file">投机解码.md</p>
-                <p>One technical note, three exact passages. Open a highlighted line once the answer is ready.</p>
+                <p class="cover-file">speculative-decoding.md</p>
+                <p>One technical note, three exact passages translated from the sampled run. Open a highlighted line once the answer is ready.</p>
                 <ol><li><span>Draft generation</span><code>L284</code></li><li><span>Parallel verification</span><code>L267</code></li><li><span>Limits to the speedup</span><code>L241</code></li></ol>
               </div>
               <div class="passage" role="group" id="passage-1" tabindex="-1" aria-label="Source 1">
-                <p class="file-path">learning_doc/项目/LLM推理技术学习/投机解码.md · L283-285</p>
+                <p class="file-path">LLM inference notes &gt; speculative-decoding.md &gt; Lines 283-285</p>
                 <h4>[1] Draft generation</h4>
-                <div class="note-line"><b>283</b><span lang="zh-CN">一轮的完整过程是：</span></div>
-                <div class="note-line"><b>284</b><span lang="zh-CN"><mark>Draft：草稿模型自回归生成 $x_1,\ldots,x_\gamma$，并保存每一步的 $q_i(x)$。</mark></span></div>
-                <div class="note-line"><b>285</b><span lang="zh-CN">Verify：目标模型对整个候选块运行一次前向，得到：</span></div>
-                <p class="translation"><strong>Translation</strong> Draft: The draft model generates the candidate tokens autoregressively and saves the distribution at each step.</p>
+                <div class="note-line"><b>283</b><span>A full iteration runs as follows:</span></div>
+                <div class="note-line"><b>284</b><span><mark>Draft: the draft model autoregressively generates $x_1,\ldots,x_\gamma$ and saves $q_i(x)$ at each step.</mark></span></div>
+                <div class="note-line"><b>285</b><span>Verify: the target model runs one forward pass over the candidate block to obtain:</span></div>
+                <p class="translation"><strong>Trace note</strong> Translated from the sampled Vault note with original line numbers preserved.</p>
               </div>
               <div class="passage" role="group" id="passage-2" tabindex="-1" aria-label="Source 2">
-                <p class="file-path">learning_doc/项目/LLM推理技术学习/投机解码.md · L267-268</p>
+                <p class="file-path">LLM inference notes &gt; speculative-decoding.md &gt; Lines 267-268</p>
                 <h4>[2] Parallel verification</h4>
-                <div class="note-line"><b>267</b><span lang="zh-CN">草稿一旦给出，目标模型就暂时获得了一个完整的“假设前缀”。<mark>Transformer 可以在 causal mask 下，把这些已知候选位置组成一个 block，在一次前向中并行算出每个位置的目标分布。</mark></span></div>
-                <div class="note-line"><b>268</b><span lang="zh-CN">这类似 CPU 的分支预测：先沿着可能的路径执行，再验证这条路径是否正确。</span></div>
-                <p class="translation"><strong>Translation</strong> Under a causal mask, the Transformer can group the known candidate positions into a block and compute all of their target distributions in parallel in one forward pass.</p>
+                <div class="note-line"><b>267</b><span>Once the draft is proposed, the target model temporarily has a complete &ldquo;hypothetical prefix&rdquo;. <mark>Under a causal mask, the Transformer can group these known candidate positions into a block and compute the target distribution for every position in parallel in one forward pass.</mark></span></div>
+                <div class="note-line"><b>268</b><span>This resembles CPU branch prediction: execute along a likely path first, then verify whether that path holds.</span></div>
+                <p class="translation"><strong>Trace note</strong> Translated from the sampled Vault note with original line numbers preserved.</p>
               </div>
               <div class="passage" role="group" id="passage-3" tabindex="-1" aria-label="Source 3">
-                <p class="file-path">learning_doc/项目/LLM推理技术学习/投机解码.md · L241-243</p>
+                <p class="file-path">LLM inference notes &gt; speculative-decoding.md &gt; Lines 241-243</p>
                 <h4>[3] Limits to the speedup</h4>
-                <div class="note-line"><b>241</b><span lang="zh-CN">它主要优化 Decode 的 TPOT/ITL，不会明显加速 Prefill。<mark>低并发、长输出、访存受限时最容易获益；大 batch、高并发、Prefill 占主导时收益会下降，甚至变慢。</mark></span></div>
-                <div class="note-line"><b>242</b><span lang="zh-CN">---</span></div>
-                <div class="note-line"><b>243</b><span lang="zh-CN">1. 它要解决什么问题</span></div>
-                <p class="translation"><strong>Translation</strong> Low concurrency, long outputs and memory-bound decoding offer the best gains. At large batch sizes, high concurrency, or when prefill dominates, the benefit shrinks and may reverse.</p>
+                <div class="note-line"><b>241</b><span>It mainly optimizes Decode TPOT/ITL and does not noticeably accelerate Prefill. <mark>Gains are largest under low concurrency, long outputs and memory-bound decoding; under large batch sizes, high concurrency or prefill-dominated workloads, the benefit shrinks and may reverse.</mark></span></div>
+                <div class="note-line"><b>242</b><span>---</span></div>
+                <div class="note-line"><b>243</b><span>1. What problem does it solve</span></div>
+                <p class="translation"><strong>Trace note</strong> Translated from the sampled Vault note with original line numbers preserved.</p>
               </div>
             </div>
           </div>

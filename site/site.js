@@ -105,52 +105,79 @@ function setupSampleReplay(workspace) {
   const guide = workspace.querySelector('.ready-guide');
   const question = workspace.querySelector('.question-bubble');
   const log = workspace.querySelector('.sample-log');
+  const logSummary = log.querySelector('summary');
   const rows = [...log.querySelectorAll('li')];
   const answer = workspace.querySelector('.recorded-answer');
   const paragraphs = [...answer.querySelectorAll('[data-answer-block]')];
+  const snapshots = paragraphs.map(block => block.cloneNode(true));
   const files = workspace.querySelector('.source-links');
-  const references = [...answer.querySelectorAll('a')];
   const cover = workspace.querySelector('.source-cover');
   const passages = [...workspace.querySelectorAll('.passage')];
   const status = workspace.querySelector('[data-replay-status]');
   let timer;
+  let userSelectedPassage = false;
+  let userToggledLog = false;
+  let activePassageId = null;
 
-  function selectPassage(passage, navigate) {
-    cover.hidden = true;
-    passages.forEach(item => { item.hidden = item !== passage; });
-    references.forEach(link => {
-      if (link.hash === '#' + passage.id) link.setAttribute('aria-current', 'true');
+  function syncReferenceState() {
+    const allLinks = [...answer.querySelectorAll('a[href^="#passage-"]')];
+    allLinks.forEach(link => {
+      const active = activePassageId !== null && link.hash === '#' + activePassageId;
+      link.classList.toggle('is-active', active);
+      if (active) link.setAttribute('aria-current', 'true');
       else link.removeAttribute('aria-current');
     });
+  }
+
+  function selectPassage(passage, navigate, fromUser = false) {
+    if (!passage) return;
+    if (fromUser) userSelectedPassage = true;
+    activePassageId = passage.id;
+    cover.hidden = true;
+    passages.forEach(item => { item.hidden = item !== passage; });
+    syncReferenceState();
     const mark = passage.querySelector('mark');
-    mark.classList.remove('sweep');
-    void mark.offsetWidth;
-    mark.classList.add('sweep');
+    if (mark) {
+      mark.classList.remove('sweep');
+      void mark.offsetWidth;
+      mark.classList.add('sweep');
+    }
     if (navigate) {
       passage.focus({ preventScroll: true });
       requestAnimationFrame(() => {
         if (passage.hidden) return;
         const compact = matchMedia('(max-width: 768px)').matches;
-        const bounds = mark.getBoundingClientRect();
+        const bounds = (mark || passage).getBoundingClientRect();
         if (compact || bounds.top < 72 || bounds.bottom > innerHeight) {
-          const target = compact ? passage : mark;
+          const target = compact ? passage : (mark || passage);
           target.scrollIntoView({ behavior: motion.matches ? 'instant' : 'smooth', block: compact ? 'start' : 'nearest' });
         }
       });
     }
   }
 
+  function restoreParagraphs() {
+    paragraphs.forEach((block, i) => {
+      block.classList.remove('is-streaming-block');
+      block.replaceChildren(...snapshots[i].cloneNode(true).childNodes);
+    });
+    syncReferenceState();
+  }
+
   function clearPlayback() {
     clearTimeout(timer);
+    userSelectedPassage = false;
+    userToggledLog = false;
+    activePassageId = null;
     question.hidden = true;
     log.hidden = true;
     log.open = true;
     answer.hidden = true;
     files.hidden = true;
     cover.hidden = false;
+    restoreParagraphs();
     [...rows, ...paragraphs, ...passages].forEach(item => { item.hidden = true; });
     rows.forEach(row => row.classList.remove('pending-call'));
-    references.forEach(link => link.removeAttribute('aria-current'));
   }
 
   function finish() {
@@ -159,19 +186,85 @@ function setupSampleReplay(workspace) {
     if (document.activeElement === skip) send.focus({ preventScroll: true });
     skip.hidden = true;
     question.hidden = log.hidden = answer.hidden = files.hidden = false;
+    restoreParagraphs();
     [...rows, ...paragraphs].forEach(item => { item.hidden = false; });
     rows.forEach(row => row.classList.remove('pending-call'));
-    if (!cover.hidden) selectPassage(passages[0], false);
-    status.textContent = label('回答就绪，可核对三条引文。', 'Answer ready. Three passages are available for inspection.');
+    if (matchMedia('(max-width: 639px)').matches && !userToggledLog) {
+      log.open = false;
+    }
+    if (!userSelectedPassage) selectPassage(passages[0], false, false);
+    else syncReferenceState();
+    status.textContent = label('回答完成，共 3 条来源可核对。', 'Answer complete. 3 sources are ready to inspect.');
+  }
+
+  function prepareStreamSteps(block, snapshot) {
+    const clone = snapshot.cloneNode(true);
+    const steps = [];
+    function walk(node) {
+      for (const child of [...node.childNodes]) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          const full = child.nodeValue;
+          if (!full) continue;
+          child.nodeValue = '';
+          steps.push({ kind: 'text', node: child, full });
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+          if (child.matches('a.ref')) {
+            child.hidden = true;
+            steps.push({ kind: 'ref', node: child });
+          } else {
+            walk(child);
+          }
+        }
+      }
+    }
+    walk(clone);
+    block.replaceChildren(...clone.childNodes);
+    return steps;
   }
 
   function streamAnswer(index) {
     answer.hidden = false;
-    paragraphs[index].hidden = false;
-    timer = setTimeout(() => {
-      if (index + 1 === paragraphs.length) finish();
-      else streamAnswer(index + 1);
-    }, 650);
+    const block = paragraphs[index];
+    const steps = prepareStreamSteps(block, snapshots[index]);
+    block.hidden = false;
+    block.classList.add('is-streaming-block');
+
+    const totalChars = steps.reduce((sum, step) => sum + (step.kind === 'text' ? step.full.length : 1), 0);
+    const targetMs = index === paragraphs.length - 1 ? 420 : 720;
+    const tickMs = 26;
+    const charsPerTick = Math.max(2, Math.ceil(totalChars / Math.max(1, Math.round(targetMs / tickMs))));
+    let stepIndex = 0;
+    let charOffset = 0;
+
+    function tick() {
+      let budget = charsPerTick;
+      while (budget > 0 && stepIndex < steps.length) {
+        const current = steps[stepIndex];
+        if (current.kind === 'ref') {
+          current.node.hidden = false;
+          syncReferenceState();
+          stepIndex += 1;
+          budget -= 1;
+        } else {
+          const nextOffset = Math.min(current.full.length, charOffset + budget);
+          current.node.nodeValue = current.full.slice(0, nextOffset);
+          budget -= (nextOffset - charOffset);
+          charOffset = nextOffset;
+          if (charOffset >= current.full.length) {
+            stepIndex += 1;
+            charOffset = 0;
+          }
+        }
+      }
+      if (stepIndex < steps.length) {
+        timer = setTimeout(tick, tickMs);
+      } else {
+        block.classList.remove('is-streaming-block');
+        if (index + 1 === paragraphs.length) finish();
+        else timer = setTimeout(() => streamAnswer(index + 1), 90);
+      }
+    }
+    tick();
   }
 
   function streamCall(index) {
@@ -181,9 +274,15 @@ function setupSampleReplay(workspace) {
     row.classList.add('pending-call');
     timer = setTimeout(() => {
       row.classList.remove('pending-call');
-      if (index + 1 === rows.length) streamAnswer(0);
-      else streamCall(index + 1);
-    }, 420);
+      if (index + 1 === rows.length) {
+        if (matchMedia('(max-width: 639px)').matches && !userToggledLog) {
+          log.open = false;
+        }
+        streamAnswer(0);
+      } else {
+        streamCall(index + 1);
+      }
+    }, 400);
   }
 
   function play() {
@@ -197,22 +296,25 @@ function setupSampleReplay(workspace) {
       return;
     }
     skip.hidden = false;
-    status.textContent = label('正在回放采样轨迹。', 'Playing the recorded trace.');
+    status.textContent = label('正在检索并回放采样轨迹。', 'Searching notes and replaying the recorded trace.');
     timer = setTimeout(() => streamCall(0), 160);
   }
 
   clearPlayback();
   workspace.dataset.phase = 'ready';
+  onScreen(workspace, seen => workspace.classList.toggle('in-view', seen));
+  logSummary.addEventListener('click', () => { userToggledLog = true; });
   send.addEventListener('click', play);
   skip.addEventListener('click', finish);
   motion.addEventListener('change', () => {
     if (motion.matches && workspace.dataset.phase === 'playing') finish();
   });
-  references.forEach(link => link.addEventListener('click', event => {
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  answer.addEventListener('click', event => {
+    const link = event.target.closest('a[href^="#passage-"]');
+    if (!link || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    selectPassage(document.getElementById(link.hash.slice(1)), true);
-  }));
+    selectPassage(document.getElementById(link.hash.slice(1)), true, true);
+  });
 }
 setupSampleReplay(document.querySelector('#qa-replay'));
 

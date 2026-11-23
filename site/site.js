@@ -1,467 +1,248 @@
 document.documentElement.classList.add('js');
 
-const english = document.documentElement.lang === 'en';
-const label = (zh, en) => english ? en : zh;
+const en = document.documentElement.lang === 'en';
+const label = (zh, english) => en ? english : zh;
 const motion = matchMedia('(prefers-reduced-motion: reduce)');
 
 const menu = document.querySelector('.nav-toggle');
-const links = document.querySelector('.nav-links');
-function openMenu(open) {
+const menuLinks = document.getElementById('nav-links');
+function toggleMenu(open) {
   menu.setAttribute('aria-expanded', String(open));
-  links.classList.toggle('open', open);
+  menuLinks.classList.toggle('open', open);
 }
-menu.addEventListener('click', () => openMenu(menu.getAttribute('aria-expanded') !== 'true'));
-links.addEventListener('click', (event) => {
-  if (event.target.closest('a')) openMenu(false);
+menu.addEventListener('click', () => toggleMenu(menu.getAttribute('aria-expanded') !== 'true'));
+document.addEventListener('click', event => {
+  if (!event.target.closest('.nav') || event.target.closest('.nav a')) toggleMenu(false);
 });
-document.addEventListener('keydown', (event) => {
+document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && menu.getAttribute('aria-expanded') === 'true') {
-    openMenu(false);
+    toggleMenu(false);
     menu.focus();
   }
 });
 
-function onScreen(element, change) {
-  if (!('IntersectionObserver' in window)) {
-    change(true);
-    return;
+function selectTab(tab) {
+  for (const sibling of tab.parentElement.querySelectorAll('[role="tab"]')) {
+    const selected = tab === sibling;
+    sibling.setAttribute('aria-selected', String(selected));
+    sibling.tabIndex = selected ? 0 : -1;
+    document.getElementById(sibling.getAttribute('aria-controls')).hidden = !selected;
   }
-  const observer = new IntersectionObserver(([entry]) => change(entry.isIntersecting));
-  observer.observe(element);
 }
-
-function setupTabs(group) {
-  const tabs = Array.from(group.querySelectorAll('[role="tab"]'));
-  const panels = tabs.map(tab => document.getElementById(tab.getAttribute('aria-controls')));
-  let current = 0;
-  function select(index, focus = false) {
-    current = index;
-    tabs.forEach((tab, i) => {
-      tab.setAttribute('aria-selected', String(i === index));
-      tab.tabIndex = i === index ? 0 : -1;
-      panels[i].hidden = i !== index;
-    });
-    group.style.setProperty('--slide', index);
-    if (focus) tabs[index].focus();
-    group.dispatchEvent(new Event('tabchange'));
-  }
+for (const group of document.querySelectorAll('[role="tablist"]')) {
+  const tabs = [...group.children];
+  selectTab(tabs[0]);
   tabs.forEach((tab, i) => {
-    tab.addEventListener('click', () => select(i));
+    tab.addEventListener('click', () => selectTab(tab));
     tab.addEventListener('keydown', event => {
-      const next = { ArrowRight: i + 1, ArrowLeft: i - 1, ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: tabs.length - 1 }[event.key];
+      const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[event.key];
       if (next === undefined) return;
       event.preventDefault();
-      select((next + tabs.length) % tabs.length, true);
+      const selected = tabs[(next + tabs.length) % tabs.length];
+      selectTab(selected);
+      selected.focus();
     });
   });
-  select(0);
-  return {
-    advance: () => select((current + 1) % tabs.length),
-    first: () => select(0),
-  };
 }
 
-const tabGroups = new Map();
-for (const group of document.querySelectorAll('[data-tabs]')) {
-  tabGroups.set(group, setupTabs(group));
-}
-
-function setupCarousel(stage) {
-  const control = stage.querySelector('.stage-pause');
-  const interval = 8000;
-  let paused = motion.matches;
-  let visible = false;
-  let timer;
-  stage.style.setProperty('--interval', interval + 'ms');
-  function update() {
-    clearTimeout(timer);
-    stage.classList.remove('running');
-    control.textContent = paused ? label('继续轮播', 'Resume slides') : label('暂停轮播', 'Pause slides');
-    control.setAttribute('aria-pressed', String(paused));
-    if (paused || !visible || document.hidden || stage.matches(':hover, :focus-within')) return;
-    void stage.offsetWidth;
-    stage.classList.add('running');
-    timer = setTimeout(() => tabGroups.get(stage).advance(), interval);
+const citations = [...document.querySelectorAll('.cite')];
+const reader = document.querySelector('.source-scroll');
+function showCitation(link, follow = false) {
+  const target = document.getElementById(link.hash.slice(1));
+  for (const citation of citations) {
+    const active = citation === link;
+    if (active) citation.setAttribute('aria-current', 'location');
+    else citation.removeAttribute('aria-current');
+    document.getElementById(citation.hash.slice(1)).classList.toggle('active', active);
   }
-  control.addEventListener('click', () => { paused = !paused; update(); });
-  stage.addEventListener('tabchange', () => {
-    stage.querySelector('.stage-path').textContent = stage.querySelector('.stage-slide:not([hidden]) code').textContent;
-    update();
+  document.querySelector('.source-head [data-line]').textContent = 'L' + target.dataset.line;
+  const top = reader.scrollTop + target.getBoundingClientRect().top - reader.getBoundingClientRect().top;
+  reader.scrollTo({ top, behavior: motion.matches ? 'instant' : 'smooth' });
+  if (follow && matchMedia('(max-width: 768px)').matches) {
+    reader.closest('.source').scrollIntoView({ block: 'nearest', behavior: motion.matches ? 'instant' : 'smooth' });
+  }
+}
+for (const citation of citations) {
+  citation.addEventListener('pointerenter', event => {
+    if (event.pointerType === 'mouse') showCitation(citation);
   });
-  stage.addEventListener('pointerenter', update);
-  stage.addEventListener('pointerleave', update);
-  stage.addEventListener('focusin', update);
-  stage.addEventListener('focusout', () => queueMicrotask(update));
-  document.addEventListener('visibilitychange', update);
-  motion.addEventListener('change', () => { paused = motion.matches; update(); });
-  onScreen(stage, seen => { visible = seen; update(); });
-}
-
-setupCarousel(document.querySelector('[data-carousel]'));
-
-function setupSampleReplay(workspace) {
-  const send = workspace.querySelector('[data-send]');
-  const skip = workspace.querySelector('[data-skip]');
-  const guide = workspace.querySelector('.ready-guide');
-  const question = workspace.querySelector('.question-bubble');
-  const log = workspace.querySelector('.sample-log');
-  const rows = [...log.querySelectorAll('li')];
-  const answer = workspace.querySelector('.recorded-answer');
-  const paragraphs = [...answer.querySelectorAll('[data-answer-block]')];
-  const files = workspace.querySelector('.source-links');
-  const references = [...answer.querySelectorAll('a')];
-  const cover = workspace.querySelector('.source-cover');
-  const passages = [...workspace.querySelectorAll('.passage')];
-  const status = workspace.querySelector('[data-replay-status]');
-  let timer;
-
-  function selectPassage(passage, navigate) {
-    cover.hidden = true;
-    passages.forEach(item => { item.hidden = item !== passage; });
-    references.forEach(link => {
-      if (link.hash === '#' + passage.id) link.setAttribute('aria-current', 'true');
-      else link.removeAttribute('aria-current');
-    });
-    const mark = passage.querySelector('mark');
-    mark.classList.remove('sweep');
-    void mark.offsetWidth;
-    mark.classList.add('sweep');
-    if (navigate) {
-      passage.focus({ preventScroll: true });
-      requestAnimationFrame(() => {
-        if (passage.hidden) return;
-        const compact = matchMedia('(max-width: 768px)').matches;
-        const bounds = mark.getBoundingClientRect();
-        if (compact || bounds.top < 72 || bounds.bottom > innerHeight) {
-          const target = compact ? passage : mark;
-          target.scrollIntoView({ behavior: motion.matches ? 'instant' : 'smooth', block: compact ? 'start' : 'nearest' });
-        }
-      });
-    }
-  }
-
-  function clearPlayback() {
-    clearTimeout(timer);
-    question.hidden = true;
-    log.hidden = true;
-    log.open = true;
-    answer.hidden = true;
-    files.hidden = true;
-    cover.hidden = false;
-    [...rows, ...paragraphs, ...passages].forEach(item => { item.hidden = true; });
-    rows.forEach(row => row.classList.remove('pending-call'));
-    references.forEach(link => link.removeAttribute('aria-current'));
-  }
-
-  function finish() {
-    clearTimeout(timer);
-    workspace.dataset.phase = 'done';
-    if (document.activeElement === skip) send.focus({ preventScroll: true });
-    skip.hidden = true;
-    question.hidden = log.hidden = answer.hidden = files.hidden = false;
-    [...rows, ...paragraphs].forEach(item => { item.hidden = false; });
-    rows.forEach(row => row.classList.remove('pending-call'));
-    if (!cover.hidden) selectPassage(passages[0], false);
-    status.textContent = label('回答就绪，可核对三条引文。', 'Answer ready. Three passages are available for inspection.');
-  }
-
-  function streamAnswer(index) {
-    answer.hidden = false;
-    paragraphs[index].hidden = false;
-    timer = setTimeout(() => {
-      if (index + 1 === paragraphs.length) finish();
-      else streamAnswer(index + 1);
-    }, 650);
-  }
-
-  function streamCall(index) {
-    log.hidden = false;
-    const row = rows[index];
-    row.hidden = false;
-    row.classList.add('pending-call');
-    timer = setTimeout(() => {
-      row.classList.remove('pending-call');
-      if (index + 1 === rows.length) streamAnswer(0);
-      else streamCall(index + 1);
-    }, 420);
-  }
-
-  function play() {
-    clearPlayback();
-    workspace.dataset.phase = 'playing';
-    guide.hidden = true;
-    send.textContent = label('重播', 'Replay');
-    question.hidden = false;
-    if (motion.matches) {
-      finish();
-      return;
-    }
-    skip.hidden = false;
-    status.textContent = label('正在回放采样轨迹。', 'Playing the recorded trace.');
-    timer = setTimeout(() => streamCall(0), 160);
-  }
-
-  clearPlayback();
-  workspace.dataset.phase = 'ready';
-  send.addEventListener('click', play);
-  skip.addEventListener('click', finish);
-  motion.addEventListener('change', () => {
-    if (motion.matches && workspace.dataset.phase === 'playing') finish();
-  });
-  references.forEach(link => link.addEventListener('click', event => {
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  citation.addEventListener('focus', () => showCitation(citation));
+  citation.addEventListener('click', event => {
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    selectPassage(document.getElementById(link.hash.slice(1)), true);
-  }));
+    showCitation(citation, true);
+  });
 }
-setupSampleReplay(document.querySelector('#qa-replay'));
-
-
-function setupTrace(trace) {
-  const rows = [...trace.querySelectorAll('.log-lines li')];
-  const totals = [...trace.querySelectorAll('[data-total]')];
-  let timer;
-  function play() {
-    clearTimeout(timer);
-    trace.classList.add('is-streaming');
-    rows.forEach(row => row.classList.add('waiting'));
-    totals.forEach(el => { el.textContent = '0'; });
-    function step(i) {
-      rows[i].classList.remove('waiting');
-      if (i === 0) totals[0].textContent = totals[0].dataset.total;
-      if (i === rows.length - 1) {
-        totals.forEach(el => { el.textContent = el.dataset.total; });
-        trace.classList.remove('is-streaming');
-      } else if (motion.matches) {
-        step(i + 1);
-      } else {
-        timer = setTimeout(() => step(i + 1), 420);
-      }
-    }
-    step(0);
+function restoreFragment() {
+  const target = document.getElementById(location.hash.slice(1));
+  if (!target) return;
+  const panels = [];
+  for (let element = target; element; element = element.parentElement) {
+    if (element.getAttribute('role') === 'tabpanel') panels.push(element);
   }
-  trace.querySelector('[data-replay]').addEventListener('click', play);
+  for (const panel of panels.reverse()) selectTab(document.getElementById(panel.getAttribute('aria-labelledby')));
+  const citation = citations.find(link => link.hash === location.hash);
+  if (citation) showCitation(citation, true);
+  else if (panels.length) target.scrollIntoView({ block: 'nearest' });
 }
-setupTrace(document.querySelector('.trace'));
+showCitation(citations[0]);
+restoreFragment();
+window.addEventListener('hashchange', restoreFragment);
 
-function setupDraft(draft) {
-  const work = draft.querySelector('.draft-work');
-  const editor = draft.querySelector('textarea');
-  const preview = draft.querySelector('.draft-preview');
-  const schedule = draft.querySelector('.check input');
-  const receipt = draft.querySelector('.receipt');
-  const steps = [...receipt.querySelectorAll('.receipt-stages li')];
-  const confirm = draft.querySelector('[data-confirm]');
-  const reset = draft.querySelector('[data-reset]');
-  const status = draft.querySelector('[data-draft-status]');
-  let timer;
-  function refresh() {
-    preview.replaceChildren();
-    let list;
-    for (const line of editor.value.split(/\r?\n/)) {
-      const bullet = line.match(/^\s*[-*+]\s+(.+)/);
-      if (bullet) {
-        if (!list) {
-          list = document.createElement('ul');
-          preview.append(list);
-        }
-        const item = document.createElement('li');
-        const task = bullet[1].match(/^\[([ xX])\]\s+(.*)/);
-        if (task) {
-          item.className = 'task-item';
-          const box = document.createElement('input');
-          box.type = 'checkbox';
-          box.checked = task[1].toLowerCase() === 'x';
-          box.disabled = true;
-          box.setAttribute('aria-label', task[2]);
-          item.append(box, document.createTextNode(task[2]));
-        } else {
-          item.textContent = bullet[1];
-        }
-        list.append(item);
-      } else {
-        list = null;
-        if (!line.trim()) continue;
-        const heading = line.match(/^#{1,6}\s+(.+)/);
-        const block = document.createElement(heading ? 'strong' : 'p');
-        block.textContent = heading ? heading[1] : line;
-        preview.append(block);
+function setupDraft() {
+  const editor = document.getElementById('editor');
+  const preview = document.querySelector('[data-preview]');
+  const schedule = document.querySelector('[data-schedule]');
+  const confirm = document.querySelector('[data-confirm]');
+  const reset = document.querySelector('[data-reset]');
+  const receipt = document.querySelector('.receipt');
+  const result = receipt.querySelector('[data-result]');
+  const status = document.querySelector('[data-draft-status]');
+  const markdown = new marked.Marked({ renderer: {
+    html() { return ''; },
+    image(token) { return this.parser.parseInline(token.tokens); },
+    heading(token) { return '<h4>' + this.parser.parseInline(token.tokens) + '</h4>'; },
+  } });
+  let taskLines = [];
+
+  // Lex a numbered copy to associate rendered task boxes with the editable source.
+  // The parser distinguishes actual list items from lookalikes in code blocks.
+  const taskPrefix = /^((?:\s*>\s*)*\s*(?:[-*+]|\d+[.)])\s+\[)[ xX](\]\s+)/;
+  function render() {
+    const numbered = editor.value.split('\n').map((line, index) =>
+      line.replace(taskPrefix, prefix => prefix + index + ' ')).join('\n');
+    taskLines = [];
+    marked.walkTokens(markdown.lexer(numbered), token => {
+      if (token.type === 'list_item' && token.task) taskLines.push(Number.parseInt(token.text, 10));
+    });
+    preview.replaceChildren(DOMPurify.sanitize(markdown.parse(editor.value), {
+      RETURN_DOM_FRAGMENT: true,
+      ALLOWED_TAGS: ['p', 'h4', 'ul', 'ol', 'li', 'input', 'em', 'strong', 'del', 'pre', 'code',
+        'blockquote', 'hr', 'br', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'a'],
+      ALLOWED_ATTR: ['href', 'type', 'checked', 'disabled', 'start'],
+    }));
+    for (const [index, box] of [...preview.querySelectorAll('input')].entries()) {
+      box.disabled = !Number.isInteger(taskLines[index]);
+      box.dataset.index = String(index);
+      const taskLabel = document.createElement('label');
+      box.before(taskLabel);
+      // A nested list has its own tasks and labels.
+      let sibling = taskLabel.nextSibling;
+      while (sibling && !(sibling instanceof Element && sibling.matches('ul, ol'))) {
+        taskLabel.append(sibling);
+        sibling = taskLabel.nextSibling;
       }
+      box.setAttribute('aria-label', taskLabel.textContent.trim());
     }
     confirm.disabled = !editor.value.trim();
   }
-  refresh();
-  editor.addEventListener('input', refresh);
+  function hideReceipt() {
+    receipt.hidden = true;
+    status.textContent = '';
+  }
+  function update() {
+    hideReceipt();
+    render();
+  }
+  preview.addEventListener('change', event => {
+    const box = event.target.closest('input[type="checkbox"]');
+    if (!box) return;
+    const lines = editor.value.split('\n');
+    const number = taskLines[Number(box.dataset.index)];
+    lines[number] = lines[number].replace(taskPrefix, (_, before, after) => before + (box.checked ? 'x' : ' ') + after);
+    editor.value = lines.join('\n');
+    hideReceipt();
+  });
+  editor.addEventListener('input', update);
+  schedule.addEventListener('change', hideReceipt);
   confirm.addEventListener('click', () => {
-    const items = [...preview.querySelectorAll('li')].map(item => item.textContent);
-    const synced = schedule.checked ? items : [];
-    const taskList = receipt.querySelector('.saved-items');
-    taskList.replaceChildren(...synced.map(text => {
-      const item = document.createElement('li');
-      item.textContent = text;
-      return item;
-    }));
-    const empty = receipt.querySelector('.schedule-empty');
-    empty.hidden = synced.length > 0;
-    empty.textContent = schedule.checked
-      ? label('没有可同步的事项', 'No tasks to add')
-      : label('本次仅保存笔记', 'Note saved without scheduling tasks');
-    const count = schedule.checked ? 4 : 3;
-    steps[3].textContent = label('已同步 ' + synced.length + ' 条日程', synced.length + (synced.length === 1 ? ' task added' : ' tasks added') + ' to the schedule');
-    work.hidden = true;
+    const entries = schedule.checked
+      ? [...preview.querySelectorAll('input:checked')].map(box => box.getAttribute('aria-label'))
+      : [];
+    const message = entries.length
+      ? label('加入每日安排 · ', 'Added to the daily schedule · ') + entries.join(label('、', ', '))
+      : label('仅保存计划正文。', 'Saved the plan text only.');
+    result.textContent = message;
     receipt.hidden = false;
-    steps.forEach(el => { el.hidden = true; });
+    status.textContent = label('示例已保存。', 'Preview saved. ') + message;
     reset.focus({ preventScroll: true });
-    function show(i) {
-      steps[i].hidden = false;
-      status.textContent = steps[i].textContent;
-      if (i + 1 >= count) return;
-      if (motion.matches) show(i + 1);
-      else timer = setTimeout(() => show(i + 1), 320);
-    }
-    show(0);
   });
   reset.addEventListener('click', () => {
-    clearTimeout(timer);
     editor.value = editor.defaultValue;
     schedule.checked = true;
-    status.textContent = '';
-    receipt.hidden = true;
-    work.hidden = false;
-    tabGroups.get(work).first();
-    refresh();
-    work.querySelector('[role="tab"]').focus();
+    update();
+    const tab = document.getElementById('draft-preview-tab');
+    selectTab(tab);
+    tab.focus({ preventScroll: true });
   });
+  render();
 }
-setupDraft(document.querySelector('.draft'));
+setupDraft();
 
-const gallery = [...document.querySelectorAll('.gallery .shot')];
-const filters = [...document.querySelectorAll('[data-filter]')];
-for (const filter of filters) {
-  filter.addEventListener('click', () => {
-    filters.forEach(item => item.setAttribute('aria-pressed', String(item === filter)));
-    gallery.forEach(shot => { shot.hidden = filter.dataset.filter !== 'all' && shot.dataset.category !== filter.dataset.filter; });
-  });
-}
-
-function setupViewer(viewer) {
-  if (typeof viewer.showModal !== 'function') return;
-  let items = [];
-  let position = 0;
-  let trigger;
+const viewer = document.getElementById('viewer');
+if (typeof viewer.showModal === 'function') {
+  const shots = [...new Map([...document.querySelectorAll('[data-zoom]')].map(shot => [shot.dataset.zoom, shot])).values()];
+  let index = 0;
+  let opener;
   function draw() {
-    const shot = items[position];
-    const image = shot.querySelector('img').cloneNode();
-    image.loading = 'eager';
-    viewer.querySelector('[data-original]').href = image.src;
+    const shot = shots[index];
+    const image = new Image();
+    image.src = shot.href;
+    image.alt = shot.dataset.title;
     viewer.querySelector('.viewer-image').replaceChildren(image);
-    viewer.querySelector('#viewer-title').textContent = shot.querySelector('strong').textContent;
-    viewer.querySelector('#viewer-copy').textContent = shot.querySelector('figcaption span').textContent;
-    viewer.querySelector('[data-position]').textContent = (position + 1) + ' / ' + items.length;
+    viewer.querySelector('#viewer-title').textContent = image.alt;
+    viewer.querySelector('.original').href = image.src;
+    viewer.querySelector('[data-position]').textContent = (index + 1) + ' / ' + shots.length;
   }
-  function move(by) {
-    position = (position + by + items.length) % items.length;
+  function move(step) {
+    index = (index + step + shots.length) % shots.length;
     draw();
   }
   document.addEventListener('click', event => {
-    const opener = event.target.closest('a[data-zoom]');
-    if (!opener || event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-    items = opener.closest('.gallery') ? gallery.filter(shot => !shot.hidden) : gallery;
-    position = items.findIndex(shot => shot.querySelector('a').dataset.zoom === opener.dataset.zoom);
-    if (position < 0) return;
+    const shot = event.target.closest('[data-zoom]');
+    if (!shot || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    trigger = opener;
+    opener = shot;
+    index = shots.findIndex(entry => entry.dataset.zoom === shot.dataset.zoom);
     draw();
     viewer.showModal();
     viewer.querySelector('[data-close]').focus();
   });
-  viewer.querySelector('[data-close]').addEventListener('click', () => viewer.close());
-  viewer.addEventListener('close', () => trigger?.focus({ preventScroll: true }));
   viewer.querySelector('[data-prev]').addEventListener('click', () => move(-1));
   viewer.querySelector('[data-next]').addEventListener('click', () => move(1));
+  viewer.querySelector('[data-close]').addEventListener('click', () => viewer.close());
+  viewer.addEventListener('close', () => opener?.focus({ preventScroll: true }));
+  viewer.addEventListener('click', event => {
+    if (event.target !== viewer) return;
+    const bounds = viewer.getBoundingClientRect();
+    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) viewer.close();
+  });
   viewer.addEventListener('keydown', event => {
-    if (!['ArrowRight', 'ArrowLeft'].includes(event.key)) return;
+    if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
     event.preventDefault();
-    move(event.key === 'ArrowRight' ? 1 : -1);
+    move(event.key === 'ArrowLeft' ? -1 : 1);
   });
 }
-setupViewer(document.querySelector('#viewer'));
 
-function setupVideo(video) {
-  let visible = false;
-  const chapter = video.closest('[role="tabpanel"]');
-  const badge = document.getElementById(chapter.getAttribute('aria-labelledby')).querySelector('small');
-  function showDuration() {
-    const seconds = Math.round(video.duration);
-    badge.textContent = Number.isFinite(seconds) && seconds > 0
-      ? Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0')
-      : label('实机录屏', 'Recording');
-  }
-  showDuration();
-  video.addEventListener('durationchange', showDuration);
-  let userPaused = false;
-  let active = false;
-  function sync() {
-    const next = visible && !video.closest('[role="tabpanel"]').hidden && !document.hidden;
-    if (next === active) return;
-    active = next;
-    if (!active) video.pause();
-    else if (!motion.matches && !userPaused) video.play().catch(() => {});
-  }
-  video.addEventListener('pause', () => { if (active && !video.ended) userPaused = true; });
-  video.addEventListener('play', () => { userPaused = false; });
-  document.addEventListener('visibilitychange', sync);
-  motion.addEventListener('change', () => { if (motion.matches) video.pause(); });
-  video.closest('[data-tabs]').addEventListener('tabchange', sync);
-  onScreen(video, seen => { visible = seen; sync(); });
-}
-document.querySelectorAll('video').forEach(setupVideo);
-
-function copySelection(value, button) {
-  const field = document.createElement('textarea');
-  field.value = value;
-  field.readOnly = true;
-  field.className = 'sr-only';
-  document.body.append(field);
-  try {
-    field.select();
-    return document.execCommand('copy');
-  } finally {
-    field.remove();
-    button.focus({ preventScroll: true });
-  }
-}
 for (const button of document.querySelectorAll('.copy')) {
-  const initial = button.textContent;
+  const original = button.textContent;
   let timer;
   button.addEventListener('click', async () => {
-    const value = button.closest('[role="tabpanel"]').querySelector('code').textContent;
+    const code = button.closest('.terminal').querySelector('code');
     let copied = false;
     try {
-      await navigator.clipboard.writeText(value);
+      await navigator.clipboard.writeText(code.textContent);
       copied = true;
     } catch {
-      try { copied = copySelection(value, button); } catch { /* The code remains selectable. */ }
+      const range = document.createRange();
+      range.selectNodeContents(code);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      try { copied = document.execCommand('copy'); } catch { /* Keep the command selected. */ }
     }
-    button.textContent = copied ? label('已复制 ✓', 'Copied ✓') : label('请手动复制', 'Select and copy');
-    button.classList.toggle('success', copied);
+    button.textContent = copied ? label('已复制', 'Copied') : label('请手动复制', 'Select and copy');
     clearTimeout(timer);
-    timer = setTimeout(() => {
-      button.textContent = initial;
-      button.classList.remove('success');
-    }, 2000);
-  });
-}
-
-if ('IntersectionObserver' in window && !motion.matches) {
-  const reveal = new IntersectionObserver(entries => {
-    for (const entry of entries) {
-      if (!entry.isIntersecting) continue;
-      entry.target.classList.add('revealed');
-      reveal.unobserve(entry.target);
-    }
-  }, { threshold: 0.05, rootMargin: '0px 0px -30px 0px' });
-  document.querySelectorAll('.section > h2, .trust dl > div, .closing-card').forEach(element => {
-    if (element.getBoundingClientRect().top > window.innerHeight) reveal.observe(element);
+    timer = setTimeout(() => { button.textContent = original; }, 2000);
   });
 }

@@ -4,7 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Second Mind | Self-hosted Obsidian knowledge workspace</title>
-    <meta name="description" content="Second Mind is a single-admin, self-hosted workspace for Obsidian Vaults with source-grounded answers, inspectable research, isolated knowledge bases, and review-before-write workflows.">
+    <meta
+      name="description"
+      content="Second Mind is a single-admin, self-hosted workspace for Obsidian Vaults with source-grounded answers, inspectable research, isolated knowledge bases, and review-before-write workflows.">
     <link rel="canonical" href="https://kygoyuan2004.github.io/Second-Mind/en/">
     <link rel="alternate" hreflang="zh-CN" href="https://kygoyuan2004.github.io/Second-Mind/">
     <link rel="alternate" hreflang="en" href="https://kygoyuan2004.github.io/Second-Mind/en/">
@@ -14,654 +16,651 @@
     <meta property="og:locale" content="en_US">
     <meta property="og:locale:alternate" content="zh_CN">
     <meta property="og:title" content="Second Mind | Self-hosted Obsidian knowledge workspace">
-    <meta property="og:description" content="Search private knowledge, verify every source, and write back only after explicit approval on infrastructure you control.">
+    <meta
+      property="og:description"
+      content="Search private knowledge, verify every source, and write back only after explicit approval on infrastructure you control.">
     <meta property="og:url" content="https://kygoyuan2004.github.io/Second-Mind/en/">
     <meta property="og:image" content="https://kygoyuan2004.github.io/Second-Mind/assets/second-mind-qa.png">
     <meta property="og:image:alt" content="Second Mind source-grounded question and answer workspace">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="color-scheme" content="light dark">
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f7f4">
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121b22">
+    <meta name="color-scheme" content="light">
+    <meta name="theme-color" content="#ffffff">
     <link rel="icon" href="/Second-Mind/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/Second-Mind/styles.css">
+    <script src="/Second-Mind/assets/marked.umd.js" defer></script>
+    <script src="/Second-Mind/assets/purify.min.js" defer></script>
     <script src="/Second-Mind/site.js" defer></script>
   </head>
   <body>
-    <a class="skip-link" href="#main">Skip to main content</a>
-    <header>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="masthead">
       <nav class="shell nav" aria-label="Main navigation">
-        <a class="brand" href="/Second-Mind/en/"><span class="mark" aria-hidden="true">SM</span><strong>Second Mind</strong><small>v0.2.1</small></a>
-        <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="nav-links">Menu <span aria-hidden="true">☰</span></button>
+        <a href="/Second-Mind/en/" class="brand"><span class="mark" aria-hidden="true">SM</span><strong>Second Mind</strong></a>
         <div class="nav-links" id="nav-links">
-          <a href="#capabilities">Workflows</a>
-          <a href="#demos">Demos</a>
-          <a href="#privacy">Architecture &amp; privacy</a>
-          <a href="#quickstart">Quick start</a>
-          <a class="repo-link" href="https://github.com/kygoyuan2004/Second-Mind">GitHub <span aria-hidden="true">↗</span></a>
-          <span class="language">EN / <a href="/Second-Mind/" hreflang="zh-CN" lang="zh-CN">中文</a></span>
+          <a href="#capabilities">Workflows</a> <a href="#screenshots">Gallery</a>
+          <a href="#privacy">Privacy</a> <a href="#quickstart">Get started</a>
+        </div>
+        <div class="nav-end">
+          <a href="/Second-Mind/" class="lang-link" lang="zh-CN" hreflang="zh-CN">中文</a>
+          <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="nav-links">Menu</button>
         </div>
       </nav>
     </header>
     <main id="main">
-      <section id="hero" class="hero" data-sync-key="hero" aria-labelledby="hero-title">
-        <div class="shell">
-          <div class="hero-spread">
-            <div>
-              <p class="release-line">
-                <span>v0.2.1</span> · Claude Agent SDK <span class="release-context">· Self-Hosted Obsidian Workspace</span></p>
-              <h1 id="hero-title">Your notes.<br><mark>Verifiable</mark> answers.</h1>
-              <p class="lede">Ask your Obsidian Vault a question. Trace the answer to the exact line, review your week, and decide what belongs in tomorrow’s plan.</p>
-              <div class="actions">
-                <a class="button primary" href="#quickstart">Desktop downloads &amp; Docker ↓</a> <a class="button" href="https://github.com/kygoyuan2004/Second-Mind">Source on GitHub <span aria-hidden="true">↗</span></a>
-              </div>
-              <p class="platforms">Windows / Linux desktop · Docker Web · BYOK</p>
-            </div>
-            <img class="evidence-drawing" src="/Second-Mind/evidence.svg" width="580" height="350" alt="An annotated stack of Markdown notes with citation [1] pointing to line 5">
+      <section class="hero shell" id="hero" data-sync-key="hero">
+        <div class="hero-intro">
+          <div>
+            <p class="edition">
+              <a href="https://github.com/kygoyuan2004/Second-Mind/releases/tag/v0.2.1">v0.2.1</a><span aria-hidden="true">/</span>Self-hosted Obsidian workspace
+            </p>
+            <h1>Find the note<br>behind the answer.</h1>
           </div>
-          <div class="stage" data-tabs data-carousel>
-            <div class="stage-bar">
-              <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>Second Mind / Workspace</span>
-              <code class="stage-path interactive">review/weekly.md</code>
-              <button type="button" class="stage-pause interactive" aria-pressed="false">Pause slides</button>
-            </div>
-            <div class="tablist stage-tabs" role="tablist" aria-label="Workspace preview">
-              <button type="button" role="tab" id="stage-tab-qa" aria-controls="stage-qa" aria-selected="true" tabindex="0">Answers with citations</button>
-              <button type="button" role="tab" id="stage-tab-execution" aria-controls="stage-execution" aria-selected="false" tabindex="-1">Review and coverage</button>
-              <button type="button" role="tab" id="stage-tab-plan" aria-controls="stage-plan" aria-selected="false" tabindex="-1">Draft to schedule</button>
-              <button type="button" role="tab" id="stage-tab-source" aria-controls="stage-source" aria-selected="false" tabindex="-1">Line-level evidence</button>
-            </div>
-            <div id="stage-qa" class="panel stage-slide" role="tabpanel" aria-labelledby="stage-tab-qa" tabindex="0">
-              <div class="slide-copy">
-                <small>01 / 04</small>
-                <h2>Answers with citations</h2>
-                <p>Follow a citation from the answer to the note behind it.</p><code>review/weekly.md</code>
-              </div>
-              <a class="stage-image" data-zoom="qa" href="/Second-Mind/assets/second-mind-qa.png"><img src="/Second-Mind/assets/second-mind-qa.png" width="1440" height="1050" alt="Answers with citations · Follow a citation from the answer to the note behind it." fetchpriority="high"></a>
-            </div>
-            <div id="stage-execution" class="panel stage-slide" role="tabpanel" aria-labelledby="stage-tab-execution" tabindex="0">
-              <div class="slide-copy">
-                <small>02 / 04</small>
-                <h2>Review and coverage</h2>
-                <p>Inspect the tool calls to see which files were read and where coverage ends.</p><code>review/coverage.log</code>
-              </div>
-              <a class="stage-image" data-zoom="execution" href="/Second-Mind/assets/second-mind-execution.png"><img src="/Second-Mind/assets/second-mind-execution.png" width="1440" height="1050" alt="Review and coverage · Inspect the tool calls to see which files were read and where coverage ends."></a>
-            </div>
-            <div id="stage-plan" class="panel stage-slide" role="tabpanel" aria-labelledby="stage-tab-plan" tabindex="0">
-              <div class="slide-copy">
-                <small>03 / 04</small>
-                <h2>Draft to schedule</h2>
-                <p>Edit the items you want to keep, then add them to the day’s schedule.</p><code>drafts/plan.md</code>
-              </div>
-              <a class="stage-image" data-zoom="plan" href="/Second-Mind/assets/second-mind-plan.png"><img src="/Second-Mind/assets/second-mind-plan.png" width="1280" height="960" alt="Plan drafts · Edit the items you want to keep, then add them to the day’s schedule."></a>
-            </div>
-            <div id="stage-source" class="panel stage-slide" role="tabpanel" aria-labelledby="stage-tab-source" tabindex="0">
-              <div class="slide-copy">
-                <small>04 / 04</small>
-                <h2>Line-level evidence</h2>
-                <p>Read the highlighted line in context and judge the claim for yourself.</p><code>vault/research.md</code>
-              </div>
-              <a class="stage-image" data-zoom="source" href="/Second-Mind/assets/second-mind-source.png"><img src="/Second-Mind/assets/second-mind-source.png" width="1440" height="1050" alt="Line-level evidence · Read the highlighted line in context and judge the claim for yourself."></a>
+          <div class="hero-aside">
+            <p>
+              Ask your Vault a question and follow the answer to the source. Review the week, then choose what
+              goes into tomorrow’s plan.
+            </p>
+            <div class="actions">
+              <a href="#quickstart" class="button primary">Get started</a>
+              <a href="https://github.com/kygoyuan2004/Second-Mind" class="button secondary">GitHub</a>
             </div>
           </div>
         </div>
-      </section>
-      <section data-sync-key="trust" aria-label="How the workspace works" class="trust">
-        <dl class="shell">
+        <figure class="hero-figure">
+          <a
+            class="hero-image"
+            data-zoom="qa"
+            data-title="Weekly review with sources and reading coverage"
+            href="/Second-Mind/assets/second-mind-qa.png"><img
+              src="/Second-Mind/assets/second-mind-qa.png"
+              width="1440"
+              height="1050"
+              alt="Weekly review with sources and reading coverage"
+              fetchpriority="high"></a>
+          <figcaption>
+            <span>Workspace view <i>/</i> Weekly review</span><a href="/Second-Mind/assets/second-mind-qa.png" class="full-image">Full image</a>
+          </figcaption>
+        </figure>
+        <dl class="principles">
           <div>
-            <dt>Evidence First</dt>
-            <dd>Every citation leads back to a passage.</dd>
+            <dt>Trace a citation</dt>
+            <dd>Open a cited passage and judge what it supports.</dd>
           </div>
           <div>
-            <dt>Human-in-the-Loop</dt>
-            <dd>You approve the draft before it reaches disk.</dd>
+            <dt>Review before saving</dt>
+            <dd>Edit a diary or a plan before it reaches your files.</dd>
           </div>
           <div>
-            <dt>Transparent Agent</dt>
-            <dd>Tool calls and reading coverage stay visible.</dd>
+            <dt>Keep the files yourself</dt>
+            <dd>Your Vault stays on the host you choose. External models receive relevant context.</dd>
           </div>
         </dl>
       </section>
-      <section id="capabilities" class="section shell" data-sync-key="capabilities" aria-labelledby="capabilities-title">
-        <h2 id="capabilities-title">Check an answer against the note</h2>
-        <p class="intro">Send the preset question, follow a recorded search, then open the passages behind the answer. The replay runs entirely on this page.</p>
-        <article id="qa-replay" class="replay card" aria-labelledby="replay-title">
-          <div class="replay-bar">
-            <div><span class="book-sign" aria-hidden="true">▤</span><strong>LLM inference notes</strong><code>deepseek-v4-pro-0813</code></div>
-            <span class="record-label">Sampled from real SDK trace · Static replay</span>
-          </div>
-          <div class="replay-command interactive">
-            <label for="replay-question">Recorded question</label>
-            <input type="text" id="replay-question" readonly value="What is speculative decoding?">
-            <button type="button" class="button primary" data-send>Send</button>
-            <button type="button" class="button" data-skip hidden>Skip</button>
-          </div>
-          <div class="replay-layout">
-            <div class="replay-chat">
-              <h3 id="replay-title">Question and evidence</h3>
-              <div class="ready-guide interactive">
-                <p>When you press Send</p>
-                <ol><li>Find candidate notes and read the match</li><li>Follow the tool trace, including a citation retry</li><li>Open a citation and compare the answer with the source</li></ol>
-              </div>
-              <p class="question-bubble">What is speculative decoding?</p>
-              <details class="sample-log" open>
-                <summary>Tool trace <span>Full run 55.5 s</span></summary>
-                <ol>
-                  <li data-outcome="ok">
-                    <span class="log-state" aria-hidden="true"></span><span><code>KnowledgeSearch</code> <small>203 ms</small><span class="log-detail">Lexical match + BM25 · 11 candidates, embedding skipped</span></span><span class="sr-only">Completed</span>
-                  </li>
-                  <li data-outcome="ok">
-                    <span class="log-state" aria-hidden="true"></span><span><code>Read</code> <small>21 ms</small><span class="log-detail">投机解码.md · lines 1 to 621</span></span><span class="sr-only">Completed</span>
-                  </li>
-                  <li data-outcome="ok">
-                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>9 ms</small><span class="log-detail">投机解码.md · line 284</span></span><span class="sr-only">Completed</span>
-                  </li>
-                  <li data-outcome="ok">
-                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>6 ms</small><span class="log-detail">投机解码.md · line 267</span></span><span class="sr-only">Completed</span>
-                  </li>
-                  <li data-outcome="retry">
-                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>10 ms</small><span class="log-detail">Quote did not match a continuous passage. Retry requested.</span></span><span class="sr-only">Retry required</span>
-                  </li>
-                  <li data-outcome="ok">
-                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>4 ms</small><span class="log-detail">投机解码.md · matched on retry at line 241</span></span><span class="sr-only">Completed</span>
-                  </li>
-                </ol>
-              </details>
-              <div class="recorded-answer">
-                <h4>Recorded answer</h4>
-                <p data-answer-block><strong>Draft generation</strong> A low-cost draft model (distribution q) proposes a sequence of tokens autoregressively. This gives the target model a hypothetical prefix to verify. The draft model introduces parallelism. Its quality affects the acceptance rate but leaves the final distribution intact. <a class="ref" href="#passage-1" aria-label="Inspect source 1">[1]</a></p>
-                <p data-answer-block><strong>Parallel verification</strong> With the candidate tokens in place, the target model (distribution p) can evaluate a whole block in one forward pass. A causal mask lets it compute the target distribution at each candidate position in parallel, using one read of the weights across several positions. <a class="ref" href="#passage-2" aria-label="Inspect source 2">[2]</a></p>
-                <p data-answer-block><strong>Limits to the speedup</strong> Speculative decoding tackles the memory bottleneck during decoding. The sampled answer says that fewer sequential steps and weight reads lower time to first token. It also says total FLOPs do not fall, prefill is unaffected, and gains are greatest at low concurrency with long, memory-bound outputs. At large batch sizes or high concurrency, the gain can shrink or reverse. <a class="ref" href="#passage-3" aria-label="Inspect source 3">[3]</a></p>
-                <p class="editor-note" data-answer-block><strong>Source check</strong> The answer mentions time to first token. Line 241 identifies time per output token (TPOT/ITL) as the gain and says prefill sees little speedup. <a class="ref" href="#passage-3" aria-label="Inspect source 3">[3]</a></p>
-                <div class="source-links" role="group" aria-label="Cited passages">
-                  <a href="#passage-1">[1] 投机解码.md · L284</a>
-                  <a href="#passage-2">[2] 投机解码.md · L267</a>
-                  <a href="#passage-3">[3] 投机解码.md · L241</a>
-                </div>
-              </div>
-            </div>
-            <div class="proof" role="group" aria-label="Source verification">
-              <p class="proof-label">Knowledge source</p>
-              <div class="source-cover interactive">
-                <p class="cover-file">投机解码.md</p>
-                <p>One technical note, three exact passages. Open a highlighted line once the answer is ready.</p>
-                <ol><li><span>Draft generation</span><code>L284</code></li><li><span>Parallel verification</span><code>L267</code></li><li><span>Limits to the speedup</span><code>L241</code></li></ol>
-              </div>
-              <div class="passage" role="group" id="passage-1" tabindex="-1" aria-label="Source 1">
-                <p class="file-path">learning_doc/项目/LLM推理技术学习/投机解码.md · L283-285</p>
-                <h4>[1] Draft generation</h4>
-                <div class="note-line"><b>283</b><span lang="zh-CN">一轮的完整过程是：</span></div>
-                <div class="note-line"><b>284</b><span lang="zh-CN"><mark>Draft：草稿模型自回归生成 $x_1,\ldots,x_\gamma$，并保存每一步的 $q_i(x)$。</mark></span></div>
-                <div class="note-line"><b>285</b><span lang="zh-CN">Verify：目标模型对整个候选块运行一次前向，得到：</span></div>
-                <p class="translation"><strong>Translation</strong> Draft: The draft model generates the candidate tokens autoregressively and saves the distribution at each step.</p>
-              </div>
-              <div class="passage" role="group" id="passage-2" tabindex="-1" aria-label="Source 2">
-                <p class="file-path">learning_doc/项目/LLM推理技术学习/投机解码.md · L267-268</p>
-                <h4>[2] Parallel verification</h4>
-                <div class="note-line"><b>267</b><span lang="zh-CN">草稿一旦给出，目标模型就暂时获得了一个完整的“假设前缀”。<mark>Transformer 可以在 causal mask 下，把这些已知候选位置组成一个 block，在一次前向中并行算出每个位置的目标分布。</mark></span></div>
-                <div class="note-line"><b>268</b><span lang="zh-CN">这类似 CPU 的分支预测：先沿着可能的路径执行，再验证这条路径是否正确。</span></div>
-                <p class="translation"><strong>Translation</strong> Under a causal mask, the Transformer can group the known candidate positions into a block and compute all of their target distributions in parallel in one forward pass.</p>
-              </div>
-              <div class="passage" role="group" id="passage-3" tabindex="-1" aria-label="Source 3">
-                <p class="file-path">learning_doc/项目/LLM推理技术学习/投机解码.md · L241-243</p>
-                <h4>[3] Limits to the speedup</h4>
-                <div class="note-line"><b>241</b><span lang="zh-CN">它主要优化 Decode 的 TPOT/ITL，不会明显加速 Prefill。<mark>低并发、长输出、访存受限时最容易获益；大 batch、高并发、Prefill 占主导时收益会下降，甚至变慢。</mark></span></div>
-                <div class="note-line"><b>242</b><span lang="zh-CN">---</span></div>
-                <div class="note-line"><b>243</b><span lang="zh-CN">1. 它要解决什么问题</span></div>
-                <p class="translation"><strong>Translation</strong> Low concurrency, long outputs and memory-bound decoding offer the best gains. At large batch sizes, high concurrency, or when prefill dominates, the benefit shrinks and may reverse.</p>
-              </div>
-            </div>
-          </div>
-          <p class="sr-only" role="status" data-replay-status></p>
-        </article>
-        <div class="workflow-pair">
-          <article class="trace card">
-            <div class="card-top">
-              <h3>Weekly review · Reading coverage</h3><button type="button" class="subtle interactive" data-replay>Replay</button>
-            </div>
-            <ol class="log-lines">
-              <li>
-                <code>Glob("2026-11-*.md")</code></li>
-              <li>
-                <code>Read("Lab notes.md")</code></li>
-              <li>
-                <code>Read("Weekly plan.md")</code></li>
-              <li>
-                <code>Coverage Check</code></li>
-            </ol>
-            <dl class="metrics">
-              <div>
-                <dt>Candidates</dt>
-                <dd data-total="18">18</dd>
-              </div>
-              <div>
-                <dt>Full reads</dt>
-                <dd data-total="16">16</dd>
-              </div>
-              <div>
-                <dt>Partial</dt>
-                <dd data-total="2">2</dd>
-              </div>
-              <div>
-                <dt>Unread</dt>
-                <dd data-total="0">0</dd>
-              </div>
-            </dl>
-            <div class="legend" role="group" aria-label="Evidence status legend">
-              <span>Completed</span><span>In progress</span><span>Planned only</span>
-            </div>
-          </article>
-          <article class="draft card">
-            <h3>Draft example · Approve a write</h3>
-            <div data-tabs class="draft-work">
-              <div class="tablist pills" role="tablist" aria-label="Draft view">
-                <button type="button" role="tab" id="draft-tab-preview" aria-controls="draft-preview" aria-selected="true" tabindex="0">Preview Markdown</button>
-                <button type="button" role="tab" id="draft-tab-edit" aria-controls="draft-edit" aria-selected="false" tabindex="-1">Edit text</button>
-              </div>
-              <div id="draft-preview" class="panel" role="tabpanel" aria-labelledby="draft-tab-preview" tabindex="0">
-                <div class="draft-preview">
-                  <strong>Tomorrow’s plan</strong>
-                  <ul><li class="task-item"><input type="checkbox" disabled aria-label="Verify the experiment log">Verify the experiment log</li><li class="task-item"><input type="checkbox" disabled aria-label="Check the paper’s appendix">Check the paper’s appendix</li></ul>
-                </div>
-              </div>
-              <div id="draft-edit" class="panel" role="tabpanel" aria-labelledby="draft-tab-edit" tabindex="0">
-                <label class="sr-only" for="draft-text">Draft content</label>
-                <textarea id="draft-text" rows="4">## Tomorrow’s plan
-- [ ] Verify the experiment log
-- [ ] Check the paper’s appendix</textarea>
-              </div>
-              <label class="check"><input type="checkbox" checked> Also add tasks to the daily schedule</label>
-              <button type="button" class="button primary interactive" data-confirm>Confirm write to Vault →</button>
-            </div>
-            <div class="receipt" hidden>
-              <h4>Write receipt</h4>
-              <ol class="receipt-stages">
-                <li>Conflict check passed</li>
-                <li>Recovery copy created</li>
-                <li>Written to Vault</li>
-                <li>2 tasks added to the schedule</li>
-              </ol>
-              <dl class="receipt-files">
-                <div><dt>Saved note</dt><dd><code>plans/tomorrow.md</code></dd></div>
-                <div><dt>Recovery copy</dt><dd><code>recovery/plans/tomorrow.md.bak</code></dd></div>
-              </dl>
-              <strong>Daily schedule</strong>
-              <ul class="saved-items"></ul><p class="schedule-empty"></p>
-              <button type="button" class="button" data-reset>Reset demo</button>
-            </div><span class="sr-only" role="status" data-draft-status></span>
-          </article>
-        </div>
-      </section>
-      <section id="demos" class="section shell" data-sync-key="demos" aria-labelledby="demos-title">
-        <h2 id="demos-title">A guided tour of the demo Vault</h2>
-        <p class="intro">Pick a chapter to follow the workflow on a real product screen.</p>
-        <div class="theater" data-tabs>
-          <div class="tablist chapter-list" role="tablist" aria-label="Tour chapters">
-            <button type="button" role="tab" id="film-tab-hero-overview" aria-controls="film-hero-overview" aria-selected="true" tabindex="0"><strong>Workspace tour</strong><small>Guided preview</small></button>
-            <button type="button" role="tab" id="film-tab-demo-citation" aria-controls="film-demo-citation" aria-selected="false" tabindex="-1"><strong>Trace a citation</strong><small>Guided preview</small></button>
-            <button type="button" role="tab" id="film-tab-demo-review" aria-controls="film-demo-review" aria-selected="false" tabindex="-1"><strong>Read the coverage report</strong><small>Guided preview</small></button>
-            <button type="button" role="tab" id="film-tab-demo-draft-schedule" aria-controls="film-demo-draft-schedule" aria-selected="false" tabindex="-1"><strong>From draft to schedule</strong><small>Guided preview</small></button>
-          </div>
-          <div id="film-hero-overview" class="panel chapter" role="tabpanel" aria-labelledby="film-tab-hero-overview" tabindex="0">
-            <div class="theater-screen">
-              <!-- video:hero-overview -->
-              <a href="/Second-Mind/assets/second-mind-qa.png" data-zoom="qa" class="poster"><img src="/Second-Mind/assets/second-mind-qa.png" width="1440" height="1050" alt="Answers with citations · Follow a citation from the answer to the note behind it." loading="lazy"></a>
-            </div>
-            <div class="chapter-caption">
-              <strong>Workspace tour</strong><span class="pending">Recording coming soon · Screenshot tour</span>
-              <a class="enlarge" data-zoom="qa" href="/Second-Mind/assets/second-mind-qa.png">View full image ↗</a>
-            </div>
-            <ol class="chapter-steps">
-              <li>Ask for a weekly review</li>
-              <li>Read the answer and its citations</li>
-              <li>Choose a follow-up task</li>
-            </ol>
-          </div>
-          <div id="film-demo-citation" class="panel chapter" role="tabpanel" aria-labelledby="film-tab-demo-citation" tabindex="0">
-            <div class="theater-screen">
-              <!-- video:demo-citation -->
-              <a href="/Second-Mind/assets/second-mind-source.png" data-zoom="source" class="poster"><img src="/Second-Mind/assets/second-mind-source.png" width="1440" height="1050" alt="Line-level evidence · Read the highlighted line in context and judge the claim for yourself." loading="lazy"></a>
-            </div>
-            <div class="chapter-caption">
-              <strong>Trace a citation</strong><span class="pending">Recording coming soon · Screenshot tour</span>
-              <a class="enlarge" data-zoom="source" href="/Second-Mind/assets/second-mind-source.png">View full image ↗</a>
-            </div>
-            <ol class="chapter-steps">
-              <li>Open a citation</li>
-              <li>Find the highlighted line</li>
-              <li>Read the surrounding paragraph</li>
-            </ol>
-          </div>
-          <div id="film-demo-review" class="panel chapter" role="tabpanel" aria-labelledby="film-tab-demo-review" tabindex="0">
-            <div class="theater-screen">
-              <!-- video:demo-review -->
-              <a href="/Second-Mind/assets/second-mind-execution.png" data-zoom="execution" class="poster"><img src="/Second-Mind/assets/second-mind-execution.png" width="1440" height="1050" alt="Review and coverage · Inspect the tool calls to see which files were read and where coverage ends." loading="lazy"></a>
-            </div>
-            <div class="chapter-caption">
-              <strong>Read the coverage report</strong><span class="pending">Recording coming soon · Screenshot tour</span>
-              <a class="enlarge" data-zoom="execution" href="/Second-Mind/assets/second-mind-execution.png">View full image ↗</a>
-            </div>
-            <ol class="chapter-steps">
-              <li>Set a date range</li>
-              <li>Inspect the tool calls</li>
-              <li>Check for unread records</li>
-            </ol>
-          </div>
-          <div id="film-demo-draft-schedule" class="panel chapter" role="tabpanel" aria-labelledby="film-tab-demo-draft-schedule" tabindex="0">
-            <div class="theater-screen">
-              <!-- video:demo-draft-schedule -->
-              <a href="/Second-Mind/assets/second-mind-plan.png" data-zoom="plan" class="poster"><img src="/Second-Mind/assets/second-mind-plan.png" width="1280" height="960" alt="Plan drafts · Edit the items you want to keep, then add them to the day’s schedule." loading="lazy"></a>
-            </div>
-            <div class="chapter-caption">
-              <strong>From draft to schedule</strong><span class="pending">Recording coming soon · Screenshot tour</span>
-              <a class="enlarge" data-zoom="plan" href="/Second-Mind/assets/second-mind-plan.png">View full image ↗</a>
-            </div>
-            <ol class="chapter-steps">
-              <li>Preview the draft</li>
-              <li>Select and edit the items</li>
-              <li>Save to the target date</li>
-            </ol>
-          </div>
-        </div>
-      </section>
-      <section id="screenshots" class="section shell" data-sync-key="screenshots" aria-labelledby="screenshots-title">
-        <h2 id="screenshots-title">Real product screenshots</h2>
-        <p class="intro">These screens come from a DeepSeek session on public demonstration notes. Open any image to inspect it at full size.</p>
-        <div class="filters interactive" role="group" aria-label="Filter screenshots">
-          <button type="button" data-filter="all" aria-pressed="true">All screens</button>
-          <button type="button" data-filter="read" aria-pressed="false">Search and chat</button>
-          <button type="button" data-filter="write" aria-pressed="false">Writing and plans</button>
-          <button type="button" data-filter="setup" aria-pressed="false">Setup and mobile</button>
-        </div>
-        <div class="gallery">
-          <figure class="shot" data-category="read">
-            <a class="frame frame-qa" data-zoom="qa" href="/Second-Mind/assets/second-mind-qa.png"><img src="/Second-Mind/assets/second-mind-qa.png" width="1440" height="1050" alt="Answers with citations · Follow a citation from the answer to the note behind it." loading="lazy"></a>
-            <figcaption>
-              <strong>Answers with citations</strong><span>Follow a citation from the answer to the note behind it.</span></figcaption>
-          </figure>
-          <figure class="shot" data-category="read">
-            <a class="frame frame-source" data-zoom="source" href="/Second-Mind/assets/second-mind-source.png"><img src="/Second-Mind/assets/second-mind-source.png" width="1440" height="1050" alt="Line-level evidence · Read the highlighted line in context and judge the claim for yourself." loading="lazy"></a>
-            <figcaption>
-              <strong>Line-level evidence</strong><span>Read the highlighted line in context and judge the claim for yourself.</span></figcaption>
-          </figure>
-          <figure class="shot" data-category="read">
-            <a class="frame frame-execution" data-zoom="execution" href="/Second-Mind/assets/second-mind-execution.png"><img src="/Second-Mind/assets/second-mind-execution.png" width="1440" height="1050" alt="Review and coverage · Inspect the tool calls to see which files were read and where coverage ends." loading="lazy"></a>
-            <figcaption>
-              <strong>Review and coverage</strong><span>Inspect the tool calls to see which files were read and where coverage ends.</span></figcaption>
-          </figure>
-          <figure class="shot" data-category="write">
-            <a class="frame frame-diary" data-zoom="diary" href="/Second-Mind/assets/second-mind-diary.png"><img src="/Second-Mind/assets/second-mind-diary.png" width="1280" height="960" alt="Diary preview · Check the Markdown and the target date before saving a diary entry." loading="lazy"></a>
-            <figcaption>
-              <strong>Diary preview</strong><span>Check the Markdown and the target date before saving a diary entry.</span></figcaption>
-          </figure>
-          <figure class="shot" data-category="write">
-            <a class="frame frame-plan" data-zoom="plan" href="/Second-Mind/assets/second-mind-plan.png"><img src="/Second-Mind/assets/second-mind-plan.png" width="1280" height="960" alt="Plan drafts · Edit the items you want to keep, then add them to the day’s schedule." loading="lazy"></a>
-            <figcaption>
-              <strong>Plan drafts</strong><span>Edit the items you want to keep, then add them to the day’s schedule.</span></figcaption>
-          </figure>
-          <figure class="shot" data-category="write">
-            <a class="frame frame-schedule" data-zoom="schedule" href="/Second-Mind/assets/second-mind-schedule.png"><img src="/Second-Mind/assets/second-mind-schedule.png" width="1280" height="960" alt="Daily schedule · Find the selected items under their scheduled date." loading="lazy"></a>
-            <figcaption>
-              <strong>Daily schedule</strong><span>Find the selected items under their scheduled date.</span></figcaption>
-          </figure>
-          <figure class="shot" data-category="setup">
-            <a class="frame frame-provider-config" data-zoom="provider-config" href="/Second-Mind/assets/second-mind-provider-config.png"><img src="/Second-Mind/assets/second-mind-provider-config.png" width="1440" height="1050" alt="Provider settings · Choose a provider, inspect the endpoint and test the connection." loading="lazy"></a>
-            <figcaption>
-              <strong>Provider settings</strong><span>Choose a provider, inspect the endpoint and test the connection.</span></figcaption>
-          </figure>
-          <figure class="shot" data-category="setup">
-            <a class="frame frame-mobile" data-zoom="mobile" href="/Second-Mind/assets/second-mind-mobile.png"><img src="/Second-Mind/assets/second-mind-mobile.png" width="360" height="800" alt="Mobile workspace · Read a reply, open a source or continue a conversation from a narrow screen." loading="lazy"></a>
-            <figcaption>
-              <strong>Mobile workspace</strong><span>Read a reply, open a source or continue a conversation from a narrow screen.</span></figcaption>
-          </figure>
-        </div>
-      </section>
-      <section id="privacy" class="section shell" data-sync-key="privacy" aria-labelledby="privacy-title">
-        <h2 id="privacy-title">Bring your own keys</h2>
-        <p class="intro">BYOK · Stored API keys stay on your server. The browser cannot read them back, and SDK subprocesses receive a temporary local token.</p>
-        <div class="provider card" data-tabs>
-          <div class="tablist provider-tabs" role="tablist" aria-label="Explore services">
-            <button type="button" role="tab" id="provider-tab-deepseek" aria-controls="provider-deepseek" aria-selected="true" tabindex="0">DeepSeek</button>
-            <button type="button" role="tab" id="provider-tab-bailian" aria-controls="provider-bailian" aria-selected="false" tabindex="-1">Alibaba Cloud Bailian</button>
-            <button type="button" role="tab" id="provider-tab-kimi" aria-controls="provider-kimi" aria-selected="false" tabindex="-1">Kimi</button>
-            <button type="button" role="tab" id="provider-tab-custom" aria-controls="provider-custom" aria-selected="false" tabindex="-1">Custom Anthropic endpoint</button>
-            <button type="button" role="tab" id="provider-tab-tavily" aria-controls="provider-tavily" aria-selected="false" tabindex="-1">Tavily search</button>
-            <button type="button" role="tab" id="provider-tab-media" aria-controls="provider-media" aria-selected="false" tabindex="-1">Local Whisper + FFmpeg</button>
-          </div>
-          <div id="provider-deepseek" class="panel" role="tabpanel" aria-labelledby="provider-tab-deepseek" tabindex="0">
-            <h3>DeepSeek</h3><code>api.deepseek.com/anthropic/v1/messages</code>
-            <p>Native Messages transport. A task uses the model and credential selected at launch.</p>
-          </div>
-          <div id="provider-bailian" class="panel" role="tabpanel" aria-labelledby="provider-tab-bailian" tabindex="0">
-            <h3>Alibaba Cloud Bailian</h3><code>dashscope.aliyuncs.com/apps/anthropic/v1/messages</code>
-            <p>Qwen 3.8 Max accepts images and PDFs. Choose a supported reasoning level in Settings.</p>
-          </div>
-          <div id="provider-kimi" class="panel" role="tabpanel" aria-labelledby="provider-tab-kimi" tabindex="0">
-            <h3>Kimi</h3><code>api.moonshot.cn/anthropic/v1/messages</code>
-            <p>Connect to Kimi’s Messages endpoint and verify the credential and model ID in Settings.</p>
-          </div>
-          <div id="provider-custom" class="panel" role="tabpanel" aria-labelledby="provider-tab-custom" tabindex="0">
-            <h3>Custom Anthropic endpoint</h3><code>models.example.com/v1/messages</code>
-            <p>Example address. Supply your compatible endpoint, authentication method and model ID, then test the connection.</p>
-          </div>
-          <div id="provider-tavily" class="panel" role="tabpanel" aria-labelledby="provider-tab-tavily" tabindex="0">
-            <h3>Tavily search</h3><code>api.tavily.com/search</code>
-            <p>Search has its own credential. Enabled web searches send a query to Tavily. Personal learning reviews stay within the selected Vault.</p>
-          </div>
-          <div id="provider-media" class="panel" role="tabpanel" aria-labelledby="provider-tab-media" tabindex="0">
-            <h3>Local Whisper + FFmpeg</h3><code>FFmpeg → faster-whisper</code>
-            <p>Extract frames and transcribe locally. Prepare a speech model on first use. Selected content can be sent to the model handling the task.</p>
-          </div>
-        </div>
-        <p class="footnote">External models receive the question, attachments and selected excerpts. Remote embedding services receive text for indexing. Local keyword search works without a model key. <a class="text-link" href="https://github.com/kygoyuan2004/Second-Mind/blob/main/docs/data-flow.md">Data flow <span aria-hidden="true">↗</span></a></p>
-      </section>
-      <section id="architecture" class="section shell" data-sync-key="architecture" aria-labelledby="architecture-title">
-        <h2 id="architecture-title">Where a request travels</h2>
-        <p class="intro">Follow a request from the browser or desktop app through authentication, scoped reads and a confirmed write.</p>
-        <div class="architecture card">
-          <svg viewBox="0 0 780 324" width="780" height="324" role="img" aria-label="Authenticated clients reach Second Mind and scoped SDK tools. The server connects to optional external services.">
-            <path class="track" d="M44 39V283 M302 158H452Q468 158 468 142V113Q468 98 484 98H519"/>
-            <path class="pulse" d="M44 39V283 M302 158H452Q468 158 468 142V113Q468 98 484 98H519"/>
-            <circle class="node" cx="44" cy="35" r="7"/><text x="65" y="35" class="node-title">Browser / Desktop</text><text x="65" y="54">Browser session or desktop client</text>
-            <circle class="node" cx="44" cy="96" r="7"/><text x="65" y="96" class="node-title">Auth &amp; Loopback Token</text><text x="65" y="115">Admin authentication / desktop loopback token</text>
-            <circle class="node" cx="44" cy="157" r="7"/><text x="65" y="157" class="node-title">Second Mind Server</text><text x="65" y="176">Credential proxy · tasks · approved writes</text>
-            <circle class="node" cx="44" cy="218" r="7"/><text x="65" y="218" class="node-title">Claude Agent SDK</text><text x="65" y="237">sdk-v1 · no Bash / Write tools</text>
-            <circle class="node" cx="44" cy="279" r="7"/><text x="65" y="279" class="node-title">Index / Obsidian Vault</text><text x="65" y="298">Isolated index · bounded note reads</text>
-            <rect class="boundary" x="520" y="51" width="233" height="94" rx="7"/>
-            <text x="536" y="81" class="node-title">External API Boundary</text><text x="536" y="109">LLM / Embedding / Search</text><text x="536" y="128">Enabled by configuration</text>
-          </svg>
-          <ol class="arch-mobile">
-            <li>
-              <strong>Browser / Desktop</strong><small>Browser session or desktop client</small></li>
-            <li>
-              <strong>Auth &amp; Loopback Token</strong><small>Admin authentication / desktop loopback token</small></li>
-            <li>
-              <strong>Second Mind Server</strong><small>Credential proxy · tasks · approved writes</small></li>
-            <li>
-              <strong>Claude Agent SDK</strong><small>sdk-v1 · no Bash / Write tools</small></li>
-            <li>
-              <strong>Index / Obsidian Vault</strong><small>Isolated index · bounded note reads</small></li>
-            <li>
-              <strong>External API Boundary</strong><small>LLM / Embedding / Search</small></li>
-          </ol>
-        </div>
-      </section>
-      <section id="knowledge-bases" class="section shell" data-sync-key="knowledge-bases" aria-labelledby="knowledge-bases-title">
-        <h2 id="knowledge-bases-title">Multiple knowledge bases, separate contexts</h2>
-        <p class="intro">Switch the example Vault to see what travels with it. Each search reads one Vault.</p>
-        <div class="vault card" data-tabs>
-          <div class="tablist pills" role="tablist" aria-label="Example Vaults">
-            <button type="button" role="tab" id="vault-tab-lab" aria-controls="vault-lab" aria-selected="true" tabindex="0">Research lab</button>
-            <button type="button" role="tab" id="vault-tab-journal" aria-controls="vault-journal" aria-selected="false" tabindex="-1">Daily journal</button>
-            <button type="button" role="tab" id="vault-tab-project" aria-controls="vault-project" aria-selected="false" tabindex="-1">Project notes</button>
-          </div>
-          <div id="vault-lab" class="panel" role="tabpanel" aria-labelledby="vault-tab-lab" tabindex="0">
-            <dl class="vault-stats">
-              <div>
-                <dt>Indexed notes</dt>
-                <dd>42</dd>
-              </div>
-              <div>
-                <dt>Conversations</dt>
-                <dd>6</dd>
-              </div>
-              <div>
-                <dt>Drafts</dt>
-                <dd>2</dd>
-              </div>
-              <div>
-                <dt>Write target</dt>
-                <dd>/vaults/research</dd>
-              </div>
-            </dl>
-          </div>
-          <div id="vault-journal" class="panel" role="tabpanel" aria-labelledby="vault-tab-journal" tabindex="0">
-            <dl class="vault-stats">
-              <div>
-                <dt>Indexed notes</dt>
-                <dd>108</dd>
-              </div>
-              <div>
-                <dt>Conversations</dt>
-                <dd>12</dd>
-              </div>
-              <div>
-                <dt>Drafts</dt>
-                <dd>1</dd>
-              </div>
-              <div>
-                <dt>Write target</dt>
-                <dd>/vaults/journal</dd>
-              </div>
-            </dl>
-          </div>
-          <div id="vault-project" class="panel" role="tabpanel" aria-labelledby="vault-tab-project" tabindex="0">
-            <dl class="vault-stats">
-              <div>
-                <dt>Indexed notes</dt>
-                <dd>67</dd>
-              </div>
-              <div>
-                <dt>Conversations</dt>
-                <dd>4</dd>
-              </div>
-              <div>
-                <dt>Drafts</dt>
-                <dd>3</dd>
-              </div>
-              <div>
-                <dt>Write target</dt>
-                <dd>/vaults/projects</dd>
-              </div>
-            </dl>
-          </div>
-        </div>
-        <ol class="registry">
-          <li>Set an allowed root</li>
-          <li>Discover the Vault</li>
-          <li>Register a stable ID</li>
-          <li>Bind sessions and tasks</li>
-          <li>Isolate reads and writes</li>
-        </ol>
-      </section>
-      <section id="quickstart" class="deploy" data-sync-key="quickstart" aria-labelledby="quickstart-title">
+      <section id="capabilities" data-sync-key="capabilities" class="band warm">
         <div class="shell">
-          <h2 id="quickstart-title">Own Your Mind.</h2>
-          <div class="install-grid">
+          <div class="section-head">
             <div>
-              <h3>Open a Vault on your computer</h3>
-              <p>Desktop includes Node, Python and FFmpeg. Open a folder on your computer, or connect to an existing Second Mind server.</p>
-              <div class="tags">
-                <span>Windows x64 · .exe</span><span>Linux x86_64 · AppImage</span><span>Debian / Ubuntu · .deb</span>
-              </div>
-              <a class="button primary" href="https://github.com/kygoyuan2004/Second-Mind/releases">Download desktop <span aria-hidden="true">↗</span></a>
+              <p class="eyebrow">Interactive preview</p>
+              <h2>Check an answer for yourself</h2>
             </div>
-            <div class="terminal" data-tabs>
-              <h3>Deploy the web app with Docker</h3>
-              <div class="tablist os-tabs" role="tablist" aria-label="Installation platform">
-                <button type="button" role="tab" id="os-tab-linux" aria-controls="os-linux" aria-selected="true" tabindex="0">Linux</button>
-                <button type="button" role="tab" id="os-tab-macos" aria-controls="os-macos" aria-selected="false" tabindex="-1">macOS</button>
-                <button type="button" role="tab" id="os-tab-windows" aria-controls="os-windows" aria-selected="false" tabindex="-1">Windows</button>
-              </div>
-              <div id="os-linux" class="panel" role="tabpanel" aria-labelledby="os-tab-linux" tabindex="0">
-                <div class="command-head">
-                  <strong>Git · Docker Engine + Compose v2</strong><button type="button" class="copy interactive">Copy</button>
+            <p class="intro">
+              Follow a citation, inspect the reading list or edit tomorrow’s plan. Changes stay in this page
+              preview.
+            </p>
+          </div>
+          <div class="studio" id="qa-replay">
+            <div class="scene-tabs" role="tablist" aria-label="Preview scenes">
+              <button
+                type="button"
+                id="scene-cite-tab"
+                role="tab"
+                aria-controls="scene-cite"
+                aria-selected="true"
+                tabindex="0">
+                Citations
+              </button>
+              <button
+                type="button"
+                id="scene-review-tab"
+                role="tab"
+                aria-controls="scene-review"
+                aria-selected="false"
+                tabindex="-1">
+                Weekly review
+              </button>
+              <button
+                type="button"
+                id="scene-draft-tab"
+                role="tab"
+                aria-controls="scene-draft"
+                aria-selected="false"
+                tabindex="-1">
+                Draft approval
+              </button>
+            </div>
+            <div class="tabpanel" role="tabpanel" id="scene-cite" aria-labelledby="scene-cite-tab">
+              <div class="spread">
+                <div class="answer">
+                  <p class="eyebrow">Sample question</p>
+                  <h3>What is speculative decoding?</h3>
+                  <p>
+                    A smaller draft model proposes several tokens in sequence and records the distribution at
+                    each step.<sup><a class="cite" href="#passage-1" aria-label="Show citation 1, L284">[1]</a></sup>
+                  </p>
+                  <p>
+                    With that candidate prefix in hand, the target model can verify several positions in a
+                    single forward pass.<sup><a class="cite" href="#passage-2" aria-label="Show citation 2, L267">[2]</a></sup>
+                  </p>
+                  <p>
+                    The gain is in time per output token during decoding. Long, memory-bound outputs at low
+                    concurrency benefit most.<sup><a class="cite" href="#passage-3" aria-label="Show citation 3, L241">[3]</a></sup>
+                  </p>
+                  <details class="search-log">
+                    <summary>View the search record</summary>
+                    <ol>
+                      <li>Keyword retrieval found 11 candidate notes.</li>
+                      <li>The reader opened lines 1 through 621 of the note.</li>
+                      <li>Three passages were located, including a retry that matched line 241.</li>
+                    </ol>
+                  </details>
                 </div>
-                <pre><code>git clone https://github.com/kygoyuan2004/Second-Mind.git
-cd Second-Mind
-./install.sh</code></pre>
-              </div>
-              <div id="os-macos" class="panel" role="tabpanel" aria-labelledby="os-tab-macos" tabindex="0">
-                <div class="command-head">
-                  <strong>Git · Docker Desktop</strong><button type="button" class="copy interactive">Copy</button>
+                <div class="source">
+                  <div class="source-head">
+                    <span>Source note</span><strong>投机解码.md · <span data-line>L284</span></strong>
+                  </div>
+                  <section class="source-scroll" tabindex="0" aria-label="Cited passages">
+                    <div class="passage" id="passage-1" data-line="284">
+                      <h4>Draft generation</h4>
+                      <p class="note-line">
+                        <span class="line-no">283</span><span lang="zh-CN">一轮的完整过程是：</span>
+                      </p>
+                      <p class="note-line">
+                        <span class="line-no">284</span><mark lang="zh-CN">Draft：草稿模型自回归生成 <var>x</var><sub>1</sub>, …, <var>x</var><sub>γ</sub>，并保存每一步的 <var>q</var><sub>i</sub>(<var>x</var>)。</mark>
+                      </p>
+                      <p class="note-line">
+                        <span class="line-no">285</span><span lang="zh-CN">Verify：目标模型对整个候选块运行一次前向，得到：</span>
+                      </p>
+                      <p class="translation">
+                        The draft model generates the candidates and saves each distribution.
+                      </p>
+                    </div>
+                    <div class="passage" id="passage-2" data-line="267">
+                      <h4>Parallel verification</h4>
+                      <p class="note-line">
+                        <span class="line-no">267</span><mark lang="zh-CN">草稿一旦给出，目标模型就暂时获得了一个完整的“假设前缀”。Transformer 可以在 causal
+                          mask 下，把这些已知候选位置组成一个
+                          block，在一次前向中并行算出每个位置的目标分布。</mark>
+                      </p>
+                      <p class="note-line">
+                        <span class="line-no">268</span><span lang="zh-CN">这类似 CPU 的分支预测：先沿着可能的路径执行，再验证这条路径是否正确。</span>
+                      </p>
+                      <p class="translation">
+                        The target model can compute all candidate positions in one forward pass.
+                      </p>
+                    </div>
+                    <div class="passage" id="passage-3" data-line="241">
+                      <h4>Where it helps</h4>
+                      <p class="note-line">
+                        <span class="line-no">241</span><mark lang="zh-CN">它主要优化 Decode 的 TPOT/ITL，不会明显加速
+                          Prefill。低并发、长输出、访存受限时最容易获益；大 batch、高并发、Prefill
+                          占主导时收益会下降，甚至变慢。</mark>
+                      </p>
+                      <p class="note-line"><span class="line-no">242</span><span lang="zh-CN">---</span></p>
+                      <p class="note-line">
+                        <span class="line-no">243</span><span lang="zh-CN">1. 它要解决什么问题</span>
+                      </p>
+                      <p class="translation">
+                        Decoding gains depend on the workload. Prefill sees little speedup.
+                      </p>
+                    </div>
+                  </section>
                 </div>
-                <pre><code>git clone https://github.com/kygoyuan2004/Second-Mind.git
-cd Second-Mind
-./install.sh</code></pre>
               </div>
-              <div id="os-windows" class="panel" role="tabpanel" aria-labelledby="os-tab-windows" tabindex="0">
-                <div class="command-head">
-                  <strong>Git · PowerShell + Docker Desktop</strong><button type="button" class="copy interactive">Copy</button>
+            </div>
+            <div class="tabpanel" role="tabpanel" id="scene-review" aria-labelledby="scene-review-tab">
+              <div class="spread review">
+                <div class="review-lead">
+                  <p class="eyebrow">2026.11.16 / 11.22</p>
+                  <h3>What did the review cover?</h3>
+                  <div class="fraction">6 <span>/ 6</span></div>
+                  <p>candidate notes read in full</p>
+                  <progress value="6" max="6" aria-label="Full reading coverage">100%</progress>
+                  <p class="aside-note">
+                    Three notes have dates in the review window. The other three provide background and are
+                    listed separately.
+                  </p>
+                  <a
+                    class="image-link"
+                    data-zoom="qa"
+                    data-title="Inspect the original coverage report"
+                    href="/Second-Mind/assets/second-mind-qa.png">Inspect the original coverage report</a>
                 </div>
-                <pre><code>git clone https://github.com/kygoyuan2004/Second-Mind.git
-cd Second-Mind
-powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre>
+                <div class="reading-list">
+                  <h4>Notes read in this review</h4>
+                  <p class="list-label">Dated this week</p>
+                  <ul>
+                    <li><span>Research plan, Nov 16</span><small>Read in full</small></li>
+                    <li><span>Experiment log, Nov 20</span><small>Read in full</small></li>
+                    <li><span>Friday experiment</span><small>Read in full</small></li>
+                  </ul>
+                  <p class="list-label">Undated background</p>
+                  <ul>
+                    <li><span>RAG.md</span><small>Read in full</small></li>
+                    <li><span>Second-Mind.md</span><small>Read in full</small></li>
+                    <li><span>Deployment.md</span><small>Read in full</small></li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div class="tabpanel" role="tabpanel" id="scene-draft" aria-labelledby="scene-draft-tab">
+              <div class="draft-work">
+                <div class="draft-head">
+                  <div>
+                    <p class="eyebrow">Plan draft</p>
+                    <h3>What goes into tomorrow?</h3>
+                  </div>
+                  <div class="mini-tabs" role="tablist" aria-label="Draft view">
+                    <button
+                      type="button"
+                      id="draft-preview-tab"
+                      role="tab"
+                      aria-controls="draft-preview"
+                      aria-selected="true"
+                      tabindex="0">
+                      Preview
+                    </button>
+                    <button
+                      type="button"
+                      id="draft-edit-tab"
+                      role="tab"
+                      aria-controls="draft-edit"
+                      aria-selected="false"
+                      tabindex="-1">
+                      Edit
+                    </button>
+                  </div>
+                </div>
+                <div
+                  class="tabpanel draft-paper"
+                  role="tabpanel"
+                  id="draft-preview"
+                  aria-labelledby="draft-preview-tab">
+                  <div data-preview></div>
+                </div>
+                <div
+                  class="tabpanel draft-paper"
+                  role="tabpanel"
+                  id="draft-edit"
+                  aria-labelledby="draft-edit-tab">
+                  <label for="editor">Markdown</label><textarea id="editor" rows="5" spellcheck="false">
+## Tomorrow’s plan
+- [x] Verify the experiment log
+- [ ] Check the paper appendix</textarea>
+                </div>
+                <div class="draft-actions">
+                  <label><input type="checkbox" data-schedule checked> Add checked items to the daily
+                    schedule</label>
+                  <button type="button" class="button primary" data-confirm>Confirm write to Vault</button>
+                </div>
+                <div class="receipt" hidden>
+                  <span class="tick" aria-hidden="true">✓</span>
+                  <div>
+                    <strong>Preview saved</strong><code>plans/tomorrow.md</code>
+                    <p data-result></p>
+                  </div>
+                  <button type="button" class="text-button" data-reset>Reset preview</button>
+                </div>
+                <p class="sr-only" role="status" data-draft-status></p>
               </div>
             </div>
           </div>
-          <div class="ops">
-            <code>doctor</code><code>status</code><code>logs</code><code>update</code><code>backup</code><code>restore</code>
+        </div>
+      </section>
+      <section id="screenshots" data-sync-key="screenshots" class="band">
+        <div class="shell" id="demos">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Real product screenshots</p>
+              <h2>Inside a working Vault</h2>
+            </div>
+            <p class="intro">
+              A closer look at the public demo Vault. Select a screen to view it at full size.
+            </p>
           </div>
-          <p>For optional device sync, use <code>compose.obsidian-sync.yaml</code>. <a class="text-link" href="https://github.com/kygoyuan2004/Second-Mind/blob/main/docs/deployment.md">Deployment and backups <span aria-hidden="true">↗</span></a></p>
+          <div class="gallery">
+            <article class="story story-source">
+              <a
+                class="photo"
+                data-zoom="source"
+                data-title="Deep questions, exact passages"
+                href="/Second-Mind/assets/second-mind-source.png"><img
+                  src="/Second-Mind/assets/second-mind-source.png"
+                  width="1440"
+                  height="1050"
+                  alt="Deep questions, exact passages"
+                  loading="lazy"></a>
+              <div class="story-copy">
+                <h3>Deep questions, exact passages</h3>
+                <p>Open the cited paragraph to see how far an experiment actually progressed.</p>
+                <div class="story-links">
+                  <a
+                    class="image-link"
+                    data-zoom="execution"
+                    data-title="Inspect the search record"
+                    href="/Second-Mind/assets/second-mind-execution.png">Inspect the search record</a>
+                </div>
+              </div>
+            </article>
+            <article class="story story-mobile">
+              <a
+                class="photo"
+                data-zoom="mobile"
+                data-title="A workspace that travels"
+                href="/Second-Mind/assets/second-mind-mobile.png"><img
+                  src="/Second-Mind/assets/second-mind-mobile.png"
+                  width="360"
+                  height="800"
+                  alt="A workspace that travels"
+                  loading="lazy"></a>
+              <div class="story-copy">
+                <h3>A workspace that travels</h3>
+                <p>
+                  Follow up and read sources on a phone. On desktop, bring images, PDFs or recordings to the
+                  configured model and local media tools.
+                </p>
+                <div class="story-links">
+                  <a
+                    class="image-link"
+                    data-zoom="provider-config"
+                    data-title="View model settings"
+                    href="/Second-Mind/assets/second-mind-provider-config.png">View model settings</a>
+                </div>
+              </div>
+            </article>
+            <article class="story story-schedule">
+              <a
+                class="photo"
+                data-zoom="schedule"
+                data-title="From weekly review to daily plan"
+                href="/Second-Mind/assets/second-mind-schedule.png"><img
+                  src="/Second-Mind/assets/second-mind-schedule.png"
+                  width="1280"
+                  height="960"
+                  alt="From weekly review to daily plan"
+                  loading="lazy"></a>
+              <div class="story-copy">
+                <h3>From weekly review to daily plan</h3>
+                <p>
+                  Edit the draft and add selected items to their date. Each scheduled item has its own start
+                  time and duration.
+                </p>
+                <div class="story-links">
+                  <a
+                    class="image-link"
+                    data-zoom="plan"
+                    data-title="Plan draft"
+                    href="/Second-Mind/assets/second-mind-plan.png">Plan draft</a>
+                  <a
+                    class="image-link"
+                    data-zoom="diary"
+                    data-title="Diary preview"
+                    href="/Second-Mind/assets/second-mind-diary.png">Diary preview</a>
+                </div>
+              </div>
+            </article>
+          </div>
         </div>
       </section>
-      <section id="limits" class="section shell" data-sync-key="limits" aria-labelledby="limits-title">
-        <h2 id="limits-title">What is this workspace built for?</h2>
-        <div class="limits-grid">
-          <article>
-            <h3>Designed for</h3>
-            <ul>
-              <li>A single-admin, self-hosted workspace on your own hardware.</li>
-              <li>Source-first answers and a draft you review before writing.</li>
-              <li>BYOK model access and isolated Vaults.</li>
-            </ul>
-          </article>
-          <article>
-            <h3>Outside the scope</h3>
-            <ul>
-              <li>Multi-tenant accounts and fine-grained team permissions.</li>
-              <li>Cross-base federated search or shared context across Vaults.</li>
-              <li>Hosted SaaS or managed provider billing.</li>
-            </ul>
-          </article>
+      <section id="privacy" data-sync-key="privacy" class="band warm">
+        <div class="shell">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">BYOK / Privacy</p>
+              <h2>Your keys, your choice</h2>
+            </div>
+            <p class="intro">
+              Keys stay on your server. Settings show whether a key is configured. Only the provider you select
+              receives the key.
+            </p>
+          </div>
+          <div class="providers">
+            <div class="provider">
+              <h3>DeepSeek</h3>
+              <p>Ask questions using the official connection.</p>
+              <code>api.deepseek.com/anthropic/v1/messages</code>
+            </div>
+            <div class="provider">
+              <h3>Alibaba Cloud Bailian</h3>
+              <p>Read images and PDFs with Qwen 3.8 Max.</p>
+              <code>dashscope.aliyuncs.com/apps/anthropic/v1/messages</code>
+            </div>
+            <div class="provider">
+              <h3>Kimi</h3>
+              <p>Enter your model name and check the connection in Settings.</p>
+              <code>api.moonshot.cn/anthropic/v1/messages</code>
+            </div>
+            <div class="provider">
+              <h3>Custom compatible endpoint</h3>
+              <p>Supply an HTTPS endpoint, model name and credential.</p>
+              <code>Messages API</code>
+            </div>
+            <div class="provider">
+              <h3>Tavily web search</h3>
+              <p>Enable search with a separate key. Personal learning reviews skip web search.</p>
+              <code>api.tavily.com/search</code>
+            </div>
+            <div class="provider">
+              <h3>Local media processing</h3>
+              <p>Transcribe audio and extract frames locally. Selected excerpts can accompany a question.</p>
+              <code>Whisper + FFmpeg</code>
+            </div>
+          </div>
+          <div class="architecture" id="architecture">
+            <div class="arch-intro">
+              <p class="eyebrow">Privacy architecture</p>
+              <h3>Where does a question go?</h3>
+            </div>
+            <ol class="flow">
+              <li>
+                <strong>Local Vault</strong>
+                <p>Original notes stay on your computer or server.</p>
+              </li>
+              <li>
+                <strong>Scoped retrieval</strong>
+                <p>The server reads the active Vault. Search tools cannot run a shell or edit files.</p>
+              </li>
+              <li>
+                <strong>External model</strong>
+                <p>The model receives the question, context, relevant passages and submitted attachments.</p>
+              </li>
+              <li>
+                <strong>Reviewed write</strong>
+                <p>The app stages a draft. It writes to your Vault after you review and confirm.</p>
+              </li>
+            </ol>
+            <p class="boundary">
+              Keyword search runs locally. Building a remote semantic index sends eligible note chunks to your
+              embedding provider.
+              <a href="https://github.com/kygoyuan2004/Second-Mind/blob/main/docs/data-flow.md">See the full data flow</a>
+            </p>
+          </div>
         </div>
       </section>
-      <section id="closing" class="closing shell" data-sync-key="closing" aria-labelledby="closing-title">
-        <div class="closing-card">
+      <section id="knowledge-bases" data-sync-key="knowledge-bases" class="vaults shell">
+        <div class="vault-title">
+          <p class="eyebrow">Multiple knowledge bases</p>
+          <h2>A place for each Vault</h2>
+          <p>Switch Vaults to switch the index, conversations, drafts and save destination together.</p>
+        </div>
+        <dl>
           <div>
-            <p class="mono">MIT License</p>
-            <h2 id="closing-title">Start with a note you already own.</h2>
+            <dt>Research</dt>
+            <dd>Trace experiment findings back to the original log.</dd>
           </div>
-          <div class="actions">
-            <a class="button primary" href="https://github.com/kygoyuan2004/Second-Mind">Explore the source <span aria-hidden="true">↗</span></a> <a class="text-link" href="https://github.com/kygoyuan2004/Second-Mind/tree/main/docs">Read the docs <span aria-hidden="true">↗</span></a>
+          <div>
+            <dt>Journal</dt>
+            <dd>Revisit learning and daily life on their own timeline.</dd>
           </div>
+          <div>
+            <dt>Projects</dt>
+            <dd>Keep meeting notes and plans with their project.</dd>
+          </div>
+        </dl>
+      </section>
+      <section id="quickstart" data-sync-key="quickstart" class="band warm">
+        <div class="shell">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Get started</p>
+              <h2>Open your first Vault</h2>
+            </div>
+            <p class="intro">
+              Choose a notes folder on your computer or host the web workspace on your own server.
+            </p>
+          </div>
+          <div class="install">
+            <article class="install-card">
+              <h3>Desktop app</h3>
+              <p>
+                Open a local Vault or connect to an existing HTTPS server. The app includes Node.js, Python and
+                FFmpeg.
+              </p>
+              <div class="packages">
+                <a
+                  href="https://github.com/kygoyuan2004/Second-Mind/releases/download/v0.2.1/SecondMind-0.2.1-windows-x64-setup.exe"><span>Windows x64</span><span class="format">.exe</span></a>
+                <a
+                  href="https://github.com/kygoyuan2004/Second-Mind/releases/download/v0.2.1/SecondMind-0.2.1-linux-x86_64.AppImage"><span>Linux x86_64</span><span class="format">AppImage</span></a>
+                <a
+                  href="https://github.com/kygoyuan2004/Second-Mind/releases/download/v0.2.1/SecondMind-0.2.1-linux-amd64.deb"><span>Debian / Ubuntu x64</span><span class="format">.deb</span></a>
+              </div>
+              <div class="package-links">
+                <a href="https://github.com/kygoyuan2004/Second-Mind/releases" class="button secondary">GitHub Releases</a>
+                <a href="https://github.com/kygoyuan2004/Second-Mind/blob/main/docs/desktop-web-release.md">Platform verification</a>
+              </div>
+              <p class="aside-note">On Linux, unlock the system keyring to save desktop credentials.</p>
+            </article>
+            <article class="install-card docker">
+              <h3>Self-host with Docker</h3>
+              <p>Install Git and start Docker, then run the commands for your system.</p>
+              <div class="mini-tabs os-tabs" role="tablist" aria-label="Operating system">
+                <button
+                  type="button"
+                  id="os-linux-tab"
+                  role="tab"
+                  aria-controls="os-linux"
+                  aria-selected="true"
+                  tabindex="0">
+                  Linux
+                </button>
+                <button
+                  type="button"
+                  id="os-mac-tab"
+                  role="tab"
+                  aria-controls="os-mac"
+                  aria-selected="false"
+                  tabindex="-1">
+                  macOS
+                </button>
+                <button
+                  type="button"
+                  id="os-win-tab"
+                  role="tab"
+                  aria-controls="os-win"
+                  aria-selected="false"
+                  tabindex="-1">
+                  Windows
+                </button>
+              </div>
+              <div class="tabpanel os-panel" role="tabpanel" id="os-linux" aria-labelledby="os-linux-tab">
+                <div class="terminal">
+                  <div class="terminal-head">
+                    <span>Docker Engine + Compose v2</span><button type="button" class="copy" aria-live="polite">Copy</button>
+                  </div>
+                  <pre><code><span>git clone</span> https://github.com/kygoyuan2004/Second-Mind.git
+<span>cd</span> Second-Mind
+<span>./install.sh</span></code></pre>
+                </div>
+                <a
+                  href="https://github.com/kygoyuan2004/Second-Mind/blob/main/docs/quickstart-linux.md"
+                  class="guide">Platform setup guide</a>
+              </div>
+              <div class="tabpanel os-panel" role="tabpanel" id="os-mac" aria-labelledby="os-mac-tab">
+                <div class="terminal">
+                  <div class="terminal-head">
+                    <span>Docker Desktop</span><button type="button" class="copy" aria-live="polite">Copy</button>
+                  </div>
+                  <pre><code><span>git clone</span> https://github.com/kygoyuan2004/Second-Mind.git
+<span>cd</span> Second-Mind
+<span>./install.sh</span></code></pre>
+                </div>
+                <a
+                  href="https://github.com/kygoyuan2004/Second-Mind/blob/main/docs/quickstart-macos.md"
+                  class="guide">Platform setup guide</a>
+              </div>
+              <div class="tabpanel os-panel" role="tabpanel" id="os-win" aria-labelledby="os-win-tab">
+                <div class="terminal">
+                  <div class="terminal-head">
+                    <span>PowerShell · Docker Desktop</span><button type="button" class="copy" aria-live="polite">Copy</button>
+                  </div>
+                  <pre><code><span>git clone</span> https://github.com/kygoyuan2004/Second-Mind.git
+<span>cd</span> Second-Mind
+<span>powershell</span> -ExecutionPolicy Bypass -File .\install.ps1</code></pre>
+                </div>
+                <a
+                  href="https://github.com/kygoyuan2004/Second-Mind/blob/main/docs/quickstart-windows.md"
+                  class="guide">Platform setup guide</a>
+              </div>
+              <details class="operations">
+                <summary>Operations, backups and sync</summary>
+                <p>Installer commands</p>
+                <p>
+                  <code>doctor</code> · <code>status</code> · <code>logs</code> · <code>update</code> ·
+                  <code>backup</code> · <code>restore</code>
+                </p>
+                <p>
+                  <a href="https://github.com/kygoyuan2004/Second-Mind/blob/main/docs/deployment.md">Deployment and backups</a>
+                  · <a href="https://github.com/kygoyuan2004/Second-Mind/blob/main/docs/sync.md">Sync guide</a>
+                </p>
+                <a href="https://github.com/kygoyuan2004/Second-Mind/blob/main/compose.obsidian-sync.yaml">compose.obsidian-sync.yaml</a>
+              </details>
+            </article>
+          </div>
+        </div>
+      </section>
+      <section id="limits" data-sync-key="limits" class="shell limits">
+        <h2>Is it a fit?</h2>
+        <div>
+          <h3><span aria-hidden="true">✓</span> A good fit</h3>
+          <p>
+            A single-admin, self-hosted workspace for reading, verifying and writing in your own Obsidian
+            Vaults.
+          </p>
+        </div>
+        <div>
+          <h3><span aria-hidden="true">×</span> Outside the scope</h3>
+          <p>Multi-user team permissions, cross-base federated search, or managed hosting and model billing.</p>
         </div>
       </section>
     </main>
-    <footer class="shell">
-      <a class="brand" href="#main"><span class="mark" aria-hidden="true">SM</span><strong>Second Mind</strong></a>
-      <nav aria-label="Footer navigation">
-        <a class="text-link" href="https://github.com/kygoyuan2004/Second-Mind">GitHub <span aria-hidden="true">↗</span></a> <a href="https://github.com/kygoyuan2004/Second-Mind/tree/main/docs">Docs</a> <a href="https://github.com/kygoyuan2004/Second-Mind/blob/main/LICENSE">MIT</a> <a href="/Second-Mind/" hreflang="zh-CN" lang="zh-CN">中文</a>
-      </nav>
+    <footer>
+      <div class="shell footer">
+        <a href="/Second-Mind/en/" class="brand"><span class="mark" aria-hidden="true">SM</span><strong>Second Mind</strong></a>
+        <nav aria-label="Footer">
+          <a href="#quickstart">Get started</a>
+          <a href="https://github.com/kygoyuan2004/Second-Mind/tree/main/docs">Docs</a>
+          <a href="https://github.com/kygoyuan2004/Second-Mind">GitHub</a>
+          <a href="https://github.com/kygoyuan2004/Second-Mind/blob/main/LICENSE">MIT License</a>
+          <a href="/Second-Mind/" class="lang-link" lang="zh-CN" hreflang="zh-CN">中文</a>
+        </nav>
+      </div>
     </footer>
-    <dialog id="viewer" aria-labelledby="viewer-title" aria-describedby="viewer-copy">
+    <dialog id="viewer" aria-labelledby="viewer-title">
       <div class="viewer-top">
-        <strong id="viewer-title">Screenshot</strong><button type="button" data-close>Close ×</button>
+        <strong id="viewer-title">Screenshot</strong><button type="button" data-close>Close</button>
       </div>
-      <div class="viewer-image">
-      </div>
-      <p id="viewer-copy"></p>
+      <div class="viewer-image"></div>
       <div class="viewer-controls">
-        <button type="button" data-prev>← Previous</button><span data-position></span><a data-original href="/Second-Mind/assets/second-mind-qa.png">Original image</a><button type="button" data-next>Next →</button>
+        <button type="button" data-prev>Previous</button><span data-position></span><button type="button" data-next>Next</button><a href="/Second-Mind/assets/second-mind-qa.png" class="original">Original image</a>
       </div>
     </dialog>
   </body>

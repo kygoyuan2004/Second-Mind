@@ -1,325 +1,621 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Second Mind | 自托管 Obsidian 知识工作台</title>
-  <meta name="description" content="Second Mind 是面向 Obsidian Vault 的单管理员、自托管知识工作台，提供可溯源问答、研究执行过程、多知识库隔离和确认后写入。">
-  <link rel="canonical" href="https://kygoyuan2004.github.io/Second-Mind/">
-  <link rel="alternate" hreflang="zh-CN" href="https://kygoyuan2004.github.io/Second-Mind/">
-  <link rel="alternate" hreflang="en" href="https://kygoyuan2004.github.io/Second-Mind/en/">
-  <link rel="alternate" hreflang="x-default" href="https://kygoyuan2004.github.io/Second-Mind/">
-  <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Second Mind">
-  <meta property="og:locale" content="zh_CN">
-  <meta property="og:locale:alternate" content="en_US">
-  <meta property="og:title" content="Second Mind | 自托管 Obsidian 知识工作台">
-  <meta property="og:description" content="在自己的基础设施中检索私人知识、核验来源，并在明确确认后写回。">
-  <meta property="og:url" content="https://kygoyuan2004.github.io/Second-Mind/">
-  <meta property="og:image" content="https://kygoyuan2004.github.io/Second-Mind/assets/second-mind-qa.png">
-  <meta property="og:image:alt" content="Second Mind 可溯源问答界面">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f6f8">
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#07111d">
-  <link rel="stylesheet" href="/Second-Mind/styles.css">
-  <script src="/Second-Mind/site.js" defer></script>
-</head>
-<body>
-  <a class="skip-link" href="#main">跳到主要内容</a>
-
-  <header class="site-header">
-    <nav class="site-nav shell" aria-label="主导航">
-      <a class="wordmark" href="/Second-Mind/" aria-label="Second Mind 首页">
-        <span class="wordmark-mark" aria-hidden="true">SM</span>
-        <span>Second Mind</span>
-      </a>
-      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="primary-links" data-open-label="打开菜单" data-close-label="关闭菜单">
-        <span aria-hidden="true">菜单</span>
-        <span class="sr-only">打开菜单</span>
-      </button>
-      <div class="nav-links" id="primary-links">
-        <a href="#capabilities">能力</a>
-        <a href="#knowledge-bases">多知识库</a>
-        <a href="#privacy">隐私</a>
-        <a href="#quickstart">安装</a>
-        <a href="https://github.com/kygoyuan2004/Second-Mind">GitHub</a>
-        <a class="language-link" href="/Second-Mind/en/" lang="en" hreflang="en">EN</a>
-      </div>
-    </nav>
-  </header>
-
-  <main id="main">
-    <section class="hero shell" aria-labelledby="hero-title">
-      <div class="hero-copy">
-        <p class="eyebrow">自托管知识工作台</p>
-        <h1 id="hero-title">这周走到了哪一步？</h1>
-        <p class="lede">在自己的基础设施中检索 Obsidian、追溯来源，并在明确确认后写回。</p>
-        <div class="hero-actions">
-          <a class="button button-primary" href="#quickstart">查看快速安装</a>
-          <a class="text-link" href="https://github.com/kygoyuan2004/Second-Mind">浏览 GitHub <span aria-hidden="true">↗</span></a>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Second Mind | 自托管 Obsidian 知识工作台</title>
+    <meta name="description" content="Second Mind 是面向 Obsidian Vault 的单管理员、自托管知识工作台，提供可溯源问答、研究执行过程、多知识库隔离和确认后写入。">
+    <link rel="canonical" href="https://kygoyuan2004.github.io/Second-Mind/">
+    <link rel="alternate" hreflang="zh-CN" href="https://kygoyuan2004.github.io/Second-Mind/">
+    <link rel="alternate" hreflang="en" href="https://kygoyuan2004.github.io/Second-Mind/en/">
+    <link rel="alternate" hreflang="x-default" href="https://kygoyuan2004.github.io/Second-Mind/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Second Mind">
+    <meta property="og:locale" content="zh_CN">
+    <meta property="og:locale:alternate" content="en_US">
+    <meta property="og:title" content="Second Mind | 自托管 Obsidian 知识工作台">
+    <meta property="og:description" content="在自己的基础设施中检索私人知识、核验来源，并在明确确认后写回。">
+    <meta property="og:url" content="https://kygoyuan2004.github.io/Second-Mind/">
+    <meta property="og:image" content="https://kygoyuan2004.github.io/Second-Mind/assets/second-mind-qa.png">
+    <meta property="og:image:alt" content="Second Mind 可溯源问答界面">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f7f4">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121b22">
+    <link rel="icon" href="/Second-Mind/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/Second-Mind/styles.css">
+    <script src="/Second-Mind/site.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <header>
+      <nav class="shell nav" aria-label="主导航">
+        <a class="brand" href="/Second-Mind/"><span class="mark" aria-hidden="true">SM</span><strong>Second Mind</strong><small>v0.2.1</small></a>
+        <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="nav-links">菜单 <span aria-hidden="true">☰</span></button>
+        <div class="nav-links" id="nav-links">
+          <a href="#capabilities">核心体验</a>
+          <a href="#demos">演示视频</a>
+          <a href="#privacy">架构与隐私</a>
+          <a href="#quickstart">快速部署</a>
+          <a class="repo-link" href="https://github.com/kygoyuan2004/Second-Mind">GitHub <span aria-hidden="true">↗</span></a>
+          <span class="language">中文 / <a href="/Second-Mind/en/" hreflang="en" lang="en">EN</a></span>
         </div>
-      </div>
-      <figure class="hero-figure asset-figure">
-        <img src="/Second-Mind/assets/second-mind-qa.png" width="1440" height="1050" alt="Second Mind 使用本地笔记回答问题并列出可核验来源" fetchpriority="high">
-        <p class="asset-pending" hidden>产品界面截图未能加载。</p>
-        <figcaption>点击回答中的来源，即可预览原始笔记。</figcaption>
-      </figure>
-    </section>
-
-    <section class="trust-band" aria-label="产品边界">
-      <dl class="shell trust-list">
-        <div>
-          <dt>本地边界</dt>
-          <dd>Vault、索引、会话与运行时配置由你托管。</dd>
+      </nav>
+    </header>
+    <main id="main">
+      <section id="hero" class="hero" data-sync-key="hero" aria-labelledby="hero-title">
+        <div class="shell">
+          <div class="hero-spread">
+            <div>
+              <p class="release-line">
+                <span>v0.2.1</span> · Claude Agent SDK · Self-Hosted Obsidian Workspace</p>
+              <h1 id="hero-title">让每个答案<br>都<mark>可核验</mark>。</h1>
+              <p class="lede">在自己的 Obsidian 知识库里提问。回到引用的那一行，核对本周的进展，再决定把什么写进明天。</p>
+              <div class="actions">
+                <a class="button primary" href="#quickstart">桌面版下载与 Docker 部署 ↓</a> <a class="button" href="https://github.com/kygoyuan2004/Second-Mind">GitHub 源码 <span aria-hidden="true">↗</span></a>
+              </div>
+              <p class="platforms">Windows / Linux 桌面端 · Docker Web · BYOK</p>
+            </div>
+            <img class="evidence-drawing" src="/Second-Mind/evidence.svg" width="580" height="350" alt="展开的 Markdown 笔记，引用 [1] 指向原文第 5 行">
+          </div>
+          <div class="stage" data-tabs data-carousel>
+            <div class="stage-bar">
+              <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>Second Mind / 工作区</span>
+              <code class="stage-path interactive">review/weekly.md</code>
+              <button type="button" class="stage-pause interactive" aria-pressed="false">暂停轮播</button>
+            </div>
+            <div class="tablist stage-tabs" role="tablist" aria-label="工作区预览">
+              <button type="button" role="tab" id="stage-tab-qa" aria-controls="stage-qa" aria-selected="true" tabindex="0">引文溯源问答</button>
+              <button type="button" role="tab" id="stage-tab-execution" aria-controls="stage-execution" aria-selected="false" tabindex="-1">学习回顾与覆盖率</button>
+              <button type="button" role="tab" id="stage-tab-plan" aria-controls="stage-plan" aria-selected="false" tabindex="-1">草稿确认与日程</button>
+              <button type="button" role="tab" id="stage-tab-source" aria-controls="stage-source" aria-selected="false" tabindex="-1">原文行级核验</button>
+            </div>
+            <div id="stage-qa" class="panel stage-slide" role="tabpanel" aria-labelledby="stage-tab-qa" tabindex="0">
+              <div class="slide-copy">
+                <small>01 / 04</small>
+                <h2>引文溯源问答</h2>
+                <p>从回答中的引用，回到支持这句话的笔记。</p><code>review/weekly.md</code>
+              </div>
+              <a class="stage-image" data-zoom="qa" href="/Second-Mind/assets/second-mind-qa.png"><img src="/Second-Mind/assets/second-mind-qa.png" width="1440" height="1050" alt="引文溯源问答 · 从回答中的引用，回到支持这句话的笔记。" fetchpriority="high"></a>
+            </div>
+            <div id="stage-execution" class="panel stage-slide" role="tabpanel" aria-labelledby="stage-tab-execution" tabindex="0">
+              <div class="slide-copy">
+                <small>02 / 04</small>
+                <h2>学习回顾与覆盖率</h2>
+                <p>展开工具记录，核对读过哪些文件，还有哪些没有读完。</p><code>review/coverage.log</code>
+              </div>
+              <a class="stage-image" data-zoom="execution" href="/Second-Mind/assets/second-mind-execution.png"><img src="/Second-Mind/assets/second-mind-execution.png" width="1440" height="1050" alt="学习回顾与覆盖率 · 展开工具记录，核对读过哪些文件，还有哪些没有读完。" loading="lazy"></a>
+            </div>
+            <div id="stage-plan" class="panel stage-slide" role="tabpanel" aria-labelledby="stage-tab-plan" tabindex="0">
+              <div class="slide-copy">
+                <small>03 / 04</small>
+                <h2>草稿确认与日程</h2>
+                <p>编辑选中的事项，确认后再加入当天的安排。</p><code>drafts/plan.md</code>
+              </div>
+              <a class="stage-image" data-zoom="plan" href="/Second-Mind/assets/second-mind-plan.png"><img src="/Second-Mind/assets/second-mind-plan.png" width="1280" height="960" alt="计划草稿 · 编辑选中的事项，确认后再加入当天的安排。" loading="lazy"></a>
+            </div>
+            <div id="stage-source" class="panel stage-slide" role="tabpanel" aria-labelledby="stage-tab-source" tabindex="0">
+              <div class="slide-copy">
+                <small>04 / 04</small>
+                <h2>原文行级核验</h2>
+                <p>在上下文中查看标黄的原句，判断结论是否成立。</p><code>vault/research.md</code>
+              </div>
+              <a class="stage-image" data-zoom="source" href="/Second-Mind/assets/second-mind-source.png"><img src="/Second-Mind/assets/second-mind-source.png" width="1440" height="1050" alt="原文行级核验 · 在上下文中查看标黄的原句，判断结论是否成立。" loading="lazy"></a>
+            </div>
+          </div>
         </div>
-        <div>
-          <dt>证据优先</dt>
-          <dd>回答保留来源入口，研究任务展示执行过程。</dd>
-        </div>
-        <div>
-          <dt>单管理员</dt>
-          <dd>当前是私人知识服务，不是多租户 SaaS。</dd>
-        </div>
-      </dl>
-    </section>
-
-    <section class="section shell" id="capabilities" aria-labelledby="capabilities-title" data-sync-key="capabilities">
-      <div class="section-heading offset-heading">
-        <p class="eyebrow">核心能力</p>
-        <h2 id="capabilities-title">查原文，理清进展，写下下一步</h2>
-        <p>从问题、检索和模型会话，到来源预览与写入确认，每一步都保留足够上下文。</p>
-      </div>
-      <div class="capability-layout">
-        <article class="capability-primary">
+      </section>
+      <section data-sync-key="trust" aria-label="工作方式" class="trust">
+        <dl class="shell">
           <div>
-            <h3>可溯源问答与研究过程</h3>
-            <p>Claude Agent SDK 在选定的知识库中检索、读取原文并回答。普通任务最多 20 轮、10 分钟；深度任务最多 50 轮、30 分钟，并按需使用最多两个只读子 Agent。界面实时展示工具调用和输出。</p>
+            <dt>Evidence First</dt>
+            <dd>一条引用，定位一行原文。</dd>
           </div>
-          <figure class="asset-figure">
-            <img src="/Second-Mind/assets/second-mind-execution.png" width="1440" height="1050" alt="Second Mind 展示研究任务的检索、来源选择和生成执行过程" loading="lazy">
-            <p class="asset-pending" hidden>执行过程界面截图未能加载。</p>
-            <figcaption>展开执行过程，查看检索和原文读取。</figcaption>
-          </figure>
+          <div>
+            <dt>Human-in-the-Loop</dt>
+            <dd>先看草稿，确认后才落盘。</dd>
+          </div>
+          <div>
+            <dt>Transparent Agent</dt>
+            <dd>工具有记录，阅读有覆盖统计。</dd>
+          </div>
+        </dl>
+      </section>
+      <section id="capabilities" class="section shell" data-sync-key="capabilities" aria-labelledby="capabilities-title">
+        <h2 id="capabilities-title">从一条引文，到明天的安排</h2>
+        <p class="intro">在这份演示周报里试一次。所有操作仅作用于本页样例。</p>
+        <article class="citation card" data-tabs>
+          <div class="answer">
+            <h3>本周到底做成了什么？</h3>
+            <p class="static-answer">基线实验已经跑通。完整复现还在计划里。关于延迟的解释仍在核对。</p>
+            <div class="tablist pills cited-answer" role="tablist" aria-label="查看三条引用">
+              <span>基线实验已经跑通。 <button type="button" role="tab" id="cite-tab-0" aria-controls="cite-0" aria-selected="true" tabindex="0">[1] 实验记录.md:5</button></span>
+              <span>完整复现还在计划里。 <button type="button" role="tab" id="cite-tab-1" aria-controls="cite-1" aria-selected="false" tabindex="-1">[2] 周计划.md:14</button></span>
+              <span>关于延迟的解释仍在核对。 <button type="button" role="tab" id="cite-tab-2" aria-controls="cite-2" aria-selected="false" tabindex="-1">[3] 文献笔记.md:28</button></span>
+            </div>
+          </div>
+          <div class="sources">
+            <div id="cite-0" class="panel source-note" role="tabpanel" aria-labelledby="cite-tab-0" tabindex="0">
+              <p class="file-path">Vault / 实验记录.md</p>
+              <div class="note-line">
+                <b>4</b><span>## 周回顾</span>
+              </div>
+              <div class="note-line">
+                <b>5</b><span><mark>三次重复实验均得到相同基线。</mark></span>
+              </div>
+              <div class="note-line">
+                <b>6</b><span>记录运行日志。</span>
+              </div>
+            </div>
+            <div id="cite-1" class="panel source-note" role="tabpanel" aria-labelledby="cite-tab-1" tabindex="0">
+              <p class="file-path">Vault / 周计划.md</p>
+              <div class="note-line">
+                <b>13</b><span>## 周回顾</span>
+              </div>
+              <div class="note-line">
+                <b>14</b><span><mark>下周安排完整复现，尚未开始测量。</mark></span>
+              </div>
+              <div class="note-line">
+                <b>15</b><span>预留周四下午复盘。</span>
+              </div>
+            </div>
+            <div id="cite-2" class="panel source-note" role="tabpanel" aria-labelledby="cite-tab-2" tabindex="0">
+              <p class="file-path">Vault / 文献笔记.md</p>
+              <div class="note-line">
+                <b>27</b><span>## 周回顾</span>
+              </div>
+              <div class="note-line">
+                <b>28</b><span><mark>延迟差异仍需对照论文附录核实。</mark></span>
+              </div>
+              <div class="note-line">
+                <b>29</b><span>整理下一轮问题。</span>
+              </div>
+            </div>
+          </div>
         </article>
-        <ol class="capability-list" aria-label="更多核心能力">
-          <li>
-            <div><h3>原文核验</h3><p>从引用片段直接打开对应的本地文件上下文。</p></div>
-          </li>
-          <li>
-            <div><h3>确认后写入</h3><p>日记、计划和随手记先生成草稿，只有管理员确认后才保存。</p></div>
-          </li>
-          <li>
-            <div><h3>会话连续性</h3><p>刷新后可从历史列表重新打开会话，继续追问。</p></div>
-          </li>
-          <li>
-            <div><h3>限定范围的学习回顾</h3><p>固定日期范围和日期记录清单，分批核验原文并明确报告覆盖缺口。</p></div>
-          </li>
-        </ol>
-      </div>
-      <figure class="diary-figure asset-figure">
-        <img src="/Second-Mind/assets/second-mind-diary.png" width="1280" height="960" alt="Second Mind 日记草稿在写入 Obsidian Vault 前等待管理员确认" loading="lazy">
-        <p class="asset-pending" hidden>日记草稿界面截图未能加载。</p>
-        <figcaption><strong>写入有停顿点。</strong> 草稿、目标路径与冲突状态先接受检查。</figcaption>
-      </figure>
-    </section>
-
-    <section class="section section-toned" id="knowledge-bases" aria-labelledby="knowledge-bases-title" data-sync-key="knowledge-bases">
-      <div class="shell split-intro">
-        <div class="section-heading">
-          <p class="eyebrow">多知识库</p>
-          <h2 id="knowledge-bases-title">在不同知识库之间切换</h2>
+        <div class="workflow-pair">
+          <article class="trace card">
+            <div class="card-top">
+              <h3>跟读工具日志</h3><button type="button" class="subtle interactive" data-replay>重播</button>
+            </div>
+            <ol class="log-lines">
+              <li>
+                <code>Glob("2026-11-*.md")</code></li>
+              <li>
+                <code>Read("实验记录.md")</code></li>
+              <li>
+                <code>Read("周计划.md")</code></li>
+              <li>
+                <code>Coverage Check</code></li>
+            </ol>
+            <dl class="metrics">
+              <div>
+                <dt>候选</dt>
+                <dd data-total="18">18</dd>
+              </div>
+              <div>
+                <dt>完整读取</dt>
+                <dd data-total="16">16</dd>
+              </div>
+              <div>
+                <dt>部分读取</dt>
+                <dd data-total="2">2</dd>
+              </div>
+              <div>
+                <dt>未读</dt>
+                <dd data-total="0">0</dd>
+              </div>
+            </dl>
+            <div class="tags">
+              <span>已完成</span><span>进行中</span><span>仅计划</span>
+            </div>
+          </article>
+          <article class="draft card">
+            <h3>亲手确认一次写入</h3>
+            <div data-tabs class="draft-work">
+              <div class="tablist pills" role="tablist" aria-label="草稿视图">
+                <button type="button" role="tab" id="draft-tab-preview" aria-controls="draft-preview" aria-selected="true" tabindex="0">预览 Markdown</button>
+                <button type="button" role="tab" id="draft-tab-edit" aria-controls="draft-edit" aria-selected="false" tabindex="-1">编辑文本</button>
+              </div>
+              <div id="draft-preview" class="panel" role="tabpanel" aria-labelledby="draft-tab-preview" tabindex="0">
+                <div class="draft-preview">
+                  <strong>明日计划</strong>
+                  <ul><li>复核实验日志</li><li>对照论文附录</li></ul>
+                </div>
+              </div>
+              <div id="draft-edit" class="panel" role="tabpanel" aria-labelledby="draft-tab-edit" tabindex="0">
+                <label class="sr-only" for="draft-text">草稿内容</label>
+                <textarea id="draft-text" rows="4">## 明日计划
+- 复核实验日志
+- 对照论文附录</textarea>
+              </div>
+              <label class="check"><input type="checkbox" checked> 同时加入每日安排</label>
+              <button type="button" class="button primary interactive" data-confirm>确认写入 Vault →</button>
+            </div>
+            <div class="receipt" hidden>
+              <ol>
+                <li>冲突检测通过</li>
+                <li>已生成恢复备份</li>
+                <li>已写入 Vault</li>
+                <li>已同步 2 条日程</li>
+              </ol>
+              <button type="button" class="button" data-reset>重置演示</button>
+            </div><span class="sr-only" role="status" data-draft-status></span>
+          </article>
         </div>
-        <div class="section-copy">
-          <p>在配置页注册本机或挂载目录中的 Obsidian Vault，再从知识库页面切换。索引、会话、任务、草稿和写入分别归属各自的知识库。</p>
-          <p>每个库有稳定标识，历史记录与来源始终指向原来的库。迁移目录和删除注册前，应按部署文档备份。</p>
-
-        </div>
-      </div>
-      <div class="shell kb-workbench" role="group" aria-label="多知识库隔离流程">
-        <div class="kb-rail">
-          <p class="workbench-label">允许的挂载边界</p>
-          <code>/vaults</code>
-          <span aria-hidden="true">↓</span>
-        </div>
-        <ol class="kb-flow">
-          <li><span>发现</span><strong>根 Vault 或直接子 Vault</strong><small>只在允许根目录内</small></li>
-          <li><span>注册</span><strong>稳定的知识库标识</strong><small>拒绝路径逃逸和重叠</small></li>
-          <li><span>绑定</span><strong>会话与任务选择</strong><small>一次只处理一个知识库</small></li>
-          <li><span>隔离</span><strong>索引与写入范围</strong><small>不会默默混合语料</small></li>
-        </ol>
-      </div>
-    </section>
-
-    <section class="section shell" id="privacy" aria-labelledby="privacy-title" data-sync-key="privacy">
-      <div class="privacy-layout">
-        <div class="section-heading privacy-heading">
-          <p class="eyebrow">BYOK 与隐私</p>
-          <h2 id="privacy-title">凭据留在服务端，数据去向由配置决定</h2>
-          <p>模型、网页搜索与嵌入凭据分别配置。安装不会触发付费 API 调用，没有模型凭据时仍可登录并使用本地 BM25 检索。</p>
-          <ul class="check-list">
-            <li>浏览器不会读回已保存的密钥</li>
-            <li>静态站点没有统计脚本、Cookie 或远程字体</li>
-            <li>Vault 文件与索引保存在你管理的主机和 Docker 卷中</li>
-          </ul>
-          <p class="boundary-note">模型会收到问题、附件和工具读取的笔记片段。启用语义检索时，文本会发送给 Embedding 服务；启用联网补充时，查询会发送给搜索服务。学习回顾仅使用本库资料。请按资料敏感程度选择服务，并检查各提供商的数据政策。</p>
-          <a class="text-link" href="https://github.com/kygoyuan2004/Second-Mind/blob/main/docs/data-flow.md">阅读数据流说明 <span aria-hidden="true">↗</span></a>
-        </div>
-        <figure class="provider-figure asset-figure">
-          <img src="/Second-Mind/assets/second-mind-provider-config.png" width="1440" height="1050" alt="Second Mind 管理员分别配置模型、网页搜索与嵌入提供商" loading="lazy">
-          <p class="asset-pending" hidden>提供商配置界面截图未能加载。</p>
-          <figcaption>提供商设置在登录后的管理员界面中完成。</figcaption>
-        </figure>
-      </div>
-    </section>
-
-    <section class="section architecture-section" id="architecture" aria-labelledby="architecture-title" data-sync-key="architecture">
-      <div class="shell architecture-intro">
-        <div class="section-heading">
-          <p class="eyebrow">架构</p>
-          <h2 id="architecture-title">从你的问题，到有来源的回答</h2>
-        </div>
-        <p>浏览器只连接自托管应用。应用在认证后编排本地检索与可选外部提供商，并把所有文件访问限制在已注册知识库内。</p>
-      </div>
-      <div class="shell architecture-map" role="img" aria-label="浏览器经过认证应用访问隔离索引和用户拥有的 Vault，并按配置连接外部提供商">
-        <ol class="architecture-flow">
-          <li><span class="node-kind">客户端</span><strong>浏览器</strong><small>同源界面</small></li>
-          <li><span class="node-kind">信任门</span><strong>认证 API</strong><small>单管理员会话</small></li>
-          <li class="node-core"><span class="node-kind">工作区</span><strong>Second Mind</strong><small>任务、检索、草稿审核</small></li>
-          <li><span class="node-kind">本地状态</span><strong>隔离索引</strong><small>每个知识库独立</small></li>
-          <li><span class="node-kind">用户存储</span><strong>Obsidian Vault</strong><small>允许边界内读写</small></li>
-        </ol>
-        <aside class="provider-boundary">
-          <span>可选网络边界</span>
-          <strong>你配置的模型、嵌入和搜索服务</strong>
-          <small>只在对应功能启用时调用</small>
-        </aside>
-      </div>
-    </section>
-
-    <section class="section shell" id="screenshots" aria-labelledby="screenshots-title" data-sync-key="screenshots">
-      <div class="section-heading offset-heading">
-        <p class="eyebrow">真实产品截图</p>
-        <h2 id="screenshots-title">在演示知识库中实际运行</h2>
-        <p>这些截图来自独立演示库。DeepSeek 通过 Claude Agent SDK 阅读公开笔记并生成回顾、日记和计划。打开引用可核对原文，确认后的两项计划会出现在每日安排中。</p>
-      </div>
-      <div class="screenshot-ledger">
-        <figure class="shot shot-wide asset-figure">
-          <img src="/Second-Mind/assets/second-mind-qa.png" width="1440" height="1050" alt="可溯源问答展示回答、引用与原始笔记入口" loading="lazy">
-          <p class="asset-pending" hidden>问答界面截图未能加载。</p>
-          <figcaption><strong>问答与来源</strong><small>从结论回到笔记</small></figcaption>
-        </figure>
-        <figure class="shot asset-figure">
-          <img src="/Second-Mind/assets/second-mind-execution.png" width="1440" height="1050" alt="研究执行过程展示查询、检索与生成阶段" loading="lazy">
-          <p class="asset-pending" hidden>执行过程界面截图未能加载。</p>
-          <figcaption><strong>执行过程</strong><small>检查任务阶段的呈现</small></figcaption>
-        </figure>
-        <figure class="shot asset-figure">
-          <img src="/Second-Mind/assets/second-mind-provider-config.png" width="1440" height="1050" alt="管理员提供商配置展示独立的服务设置" loading="lazy">
-          <p class="asset-pending" hidden>提供商配置界面截图未能加载。</p>
-          <figcaption><strong>提供商配置</strong><small>自带密钥，分别管理</small></figcaption>
-        </figure>
-        <figure class="shot shot-tall asset-figure">
-          <img src="/Second-Mind/assets/second-mind-mobile.png" width="360" height="800" alt="Second Mind 在窄屏手机上的问答与导航布局" loading="lazy">
-          <p class="asset-pending" hidden>移动界面截图未能加载。</p>
-          <figcaption><strong>移动阅读</strong><small>窄屏保留来源上下文</small></figcaption>
-        </figure>
-        <figure class="shot asset-figure">
-          <img src="/Second-Mind/assets/second-mind-diary.png" width="1280" height="960" alt="日记草稿展示写入前预览和确认步骤" loading="lazy">
-          <p class="asset-pending" hidden>日记界面截图未能加载。</p>
-          <figcaption><strong>日记草稿</strong><small>写入之前先审核</small></figcaption>
-        </figure>
-        <figure class="shot shot-wide asset-figure">
-          <img src="/Second-Mind/assets/second-mind-plan.png" width="1280" height="960" alt="计划草稿展示结构化内容与目标文件路径" loading="lazy">
-          <p class="asset-pending" hidden>计划界面截图未能加载。</p>
-          <figcaption><strong>计划草稿</strong><small>内容与目标路径一起确认</small></figcaption>
-        </figure>
-        <figure class="shot shot-wide asset-figure"><img src="/Second-Mind/assets/second-mind-source.png" width="1440" height="1050" alt="引用直接定位到笔记段落" loading="lazy"><figcaption><strong>核对原文</strong><small>引用直接定位到笔记段落</small></figcaption></figure>
-        <figure class="shot shot-wide asset-figure"><img src="/Second-Mind/assets/second-mind-schedule.png" width="1280" height="960" alt="确认后查看与编辑当日事项" loading="lazy"><figcaption><strong>每日安排</strong><small>确认后查看与编辑当日事项</small></figcaption></figure>
-      </div>
-    </section>
-
-    <section class="section quickstart-section" id="quickstart" aria-labelledby="quickstart-title" data-sync-key="quickstart">
-      <div class="shell quickstart-layout">
-        <div class="section-heading">
-          <p class="eyebrow">三平台快速安装</p>
-          <h2 id="quickstart-title">在电脑上打开知识库，或部署为网页</h2><p>Windows x64 选择 EXE；Linux x86_64 选择 AppImage 或 Debian/Ubuntu 的 DEB。桌面应用支持本机 Vault 和连接现有服务器。下方是 Docker 网页版的安装命令。</p>
-          <a class="button button-primary" href="https://github.com/kygoyuan2004/Second-Mind/releases">下载桌面版</a>
-          <p class="quickstart-prereq"><strong>前置条件：</strong>Git；Linux 使用常规 rootful Docker Engine 与 Compose v2，macOS 和 Windows 使用 Docker Desktop。rootless Docker 或 SELinux enforcing 主机需要管理员另行设计 UID、卷权限和 bind-mount relabel；安装器不会自动修改这些边界。</p>
-        </div>
-        <div class="install-terminal" data-tabs>
-          <div class="tab-list" role="tablist" aria-label="选择安装平台">
-            <button type="button" role="tab" id="tab-linux" aria-controls="panel-linux" aria-selected="true" tabindex="0">Linux</button>
-            <button type="button" role="tab" id="tab-macos" aria-controls="panel-macos" aria-selected="false" tabindex="-1">macOS</button>
-            <button type="button" role="tab" id="tab-windows" aria-controls="panel-windows" aria-selected="false" tabindex="-1">Windows</button>
+      </section>
+      <section id="demos" class="section shell" data-sync-key="demos" aria-labelledby="demos-title">
+        <h2 id="demos-title">在演示库里，走一遍工作流</h2>
+        <p class="intro">选一个章节，跟着真实产品画面看每一步。</p>
+        <div class="theater" data-tabs>
+          <div class="tablist chapter-list" role="tablist" aria-label="演示章节">
+            <button type="button" role="tab" id="film-tab-hero-overview" aria-controls="film-hero-overview" aria-selected="true" tabindex="0"><strong>全景速览</strong><small>35s</small></button>
+            <button type="button" role="tab" id="film-tab-demo-citation" aria-controls="film-demo-citation" aria-selected="false" tabindex="-1"><strong>行级引文溯源</strong><small>25s</small></button>
+            <button type="button" role="tab" id="film-tab-demo-review" aria-controls="film-demo-review" aria-selected="false" tabindex="-1"><strong>学习回顾与覆盖率</strong><small>30s</small></button>
+            <button type="button" role="tab" id="film-tab-demo-draft-schedule" aria-controls="film-demo-draft-schedule" aria-selected="false" tabindex="-1"><strong>草稿确认与每日安排</strong><small>25s</small></button>
           </div>
-          <div class="tab-panel" role="tabpanel" id="panel-linux" aria-labelledby="tab-linux" tabindex="0">
-            <p>Docker Engine + Compose v2</p>
-            <pre><code>git clone https://github.com/kygoyuan2004/Second-Mind.git
+          <div id="film-hero-overview" class="panel chapter" role="tabpanel" aria-labelledby="film-tab-hero-overview" tabindex="0">
+            <div class="theater-screen">
+              <!-- video:hero-overview -->
+              <a href="/Second-Mind/assets/second-mind-qa.png" data-zoom="qa" class="poster"><img src="/Second-Mind/assets/second-mind-qa.png" width="1440" height="1050" alt="引文溯源问答 · 从回答中的引用，回到支持这句话的笔记。" loading="lazy"></a>
+            </div>
+            <div class="chapter-caption">
+              <strong>全景速览</strong><span class="pending">实机录屏即将就位 · 图解预览</span>
+              <a class="enlarge" data-zoom="qa" href="/Second-Mind/assets/second-mind-qa.png">查看大图 ↗</a>
+            </div>
+            <ol class="chapter-steps">
+              <li>提出周回顾问题</li>
+              <li>阅读带来源的回答</li>
+              <li>选择下一步事项</li>
+            </ol>
+          </div>
+          <div id="film-demo-citation" class="panel chapter" role="tabpanel" aria-labelledby="film-tab-demo-citation" tabindex="0">
+            <div class="theater-screen">
+              <!-- video:demo-citation -->
+              <a href="/Second-Mind/assets/second-mind-source.png" data-zoom="source" class="poster"><img src="/Second-Mind/assets/second-mind-source.png" width="1440" height="1050" alt="原文行级核验 · 在上下文中查看标黄的原句，判断结论是否成立。" loading="lazy"></a>
+            </div>
+            <div class="chapter-caption">
+              <strong>行级引文溯源</strong><span class="pending">实机录屏即将就位 · 图解预览</span>
+              <a class="enlarge" data-zoom="source" href="/Second-Mind/assets/second-mind-source.png">查看大图 ↗</a>
+            </div>
+            <ol class="chapter-steps">
+              <li>点开回答中的引用</li>
+              <li>定位黄色原文行</li>
+              <li>对照上下文</li>
+            </ol>
+          </div>
+          <div id="film-demo-review" class="panel chapter" role="tabpanel" aria-labelledby="film-tab-demo-review" tabindex="0">
+            <div class="theater-screen">
+              <!-- video:demo-review -->
+              <a href="/Second-Mind/assets/second-mind-execution.png" data-zoom="execution" class="poster"><img src="/Second-Mind/assets/second-mind-execution.png" width="1440" height="1050" alt="学习回顾与覆盖率 · 展开工具记录，核对读过哪些文件，还有哪些没有读完。" loading="lazy"></a>
+            </div>
+            <div class="chapter-caption">
+              <strong>学习回顾与覆盖率</strong><span class="pending">实机录屏即将就位 · 图解预览</span>
+              <a class="enlarge" data-zoom="execution" href="/Second-Mind/assets/second-mind-execution.png">查看大图 ↗</a>
+            </div>
+            <ol class="chapter-steps">
+              <li>圈定日期范围</li>
+              <li>展开工具日志</li>
+              <li>查看未读记录</li>
+            </ol>
+          </div>
+          <div id="film-demo-draft-schedule" class="panel chapter" role="tabpanel" aria-labelledby="film-tab-demo-draft-schedule" tabindex="0">
+            <div class="theater-screen">
+              <!-- video:demo-draft-schedule -->
+              <a href="/Second-Mind/assets/second-mind-plan.png" data-zoom="plan" class="poster"><img src="/Second-Mind/assets/second-mind-plan.png" width="1280" height="960" alt="计划草稿 · 编辑选中的事项，确认后再加入当天的安排。" loading="lazy"></a>
+            </div>
+            <div class="chapter-caption">
+              <strong>草稿确认与每日安排</strong><span class="pending">实机录屏即将就位 · 图解预览</span>
+              <a class="enlarge" data-zoom="plan" href="/Second-Mind/assets/second-mind-plan.png">查看大图 ↗</a>
+            </div>
+            <ol class="chapter-steps">
+              <li>预览计划草稿</li>
+              <li>勾选并编辑事项</li>
+              <li>确认写入目标日期</li>
+            </ol>
+          </div>
+        </div>
+      </section>
+      <section id="screenshots" class="section shell" data-sync-key="screenshots" aria-labelledby="screenshots-title">
+        <h2 id="screenshots-title">真实产品截图</h2>
+        <p class="intro">这些画面来自一次使用公开笔记的 DeepSeek 会话。选择缩略图可查看原尺寸。</p>
+        <div class="filters interactive" role="group" aria-label="截图分类">
+          <button type="button" data-filter="all" aria-pressed="true">全部</button>
+          <button type="button" data-filter="read" aria-pressed="false">检索与对话</button>
+          <button type="button" data-filter="write" aria-pressed="false">写作与日程</button>
+          <button type="button" data-filter="setup" aria-pressed="false">配置与移动</button>
+        </div>
+        <div class="gallery">
+          <figure class="shot" data-category="read">
+            <a class="frame frame-qa" data-zoom="qa" href="/Second-Mind/assets/second-mind-qa.png"><img src="/Second-Mind/assets/second-mind-qa.png" width="1440" height="1050" alt="引文溯源问答 · 从回答中的引用，回到支持这句话的笔记。" loading="lazy"></a>
+            <figcaption>
+              <strong>引文溯源问答</strong><span>从回答中的引用，回到支持这句话的笔记。</span></figcaption>
+          </figure>
+          <figure class="shot" data-category="read">
+            <a class="frame frame-source" data-zoom="source" href="/Second-Mind/assets/second-mind-source.png"><img src="/Second-Mind/assets/second-mind-source.png" width="1440" height="1050" alt="原文行级核验 · 在上下文中查看标黄的原句，判断结论是否成立。" loading="lazy"></a>
+            <figcaption>
+              <strong>原文行级核验</strong><span>在上下文中查看标黄的原句，判断结论是否成立。</span></figcaption>
+          </figure>
+          <figure class="shot" data-category="read">
+            <a class="frame frame-execution" data-zoom="execution" href="/Second-Mind/assets/second-mind-execution.png"><img src="/Second-Mind/assets/second-mind-execution.png" width="1440" height="1050" alt="学习回顾与覆盖率 · 展开工具记录，核对读过哪些文件，还有哪些没有读完。" loading="lazy"></a>
+            <figcaption>
+              <strong>学习回顾与覆盖率</strong><span>展开工具记录，核对读过哪些文件，还有哪些没有读完。</span></figcaption>
+          </figure>
+          <figure class="shot" data-category="write">
+            <a class="frame frame-diary" data-zoom="diary" href="/Second-Mind/assets/second-mind-diary.png"><img src="/Second-Mind/assets/second-mind-diary.png" width="1280" height="960" alt="日记预览 · 在写入日记之前，检查 Markdown 内容和目标日期。" loading="lazy"></a>
+            <figcaption>
+              <strong>日记预览</strong><span>在写入日记之前，检查 Markdown 内容和目标日期。</span></figcaption>
+          </figure>
+          <figure class="shot" data-category="write">
+            <a class="frame frame-plan" data-zoom="plan" href="/Second-Mind/assets/second-mind-plan.png"><img src="/Second-Mind/assets/second-mind-plan.png" width="1280" height="960" alt="计划草稿 · 编辑选中的事项，确认后再加入当天的安排。" loading="lazy"></a>
+            <figcaption>
+              <strong>计划草稿</strong><span>编辑选中的事项，确认后再加入当天的安排。</span></figcaption>
+          </figure>
+          <figure class="shot" data-category="write">
+            <a class="frame frame-schedule" data-zoom="schedule" href="/Second-Mind/assets/second-mind-schedule.png"><img src="/Second-Mind/assets/second-mind-schedule.png" width="1280" height="960" alt="每日安排 · 按日期查看从计划草稿确认保存的事项。" loading="lazy"></a>
+            <figcaption>
+              <strong>每日安排</strong><span>按日期查看从计划草稿确认保存的事项。</span></figcaption>
+          </figure>
+          <figure class="shot" data-category="setup">
+            <a class="frame frame-provider-config" data-zoom="provider-config" href="/Second-Mind/assets/second-mind-provider-config.png"><img src="/Second-Mind/assets/second-mind-provider-config.png" width="1440" height="1050" alt="模型配置 · 选择服务商、填写端点，检查连接并保存。" loading="lazy"></a>
+            <figcaption>
+              <strong>模型配置</strong><span>选择服务商、填写端点，检查连接并保存。</span></figcaption>
+          </figure>
+          <figure class="shot" data-category="setup">
+            <a class="frame frame-mobile" data-zoom="mobile" href="/Second-Mind/assets/second-mind-mobile.png"><img src="/Second-Mind/assets/second-mind-mobile.png" width="360" height="800" alt="移动工作区 · 在窄屏上阅读回答、打开来源，继续上一轮对话。" loading="lazy"></a>
+            <figcaption>
+              <strong>移动工作区</strong><span>在窄屏上阅读回答、打开来源，继续上一轮对话。</span></figcaption>
+          </figure>
+        </div>
+      </section>
+      <section id="privacy" class="section shell" data-sync-key="privacy" aria-labelledby="privacy-title">
+        <h2 id="privacy-title">自己的密钥，自己的选择</h2>
+        <p class="intro">BYOK · 保存的 API Key 仅留在服务端，不回传浏览器，也不交给 SDK 子进程。</p>
+        <div class="provider card" data-tabs>
+          <div class="tablist provider-tabs" role="tablist" aria-label="选择服务">
+            <button type="button" role="tab" id="provider-tab-deepseek" aria-controls="provider-deepseek" aria-selected="true" tabindex="0">DeepSeek 官方</button>
+            <button type="button" role="tab" id="provider-tab-bailian" aria-controls="provider-bailian" aria-selected="false" tabindex="-1">阿里云百炼</button>
+            <button type="button" role="tab" id="provider-tab-kimi" aria-controls="provider-kimi" aria-selected="false" tabindex="-1">Kimi</button>
+            <button type="button" role="tab" id="provider-tab-custom" aria-controls="provider-custom" aria-selected="false" tabindex="-1">自定义 Anthropic 端点</button>
+            <button type="button" role="tab" id="provider-tab-tavily" aria-controls="provider-tavily" aria-selected="false" tabindex="-1">Tavily 联网</button>
+            <button type="button" role="tab" id="provider-tab-media" aria-controls="provider-media" aria-selected="false" tabindex="-1">本地 Whisper + FFmpeg</button>
+          </div>
+          <div id="provider-deepseek" class="panel" role="tabpanel" aria-labelledby="provider-tab-deepseek" tabindex="0">
+            <h3>DeepSeek 官方</h3><code>api.deepseek.com/anthropic/v1/messages</code>
+            <p>原生 Messages 接口。每个任务沿用启动时选择的模型和凭据。</p>
+          </div>
+          <div id="provider-bailian" class="panel" role="tabpanel" aria-labelledby="provider-tab-bailian" tabindex="0">
+            <h3>阿里云百炼</h3><code>dashscope.aliyuncs.com/apps/anthropic/v1/messages</code>
+            <p>Qwen 3.8 Max 可结合图片和 PDF 回答，原生思考等级在配置页选择。</p>
+          </div>
+          <div id="provider-kimi" class="panel" role="tabpanel" aria-labelledby="provider-tab-kimi" tabindex="0">
+            <h3>Kimi</h3><code>api.moonshot.cn/anthropic/v1/messages</code>
+            <p>使用 Kimi 的 Messages 接口，在配置页核验凭据与模型 ID。</p>
+          </div>
+          <div id="provider-custom" class="panel" role="tabpanel" aria-labelledby="provider-tab-custom" tabindex="0">
+            <h3>自定义 Anthropic 端点</h3><code>models.example.com/v1/messages</code>
+            <p>示意地址。填写你的兼容端点、认证方式与模型 ID，再运行连接检查。</p>
+          </div>
+          <div id="provider-tavily" class="panel" role="tabpanel" aria-labelledby="provider-tab-tavily" tabindex="0">
+            <h3>Tavily 联网</h3><code>api.tavily.com/search</code>
+            <p>单独配置搜索密钥。开启联网补充时发送查询，个人学习回顾只读所选知识库。</p>
+          </div>
+          <div id="provider-media" class="panel" role="tabpanel" aria-labelledby="provider-tab-media" tabindex="0">
+            <h3>本地 Whisper + FFmpeg</h3><code>FFmpeg → faster-whisper</code>
+            <p>提取关键帧并在本机转写。首次使用需准备语音模型，提取内容可随任务交给所选模型。</p>
+          </div>
+        </div>
+        <p class="footnote">外部模型会收到问题、附件和选中的笔记片段；远程 Embedding 服务会收到参与索引的文本。不开启模型也可使用本机关键词检索。 <a class="text-link" href="https://github.com/kygoyuan2004/Second-Mind/blob/main/docs/data-flow.md">查看数据流 <span aria-hidden="true">↗</span></a></p>
+      </section>
+      <section id="architecture" class="section shell" data-sync-key="architecture" aria-labelledby="architecture-title">
+        <h2 id="architecture-title">一条有边界的执行链</h2>
+        <p class="intro">从浏览器或桌面应用发起请求，跟着这条线查看认证、检索和写入分别在哪里发生。</p>
+        <div class="architecture card">
+          <svg viewBox="0 0 780 324" width="780" height="324" role="img" aria-label="本地客户端经认证访问 Second Mind，SDK 使用受限检索。只有服务端连接外部服务">
+            <path class="track" d="M44 39V283 M302 158H452Q468 158 468 142V113Q468 98 484 98H519"/>
+            <path class="pulse" d="M44 39V283 M302 158H452Q468 158 468 142V113Q468 98 484 98H519"/>
+            <circle class="node" cx="44" cy="35" r="7"/><text x="65" y="35" class="node-title">Browser / Desktop</text><text x="65" y="54">浏览器会话或本机桌面客户端</text>
+            <circle class="node" cx="44" cy="96" r="7"/><text x="65" y="96" class="node-title">Auth &amp; Loopback Token</text><text x="65" y="115">管理员认证 / 桌面本机令牌</text>
+            <circle class="node" cx="44" cy="157" r="7"/><text x="65" y="157" class="node-title">Second Mind Server</text><text x="65" y="176">凭据代理 · 任务编排 · 审核写入</text>
+            <circle class="node" cx="44" cy="218" r="7"/><text x="65" y="218" class="node-title">Claude Agent SDK</text><text x="65" y="237">sdk-v1 · 无 Bash / Write 工具</text>
+            <circle class="node" cx="44" cy="279" r="7"/><text x="65" y="279" class="node-title">Index / Obsidian Vault</text><text x="65" y="298">独立索引 · 受控的笔记读取</text>
+            <rect class="boundary" x="520" y="51" width="233" height="94" rx="7"/>
+            <text x="536" y="81" class="node-title">External API Boundary</text><text x="536" y="109">LLM / Embedding / Search</text><text x="536" y="128">按配置发送</text>
+          </svg>
+          <ol class="arch-mobile">
+            <li>
+              <strong>Browser / Desktop</strong><small>浏览器会话或本机桌面客户端</small></li>
+            <li>
+              <strong>Auth &amp; Loopback Token</strong><small>管理员认证 / 桌面本机令牌</small></li>
+            <li>
+              <strong>Second Mind Server</strong><small>凭据代理 · 任务编排 · 审核写入</small></li>
+            <li>
+              <strong>Claude Agent SDK</strong><small>sdk-v1 · 无 Bash / Write 工具</small></li>
+            <li>
+              <strong>Index / Obsidian Vault</strong><small>独立索引 · 受控的笔记读取</small></li>
+            <li>
+              <strong>External API Boundary</strong><small>LLM / Embedding / Search</small></li>
+          </ol>
+        </div>
+      </section>
+      <section id="knowledge-bases" class="section shell" data-sync-key="knowledge-bases" aria-labelledby="knowledge-bases-title">
+        <h2 id="knowledge-bases-title">多个知识库，各有自己的上下文</h2>
+        <p class="intro">切换示例 Vault，看看哪些状态跟着改变。每次检索只使用当前库。</p>
+        <div class="vault card" data-tabs>
+          <div class="tablist pills" role="tablist" aria-label="示例知识库">
+            <button type="button" role="tab" id="vault-tab-lab" aria-controls="vault-lab" aria-selected="true" tabindex="0">科研实验库</button>
+            <button type="button" role="tab" id="vault-tab-journal" aria-controls="vault-journal" aria-selected="false" tabindex="-1">日常日记库</button>
+            <button type="button" role="tab" id="vault-tab-project" aria-controls="vault-project" aria-selected="false" tabindex="-1">项目资料库</button>
+          </div>
+          <div id="vault-lab" class="panel" role="tabpanel" aria-labelledby="vault-tab-lab" tabindex="0">
+            <dl class="vault-stats">
+              <div>
+                <dt>独立索引</dt>
+                <dd>42</dd>
+              </div>
+              <div>
+                <dt>独立会话</dt>
+                <dd>6</dd>
+              </div>
+              <div>
+                <dt>独立草稿箱</dt>
+                <dd>2</dd>
+              </div>
+              <div>
+                <dt>独立写入目标</dt>
+                <dd>/vaults/research</dd>
+              </div>
+            </dl>
+          </div>
+          <div id="vault-journal" class="panel" role="tabpanel" aria-labelledby="vault-tab-journal" tabindex="0">
+            <dl class="vault-stats">
+              <div>
+                <dt>独立索引</dt>
+                <dd>108</dd>
+              </div>
+              <div>
+                <dt>独立会话</dt>
+                <dd>12</dd>
+              </div>
+              <div>
+                <dt>独立草稿箱</dt>
+                <dd>1</dd>
+              </div>
+              <div>
+                <dt>独立写入目标</dt>
+                <dd>/vaults/journal</dd>
+              </div>
+            </dl>
+          </div>
+          <div id="vault-project" class="panel" role="tabpanel" aria-labelledby="vault-tab-project" tabindex="0">
+            <dl class="vault-stats">
+              <div>
+                <dt>独立索引</dt>
+                <dd>67</dd>
+              </div>
+              <div>
+                <dt>独立会话</dt>
+                <dd>4</dd>
+              </div>
+              <div>
+                <dt>独立草稿箱</dt>
+                <dd>3</dd>
+              </div>
+              <div>
+                <dt>独立写入目标</dt>
+                <dd>/vaults/projects</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+        <ol class="registry">
+          <li>限定挂载根目录</li>
+          <li>发现 Vault 目录</li>
+          <li>注册稳定标识</li>
+          <li>绑定会话与任务</li>
+          <li>隔离索引与写入</li>
+        </ol>
+      </section>
+      <section id="quickstart" class="deploy" data-sync-key="quickstart" aria-labelledby="quickstart-title">
+        <div class="shell">
+          <h2 id="quickstart-title">Own Your Mind<span>.</span></h2>
+          <div class="install-grid">
+            <div>
+              <h3>在自己的电脑上打开 Vault</h3>
+              <p>Windows 和 Linux 桌面端内置 Node、Python 与 FFmpeg。打开本机笔记目录，或连接已有的 Second Mind 服务端。</p>
+              <div class="tags">
+                <span>Windows x64 · .exe</span><span>Linux x86_64 · AppImage</span><span>Debian / Ubuntu · .deb</span>
+              </div>
+              <a class="button primary" href="https://github.com/kygoyuan2004/Second-Mind/releases">下载桌面版 <span aria-hidden="true">↗</span></a>
+            </div>
+            <div class="terminal" data-tabs>
+              <h3>用 Docker 部署网页版</h3>
+              <div class="tablist os-tabs" role="tablist" aria-label="安装平台">
+                <button type="button" role="tab" id="os-tab-linux" aria-controls="os-linux" aria-selected="true" tabindex="0">Linux</button>
+                <button type="button" role="tab" id="os-tab-macos" aria-controls="os-macos" aria-selected="false" tabindex="-1">macOS</button>
+                <button type="button" role="tab" id="os-tab-windows" aria-controls="os-windows" aria-selected="false" tabindex="-1">Windows</button>
+              </div>
+              <div id="os-linux" class="panel" role="tabpanel" aria-labelledby="os-tab-linux" tabindex="0">
+                <div class="command-head">
+                  <strong>Git · Docker Engine + Compose v2</strong><button type="button" class="copy interactive">复制</button>
+                </div>
+                <pre><code>git clone https://github.com/kygoyuan2004/Second-Mind.git
 cd Second-Mind
 ./install.sh</code></pre>
-          </div>
-          <div class="tab-panel" role="tabpanel" id="panel-macos" aria-labelledby="tab-macos" tabindex="0" hidden>
-            <p>Docker Desktop</p>
-            <pre><code>git clone https://github.com/kygoyuan2004/Second-Mind.git
+              </div>
+              <div id="os-macos" class="panel" role="tabpanel" aria-labelledby="os-tab-macos" tabindex="0">
+                <div class="command-head">
+                  <strong>Git · Docker Desktop</strong><button type="button" class="copy interactive">复制</button>
+                </div>
+                <pre><code>git clone https://github.com/kygoyuan2004/Second-Mind.git
 cd Second-Mind
 ./install.sh</code></pre>
-          </div>
-          <div class="tab-panel" role="tabpanel" id="panel-windows" aria-labelledby="tab-windows" tabindex="0" hidden>
-            <p>PowerShell + Docker Desktop</p>
-            <pre><code>git clone https://github.com/kygoyuan2004/Second-Mind.git
+              </div>
+              <div id="os-windows" class="panel" role="tabpanel" aria-labelledby="os-tab-windows" tabindex="0">
+                <div class="command-head">
+                  <strong>Git · PowerShell + Docker Desktop</strong><button type="button" class="copy interactive">复制</button>
+                </div>
+                <pre><code>git clone https://github.com/kygoyuan2004/Second-Mind.git
 cd Second-Mind
 powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre>
+              </div>
+            </div>
+          </div>
+          <div class="ops">
+            <code>doctor</code><code>status</code><code>logs</code><code>update</code><code>backup</code><code>restore</code>
+          </div>
+          <p>多设备同步可选用 <code>compose.obsidian-sync.yaml</code>. <a class="text-link" href="https://github.com/kygoyuan2004/Second-Mind/blob/main/docs/deployment.md">部署与备份 <span aria-hidden="true">↗</span></a></p>
+        </div>
+      </section>
+      <section id="limits" class="section shell" data-sync-key="limits" aria-labelledby="limits-title">
+        <h2 id="limits-title">适合怎样的书房？</h2>
+        <div class="limits-grid">
+          <article>
+            <h3>设计目标</h3>
+            <ul>
+              <li>单管理员，在自己掌握的设备上自托管。</li>
+              <li>原文证据优先，写入前审核草稿。</li>
+              <li>BYOK 接入模型，多知识库独立运行。</li>
+            </ul>
+          </article>
+          <article>
+            <h3>明确非目标</h3>
+            <ul>
+              <li>多租户账号和细粒度团队权限。</li>
+              <li>跨库联合检索或合并多个库的上下文。</li>
+              <li>托管 SaaS 或代管你的 API 账单。</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+      <section id="closing" class="closing shell" data-sync-key="closing" aria-labelledby="closing-title">
+        <div class="closing-card">
+          <div>
+            <p class="mono">MIT License</p>
+            <h2 id="closing-title">从你已有的一本笔记开始。</h2>
+          </div>
+          <div class="actions">
+            <a class="button primary" href="https://github.com/kygoyuan2004/Second-Mind">查看源码 <span aria-hidden="true">↗</span></a> <a class="text-link" href="https://github.com/kygoyuan2004/Second-Mind/tree/main/docs">阅读文档 <span aria-hidden="true">↗</span></a>
           </div>
         </div>
-      </div>
-      <div class="shell operations-strip" role="group" aria-label="安装后运维命令">
-        <span>安装后使用同一个入口：</span>
-        <code>doctor</code><code>status</code><code>logs</code><code>update</code><code>restart</code><code>backup</code><code>restore</code><code>uninstall</code>
-      </div>
-      <div class="shell">
-        <p class="boundary-note"><strong>备份与恢复：</strong><code>update</code> 先备份并保留旧镜像；<code>restore</code> 校验备份后创建独立实例；<code>uninstall</code> 保留笔记、凭据和数据卷。备份是实时副本，严格一致性需要暂停同步与写入。平台实测范围和回退步骤见 <a href="https://github.com/kygoyuan2004/Second-Mind/blob/main/docs/deployment.md">部署文档</a>。</p>
-      </div>
-    </section>
-
-    <section class="section shell limits-section" id="limits" aria-labelledby="limits-title" data-sync-key="limits">
-      <div class="section-heading">
-        <p class="eyebrow">当前边界</p>
-        <h2 id="limits-title">先把适用范围说清楚</h2>
-      </div>
-      <dl class="limits-list">
-        <div><dt>适合</dt><dd>一个可信管理员在自己控制的设备或私有网络中管理个人或小团队知识库。</dd></div>
-        <div><dt>尚不提供</dt><dd>多租户账号体系、细粒度团队权限、跨库联合检索和托管云服务。</dd></div>
-        <div><dt>网络责任</dt><dd>默认保持本机或私有网络访问。如需公网入口，请自行配置 TLS、访问控制和备份。</dd></div>
-        <div><dt>附件与媒体</dt><dd>Qwen 3.8 Max 支持图片与 PDF 附件；其他模型按实际能力限制。语音和视频处理依赖容器中的媒体工具及首次下载的语音模型。</dd></div>
-        <div><dt>平台集成</dt><dd>不安装 Windows Service 或 macOS LaunchDaemon，也不集成 Credential Manager 或 Keychain。</dd></div>
-      </dl>
-    </section>
-
-    <section class="closing-section">
-      <div class="shell closing-layout">
-        <div>
-          <p class="eyebrow">把知识边界留在自己手里</p>
-          <h2>从一个 Vault 开始，按证据工作。</h2>
-        </div>
-        <div class="closing-actions">
-          <a class="button button-primary" href="https://github.com/kygoyuan2004/Second-Mind">在 GitHub 查看源码</a>
-          <a class="text-link" href="https://github.com/kygoyuan2004/Second-Mind/tree/main/docs">阅读完整文档 <span aria-hidden="true">↗</span></a>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <footer class="site-footer">
-    <div class="shell footer-layout">
-      <div><strong>Second Mind</strong><p>自托管 Obsidian 知识工作台</p></div>
+      </section>
+    </main>
+    <footer class="shell">
+      <a class="brand" href="#main"><span class="mark" aria-hidden="true">SM</span><strong>Second Mind</strong></a>
       <nav aria-label="页脚导航">
-        <a href="https://github.com/kygoyuan2004/Second-Mind">GitHub</a>
-        <a href="https://github.com/kygoyuan2004/Second-Mind/tree/main/docs">文档</a>
-        <a href="https://github.com/kygoyuan2004/Second-Mind/blob/main/LICENSE">MIT License</a>
-        <a href="/Second-Mind/en/" lang="en" hreflang="en">English</a>
+        <a class="text-link" href="https://github.com/kygoyuan2004/Second-Mind">GitHub <span aria-hidden="true">↗</span></a> <a href="https://github.com/kygoyuan2004/Second-Mind/tree/main/docs">文档</a> <a href="https://github.com/kygoyuan2004/Second-Mind/blob/main/LICENSE">MIT</a> <a href="/Second-Mind/en/" hreflang="en" lang="en">EN</a>
       </nav>
-    </div>
-  </footer>
-</body>
+    </footer>
+    <dialog id="viewer" aria-labelledby="viewer-title" aria-describedby="viewer-copy">
+      <div class="viewer-top">
+        <strong id="viewer-title">截图</strong><button type="button" data-close>关闭 ×</button>
+      </div>
+      <div class="viewer-image">
+      </div>
+      <p id="viewer-copy"></p>
+      <div class="viewer-controls">
+        <button type="button" data-prev>← 上一张</button><span data-position></span><a data-original href="/Second-Mind/assets/second-mind-qa.png">查看原图</a><button type="button" data-next>下一张 →</button>
+      </div>
+    </dialog>
+  </body>
 </html>

@@ -28,6 +28,8 @@ const SCREENSHOT_DIMENSIONS = new Map([
   ['second-mind-provider-config.png', [1440, 1050]],
   ['second-mind-diary.png', [1280, 960]],
   ['second-mind-plan.png', [1280, 960]],
+  ['second-mind-source.png', [1440, 1050]],
+  ['second-mind-schedule.png', [1280, 960]],
   ['second-mind-mobile.png', [360, 800]],
 ]);
 
@@ -521,10 +523,18 @@ async function main() {
     const activeResources = [
       ...tags(html, 'script').map((tag) => ['script', attribute(tag, 'src')]),
       ...tags(html, 'img').map((tag) => ['image', attribute(tag, 'src')]),
+      ...tags(html, 'video').map((tag) => ['video', attribute(tag, 'src')]),
+      ...tags(html, 'video').map((tag) => ['poster', attribute(tag, 'poster')]),
+      ...tags(html, 'source').map((tag) => ['media source', attribute(tag, 'src')]),
+      ...linkTagsByRel(html, 'icon').map((tag) => ['icon', attribute(tag, 'href')]),
       ...linkTagsByRel(html, 'stylesheet').map((tag) => ['stylesheet', attribute(tag, 'href')]),
     ];
     for (const [kind, reference] of activeResources) {
       if (!reference) continue;
+      if (['video', 'media source'].includes(kind)
+        && !/^\/Second-Mind\/assets\/videos\/[a-z0-9-]+\.(mp4|webm)$/.test(reference)) {
+        fail(`${htmlRelative}: invalid local video path: ${reference}`);
+      }
       if (isExternalReference(reference)) {
         fail(`${htmlRelative}: remote ${kind} is not allowed: ${reference}`);
       } else {

@@ -48,7 +48,7 @@
           <div class="hero-spread">
             <div>
               <p class="release-line">
-                <span>v0.2.1</span> · Claude Agent SDK · Self-Hosted Obsidian Workspace</p>
+                <span>v0.2.1</span> · Claude Agent SDK <span class="release-context">· Self-Hosted Obsidian Workspace</span></p>
               <h1 id="hero-title">让每个答案<br>都<mark>可核验</mark>。</h1>
               <p class="lede">在自己的 Obsidian 知识库里提问。回到引用的那一行，核对本周的进展，再决定把什么写进明天。</p>
               <div class="actions">
@@ -84,7 +84,7 @@
                 <h2>学习回顾与覆盖率</h2>
                 <p>展开工具记录，核对读过哪些文件，还有哪些没有读完。</p><code>review/coverage.log</code>
               </div>
-              <a class="stage-image" data-zoom="execution" href="/Second-Mind/assets/second-mind-execution.png"><img src="/Second-Mind/assets/second-mind-execution.png" width="1440" height="1050" alt="学习回顾与覆盖率 · 展开工具记录，核对读过哪些文件，还有哪些没有读完。" loading="lazy"></a>
+              <a class="stage-image" data-zoom="execution" href="/Second-Mind/assets/second-mind-execution.png"><img src="/Second-Mind/assets/second-mind-execution.png" width="1440" height="1050" alt="学习回顾与覆盖率 · 展开工具记录，核对读过哪些文件，还有哪些没有读完。"></a>
             </div>
             <div id="stage-plan" class="panel stage-slide" role="tabpanel" aria-labelledby="stage-tab-plan" tabindex="0">
               <div class="slide-copy">
@@ -92,7 +92,7 @@
                 <h2>草稿确认与日程</h2>
                 <p>编辑选中的事项，确认后再加入当天的安排。</p><code>drafts/plan.md</code>
               </div>
-              <a class="stage-image" data-zoom="plan" href="/Second-Mind/assets/second-mind-plan.png"><img src="/Second-Mind/assets/second-mind-plan.png" width="1280" height="960" alt="计划草稿 · 编辑选中的事项，确认后再加入当天的安排。" loading="lazy"></a>
+              <a class="stage-image" data-zoom="plan" href="/Second-Mind/assets/second-mind-plan.png"><img src="/Second-Mind/assets/second-mind-plan.png" width="1280" height="960" alt="计划草稿 · 编辑选中的事项，确认后再加入当天的安排。"></a>
             </div>
             <div id="stage-source" class="panel stage-slide" role="tabpanel" aria-labelledby="stage-tab-source" tabindex="0">
               <div class="slide-copy">
@@ -100,7 +100,7 @@
                 <h2>原文行级核验</h2>
                 <p>在上下文中查看标黄的原句，判断结论是否成立。</p><code>vault/research.md</code>
               </div>
-              <a class="stage-image" data-zoom="source" href="/Second-Mind/assets/second-mind-source.png"><img src="/Second-Mind/assets/second-mind-source.png" width="1440" height="1050" alt="原文行级核验 · 在上下文中查看标黄的原句，判断结论是否成立。" loading="lazy"></a>
+              <a class="stage-image" data-zoom="source" href="/Second-Mind/assets/second-mind-source.png"><img src="/Second-Mind/assets/second-mind-source.png" width="1440" height="1050" alt="原文行级核验 · 在上下文中查看标黄的原句，判断结论是否成立。"></a>
             </div>
           </div>
         </div>
@@ -122,61 +122,98 @@
         </dl>
       </section>
       <section id="capabilities" class="section shell" data-sync-key="capabilities" aria-labelledby="capabilities-title">
-        <h2 id="capabilities-title">从一条引文，到明天的安排</h2>
-        <p class="intro">在这份演示周报里试一次。所有操作仅作用于本页样例。</p>
-        <article class="citation card" data-tabs>
-          <div class="answer">
-            <h3>本周到底做成了什么？</h3>
-            <p class="static-answer">基线实验已经跑通。完整复现还在计划里。关于延迟的解释仍在核对。</p>
-            <div class="tablist pills cited-answer" role="tablist" aria-label="查看三条引用">
-              <span>基线实验已经跑通。 <button type="button" role="tab" id="cite-tab-0" aria-controls="cite-0" aria-selected="true" tabindex="0">[1] 实验记录.md:5</button></span>
-              <span>完整复现还在计划里。 <button type="button" role="tab" id="cite-tab-1" aria-controls="cite-1" aria-selected="false" tabindex="-1">[2] 周计划.md:14</button></span>
-              <span>关于延迟的解释仍在核对。 <button type="button" role="tab" id="cite-tab-2" aria-controls="cite-2" aria-selected="false" tabindex="-1">[3] 文献笔记.md:28</button></span>
+        <h2 id="capabilities-title">亲手核验一次回答</h2>
+        <p class="intro">发送预设问题，观察一次真实检索，再沿引文回到笔记。所有操作只在本页回放。</p>
+        <article id="qa-replay" class="replay card" aria-labelledby="replay-title">
+          <div class="replay-bar">
+            <div><span class="book-sign" aria-hidden="true">▤</span><strong>LLM 推理技术学习</strong><code>deepseek-v4-pro-0813</code></div>
+            <span class="record-label">基于真实 SDK 轨迹采样 · 本地静态回放</span>
+          </div>
+          <div class="replay-command interactive">
+            <label for="replay-question">采样问题</label>
+            <input type="text" id="replay-question" readonly value="投机解码是什么？">
+            <button type="button" class="button primary" data-send>发送</button>
+            <button type="button" class="button" data-skip hidden>跳到结果</button>
+          </div>
+          <div class="replay-layout">
+            <div class="replay-chat">
+              <h3 id="replay-title">问答与溯源</h3>
+              <div class="ready-guide interactive">
+                <p>发送后，你会看到</p>
+                <ol><li>检索候选笔记，读取命中文件</li><li>观看工具调用与一次引文重试</li><li>打开引文，逐句对照回答与原文</li></ol>
+              </div>
+              <p class="question-bubble">投机解码是什么？</p>
+              <details class="sample-log" open>
+                <summary>执行日志 <span>任务总耗时 55.5 s</span></summary>
+                <ol>
+                  <li data-outcome="ok">
+                    <span class="log-state" aria-hidden="true"></span><span><code>KnowledgeSearch</code> <small>203 ms</small><span class="log-detail">词法匹配 + BM25 · 11 个候选，跳过向量检索</span></span><span class="sr-only">完成</span>
+                  </li>
+                  <li data-outcome="ok">
+                    <span class="log-state" aria-hidden="true"></span><span><code>Read</code> <small>21 ms</small><span class="log-detail">投机解码.md · 第 1 至 621 行</span></span><span class="sr-only">完成</span>
+                  </li>
+                  <li data-outcome="ok">
+                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>9 ms</small><span class="log-detail">投机解码.md · 第 284 行</span></span><span class="sr-only">完成</span>
+                  </li>
+                  <li data-outcome="ok">
+                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>6 ms</small><span class="log-detail">投机解码.md · 第 267 行</span></span><span class="sr-only">完成</span>
+                  </li>
+                  <li data-outcome="retry">
+                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>10 ms</small><span class="log-detail">所给引文与原文不连续，需重试</span></span><span class="sr-only">需重试</span>
+                  </li>
+                  <li data-outcome="ok">
+                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>4 ms</small><span class="log-detail">投机解码.md · 指定第 241 行，匹配成功</span></span><span class="sr-only">完成</span>
+                  </li>
+                </ol>
+              </details>
+              <div class="recorded-answer">
+                <h4>采样回答</h4>
+                <p data-answer-block><strong>候选生成</strong> 投机解码先让一个便宜的草稿模型（分布 <var>q</var>）自回归地连续猜出若干假设 token，作为目标模型后续验证的“假设前缀”。这一阶段不改变目标模型，只是提供并行性的来源，草稿质量只影响接受率、不影响最终分布是否正确。 <a class="ref" href="#passage-1" aria-label="核对引文 1">[1]</a></p>
+                <p data-answer-block><strong>并行验证</strong> 草稿把候选位置补成一条已知序列后，目标大模型（分布 <var>p</var>）用它做一次“块前向”，在 causal mask 约束下同时算出每个候选位置的目标分布，从而用一次权重读取服务多个位置，而不是像普通解码那样每步只算一个新 token。 <a class="ref" href="#passage-2" aria-label="核对引文 2">[2]</a></p>
+                <p data-answer-block><strong>加速边界</strong> 投机解码本质上针对 Decode 阶段的访存瓶颈，通过减少目标模型串行步数与权重搬运来压低头字延迟，但它不减少总 FLOPs、也不解决 Prefill；只在低并发、长输出、访存受限时收益最明显，一旦大 batch/高并发把 GPU 算力吃满，收益会衰减甚至变慢。 <a class="ref" href="#passage-3" aria-label="核对引文 3">[3]</a></p>
+                <p class="editor-note" data-answer-block><strong>核验提示</strong> 回答提到“头字延迟”。第 241 行写的是解码阶段每个输出 token 的耗时（TPOT/ITL），并说明 Prefill 不会明显加速。 <a class="ref" href="#passage-3" aria-label="核对引文 3">[3]</a></p>
+                <div class="source-links" role="group" aria-label="来源条目">
+                  <a href="#passage-1">[1] 投机解码.md · L284</a>
+                  <a href="#passage-2">[2] 投机解码.md · L267</a>
+                  <a href="#passage-3">[3] 投机解码.md · L241</a>
+                </div>
+              </div>
+            </div>
+            <div class="proof" role="group" aria-label="原文核验">
+              <p class="proof-label">Knowledge source</p>
+              <div class="source-cover interactive">
+                <p class="cover-file">投机解码.md</p>
+                <p>同一篇技术笔记，三处逐字引文。回放结束后可打开标黄的原句。</p>
+                <ol><li><span>候选生成</span><code>L284</code></li><li><span>并行验证</span><code>L267</code></li><li><span>加速边界</span><code>L241</code></li></ol>
+              </div>
+              <div class="passage" role="group" id="passage-1" tabindex="-1" aria-label="引文 1">
+                <p class="file-path">learning_doc/项目/LLM推理技术学习/投机解码.md · L283-285</p>
+                <h4>[1] 候选生成</h4>
+                <div class="note-line"><b>283</b><span lang="zh-CN">一轮的完整过程是：</span></div>
+                <div class="note-line"><b>284</b><span lang="zh-CN"><mark>Draft：草稿模型自回归生成 $x_1,\ldots,x_\gamma$，并保存每一步的 $q_i(x)$。</mark></span></div>
+                <div class="note-line"><b>285</b><span lang="zh-CN">Verify：目标模型对整个候选块运行一次前向，得到：</span></div>
+              </div>
+              <div class="passage" role="group" id="passage-2" tabindex="-1" aria-label="引文 2">
+                <p class="file-path">learning_doc/项目/LLM推理技术学习/投机解码.md · L267-268</p>
+                <h4>[2] 并行验证</h4>
+                <div class="note-line"><b>267</b><span lang="zh-CN">草稿一旦给出，目标模型就暂时获得了一个完整的“假设前缀”。<mark>Transformer 可以在 causal mask 下，把这些已知候选位置组成一个 block，在一次前向中并行算出每个位置的目标分布。</mark></span></div>
+                <div class="note-line"><b>268</b><span lang="zh-CN">这类似 CPU 的分支预测：先沿着可能的路径执行，再验证这条路径是否正确。</span></div>
+              </div>
+              <div class="passage" role="group" id="passage-3" tabindex="-1" aria-label="引文 3">
+                <p class="file-path">learning_doc/项目/LLM推理技术学习/投机解码.md · L241-243</p>
+                <h4>[3] 加速边界</h4>
+                <div class="note-line"><b>241</b><span lang="zh-CN">它主要优化 Decode 的 TPOT/ITL，不会明显加速 Prefill。<mark>低并发、长输出、访存受限时最容易获益；大 batch、高并发、Prefill 占主导时收益会下降，甚至变慢。</mark></span></div>
+                <div class="note-line"><b>242</b><span lang="zh-CN">---</span></div>
+                <div class="note-line"><b>243</b><span lang="zh-CN">1. 它要解决什么问题</span></div>
+              </div>
             </div>
           </div>
-          <div class="sources">
-            <div id="cite-0" class="panel source-note" role="tabpanel" aria-labelledby="cite-tab-0" tabindex="0">
-              <p class="file-path">Vault / 实验记录.md</p>
-              <div class="note-line">
-                <b>4</b><span>## 周回顾</span>
-              </div>
-              <div class="note-line">
-                <b>5</b><span><mark>三次重复实验均得到相同基线。</mark></span>
-              </div>
-              <div class="note-line">
-                <b>6</b><span>记录运行日志。</span>
-              </div>
-            </div>
-            <div id="cite-1" class="panel source-note" role="tabpanel" aria-labelledby="cite-tab-1" tabindex="0">
-              <p class="file-path">Vault / 周计划.md</p>
-              <div class="note-line">
-                <b>13</b><span>## 周回顾</span>
-              </div>
-              <div class="note-line">
-                <b>14</b><span><mark>下周安排完整复现，尚未开始测量。</mark></span>
-              </div>
-              <div class="note-line">
-                <b>15</b><span>预留周四下午复盘。</span>
-              </div>
-            </div>
-            <div id="cite-2" class="panel source-note" role="tabpanel" aria-labelledby="cite-tab-2" tabindex="0">
-              <p class="file-path">Vault / 文献笔记.md</p>
-              <div class="note-line">
-                <b>27</b><span>## 周回顾</span>
-              </div>
-              <div class="note-line">
-                <b>28</b><span><mark>延迟差异仍需对照论文附录核实。</mark></span>
-              </div>
-              <div class="note-line">
-                <b>29</b><span>整理下一轮问题。</span>
-              </div>
-            </div>
-          </div>
+          <p class="sr-only" role="status" data-replay-status></p>
         </article>
         <div class="workflow-pair">
           <article class="trace card">
             <div class="card-top">
-              <h3>跟读工具日志</h3><button type="button" class="subtle interactive" data-replay>重播</button>
+              <h3>周回顾示例 · 阅读覆盖率</h3><button type="button" class="subtle interactive" data-replay>重播</button>
             </div>
             <ol class="log-lines">
               <li>
@@ -206,12 +243,12 @@
                 <dd data-total="0">0</dd>
               </div>
             </dl>
-            <div class="tags">
+            <div class="legend" role="group" aria-label="证据状态图例">
               <span>已完成</span><span>进行中</span><span>仅计划</span>
             </div>
           </article>
           <article class="draft card">
-            <h3>亲手确认一次写入</h3>
+            <h3>草稿示例 · 确认写入</h3>
             <div data-tabs class="draft-work">
               <div class="tablist pills" role="tablist" aria-label="草稿视图">
                 <button type="button" role="tab" id="draft-tab-preview" aria-controls="draft-preview" aria-selected="true" tabindex="0">预览 Markdown</button>
@@ -220,25 +257,32 @@
               <div id="draft-preview" class="panel" role="tabpanel" aria-labelledby="draft-tab-preview" tabindex="0">
                 <div class="draft-preview">
                   <strong>明日计划</strong>
-                  <ul><li>复核实验日志</li><li>对照论文附录</li></ul>
+                  <ul><li class="task-item"><input type="checkbox" disabled aria-label="复核实验日志">复核实验日志</li><li class="task-item"><input type="checkbox" disabled aria-label="对照论文附录">对照论文附录</li></ul>
                 </div>
               </div>
               <div id="draft-edit" class="panel" role="tabpanel" aria-labelledby="draft-tab-edit" tabindex="0">
                 <label class="sr-only" for="draft-text">草稿内容</label>
                 <textarea id="draft-text" rows="4">## 明日计划
-- 复核实验日志
-- 对照论文附录</textarea>
+- [ ] 复核实验日志
+- [ ] 对照论文附录</textarea>
               </div>
               <label class="check"><input type="checkbox" checked> 同时加入每日安排</label>
               <button type="button" class="button primary interactive" data-confirm>确认写入 Vault →</button>
             </div>
             <div class="receipt" hidden>
-              <ol>
+              <h4>安全写入回执</h4>
+              <ol class="receipt-stages">
                 <li>冲突检测通过</li>
                 <li>已生成恢复备份</li>
                 <li>已写入 Vault</li>
                 <li>已同步 2 条日程</li>
               </ol>
+              <dl class="receipt-files">
+                <div><dt>写入文件</dt><dd><code>plans/tomorrow.md</code></dd></div>
+                <div><dt>恢复备份</dt><dd><code>recovery/plans/tomorrow.md.bak</code></dd></div>
+              </dl>
+              <strong>每日安排</strong>
+              <ul class="saved-items"></ul><p class="schedule-empty"></p>
               <button type="button" class="button" data-reset>重置演示</button>
             </div><span class="sr-only" role="status" data-draft-status></span>
           </article>
@@ -249,10 +293,10 @@
         <p class="intro">选一个章节，跟着真实产品画面看每一步。</p>
         <div class="theater" data-tabs>
           <div class="tablist chapter-list" role="tablist" aria-label="演示章节">
-            <button type="button" role="tab" id="film-tab-hero-overview" aria-controls="film-hero-overview" aria-selected="true" tabindex="0"><strong>全景速览</strong><small>35s</small></button>
-            <button type="button" role="tab" id="film-tab-demo-citation" aria-controls="film-demo-citation" aria-selected="false" tabindex="-1"><strong>行级引文溯源</strong><small>25s</small></button>
-            <button type="button" role="tab" id="film-tab-demo-review" aria-controls="film-demo-review" aria-selected="false" tabindex="-1"><strong>学习回顾与覆盖率</strong><small>30s</small></button>
-            <button type="button" role="tab" id="film-tab-demo-draft-schedule" aria-controls="film-demo-draft-schedule" aria-selected="false" tabindex="-1"><strong>草稿确认与每日安排</strong><small>25s</small></button>
+            <button type="button" role="tab" id="film-tab-hero-overview" aria-controls="film-hero-overview" aria-selected="true" tabindex="0"><strong>全景速览</strong><small>图解预览</small></button>
+            <button type="button" role="tab" id="film-tab-demo-citation" aria-controls="film-demo-citation" aria-selected="false" tabindex="-1"><strong>行级引文溯源</strong><small>图解预览</small></button>
+            <button type="button" role="tab" id="film-tab-demo-review" aria-controls="film-demo-review" aria-selected="false" tabindex="-1"><strong>学习回顾与覆盖率</strong><small>图解预览</small></button>
+            <button type="button" role="tab" id="film-tab-demo-draft-schedule" aria-controls="film-demo-draft-schedule" aria-selected="false" tabindex="-1"><strong>草稿确认与每日安排</strong><small>图解预览</small></button>
           </div>
           <div id="film-hero-overview" class="panel chapter" role="tabpanel" aria-labelledby="film-tab-hero-overview" tabindex="0">
             <div class="theater-screen">
@@ -518,7 +562,7 @@
       </section>
       <section id="quickstart" class="deploy" data-sync-key="quickstart" aria-labelledby="quickstart-title">
         <div class="shell">
-          <h2 id="quickstart-title">Own Your Mind<span>.</span></h2>
+          <h2 id="quickstart-title">Own Your Mind.</h2>
           <div class="install-grid">
             <div>
               <h3>在自己的电脑上打开 Vault</h3>

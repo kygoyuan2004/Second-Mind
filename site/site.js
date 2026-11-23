@@ -99,17 +99,133 @@ function setupCarousel(stage) {
 
 setupCarousel(document.querySelector('[data-carousel]'));
 
+function setupSampleReplay(workspace) {
+  const send = workspace.querySelector('[data-send]');
+  const skip = workspace.querySelector('[data-skip]');
+  const guide = workspace.querySelector('.ready-guide');
+  const question = workspace.querySelector('.question-bubble');
+  const log = workspace.querySelector('.sample-log');
+  const rows = [...log.querySelectorAll('li')];
+  const answer = workspace.querySelector('.recorded-answer');
+  const paragraphs = [...answer.querySelectorAll('[data-answer-block]')];
+  const files = workspace.querySelector('.source-links');
+  const references = [...answer.querySelectorAll('a')];
+  const cover = workspace.querySelector('.source-cover');
+  const passages = [...workspace.querySelectorAll('.passage')];
+  const status = workspace.querySelector('[data-replay-status]');
+  let timer;
+
+  function selectPassage(passage, navigate) {
+    cover.hidden = true;
+    passages.forEach(item => { item.hidden = item !== passage; });
+    references.forEach(link => {
+      if (link.hash === '#' + passage.id) link.setAttribute('aria-current', 'true');
+      else link.removeAttribute('aria-current');
+    });
+    const mark = passage.querySelector('mark');
+    mark.classList.remove('sweep');
+    void mark.offsetWidth;
+    mark.classList.add('sweep');
+    if (navigate) {
+      passage.focus({ preventScroll: true });
+      requestAnimationFrame(() => {
+        if (passage.hidden) return;
+        const compact = matchMedia('(max-width: 768px)').matches;
+        const bounds = mark.getBoundingClientRect();
+        if (compact || bounds.top < 72 || bounds.bottom > innerHeight) {
+          const target = compact ? passage : mark;
+          target.scrollIntoView({ behavior: motion.matches ? 'instant' : 'smooth', block: compact ? 'start' : 'nearest' });
+        }
+      });
+    }
+  }
+
+  function clearPlayback() {
+    clearTimeout(timer);
+    question.hidden = true;
+    log.hidden = true;
+    log.open = true;
+    answer.hidden = true;
+    files.hidden = true;
+    cover.hidden = false;
+    [...rows, ...paragraphs, ...passages].forEach(item => { item.hidden = true; });
+    rows.forEach(row => row.classList.remove('pending-call'));
+    references.forEach(link => link.removeAttribute('aria-current'));
+  }
+
+  function finish() {
+    clearTimeout(timer);
+    workspace.dataset.phase = 'done';
+    if (document.activeElement === skip) send.focus({ preventScroll: true });
+    skip.hidden = true;
+    question.hidden = log.hidden = answer.hidden = files.hidden = false;
+    [...rows, ...paragraphs].forEach(item => { item.hidden = false; });
+    rows.forEach(row => row.classList.remove('pending-call'));
+    if (!cover.hidden) selectPassage(passages[0], false);
+    status.textContent = label('回答就绪，可核对三条引文。', 'Answer ready. Three passages are available for inspection.');
+  }
+
+  function streamAnswer(index) {
+    answer.hidden = false;
+    paragraphs[index].hidden = false;
+    timer = setTimeout(() => {
+      if (index + 1 === paragraphs.length) finish();
+      else streamAnswer(index + 1);
+    }, 650);
+  }
+
+  function streamCall(index) {
+    log.hidden = false;
+    const row = rows[index];
+    row.hidden = false;
+    row.classList.add('pending-call');
+    timer = setTimeout(() => {
+      row.classList.remove('pending-call');
+      if (index + 1 === rows.length) streamAnswer(0);
+      else streamCall(index + 1);
+    }, 420);
+  }
+
+  function play() {
+    clearPlayback();
+    workspace.dataset.phase = 'playing';
+    guide.hidden = true;
+    send.textContent = label('重播', 'Replay');
+    question.hidden = false;
+    if (motion.matches) {
+      finish();
+      return;
+    }
+    skip.hidden = false;
+    status.textContent = label('正在回放采样轨迹。', 'Playing the recorded trace.');
+    timer = setTimeout(() => streamCall(0), 160);
+  }
+
+  clearPlayback();
+  workspace.dataset.phase = 'ready';
+  send.addEventListener('click', play);
+  skip.addEventListener('click', finish);
+  motion.addEventListener('change', () => {
+    if (motion.matches && workspace.dataset.phase === 'playing') finish();
+  });
+  references.forEach(link => link.addEventListener('click', event => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    selectPassage(document.getElementById(link.hash.slice(1)), true);
+  }));
+}
+setupSampleReplay(document.querySelector('#qa-replay'));
+
+
 function setupTrace(trace) {
   const rows = [...trace.querySelectorAll('.log-lines li')];
   const totals = [...trace.querySelectorAll('[data-total]')];
   let timer;
-  let started = false;
   function play() {
-    started = true;
     clearTimeout(timer);
     trace.classList.add('is-streaming');
     rows.forEach(row => row.classList.add('waiting'));
-    totals.forEach(el => { el.textContent = '·'; });
+    totals.forEach(el => { el.textContent = '0'; });
     function step(i) {
       rows[i].classList.remove('waiting');
       if (i === 0) totals[0].textContent = totals[0].dataset.total;
@@ -125,7 +241,6 @@ function setupTrace(trace) {
     step(0);
   }
   trace.querySelector('[data-replay]').addEventListener('click', play);
-  onScreen(trace, visible => { if (visible && !started) play(); });
 }
 setupTrace(document.querySelector('.trace'));
 
@@ -133,9 +248,9 @@ function setupDraft(draft) {
   const work = draft.querySelector('.draft-work');
   const editor = draft.querySelector('textarea');
   const preview = draft.querySelector('.draft-preview');
-  const schedule = draft.querySelector('input');
+  const schedule = draft.querySelector('.check input');
   const receipt = draft.querySelector('.receipt');
-  const steps = [...receipt.querySelectorAll('li')];
+  const steps = [...receipt.querySelectorAll('.receipt-stages li')];
   const confirm = draft.querySelector('[data-confirm]');
   const reset = draft.querySelector('[data-reset]');
   const status = draft.querySelector('[data-draft-status]');
@@ -151,7 +266,18 @@ function setupDraft(draft) {
           preview.append(list);
         }
         const item = document.createElement('li');
-        item.textContent = bullet[1];
+        const task = bullet[1].match(/^\[([ xX])\]\s+(.*)/);
+        if (task) {
+          item.className = 'task-item';
+          const box = document.createElement('input');
+          box.type = 'checkbox';
+          box.checked = task[1].toLowerCase() === 'x';
+          box.disabled = true;
+          box.setAttribute('aria-label', task[2]);
+          item.append(box, document.createTextNode(task[2]));
+        } else {
+          item.textContent = bullet[1];
+        }
         list.append(item);
       } else {
         list = null;
@@ -164,11 +290,24 @@ function setupDraft(draft) {
     }
     confirm.disabled = !editor.value.trim();
   }
+  refresh();
   editor.addEventListener('input', refresh);
   confirm.addEventListener('click', () => {
-    const tasks = editor.value.split(/\r?\n/).filter(line => /^\s*[-*+]\s+\S/.test(line)).length;
+    const items = [...preview.querySelectorAll('li')].map(item => item.textContent);
+    const synced = schedule.checked ? items : [];
+    const taskList = receipt.querySelector('.saved-items');
+    taskList.replaceChildren(...synced.map(text => {
+      const item = document.createElement('li');
+      item.textContent = text;
+      return item;
+    }));
+    const empty = receipt.querySelector('.schedule-empty');
+    empty.hidden = synced.length > 0;
+    empty.textContent = schedule.checked
+      ? label('没有可同步的事项', 'No tasks to add')
+      : label('本次仅保存笔记', 'Note saved without scheduling tasks');
     const count = schedule.checked ? 4 : 3;
-    steps[3].textContent = label('已同步 ' + tasks + ' 条日程', tasks + (tasks === 1 ? ' task added' : ' tasks added') + ' to the schedule');
+    steps[3].textContent = label('已同步 ' + synced.length + ' 条日程', synced.length + (synced.length === 1 ? ' task added' : ' tasks added') + ' to the schedule');
     work.hidden = true;
     receipt.hidden = false;
     steps.forEach(el => { el.hidden = true; });
@@ -250,6 +389,16 @@ setupViewer(document.querySelector('#viewer'));
 
 function setupVideo(video) {
   let visible = false;
+  const chapter = video.closest('[role="tabpanel"]');
+  const badge = document.getElementById(chapter.getAttribute('aria-labelledby')).querySelector('small');
+  function showDuration() {
+    const seconds = Math.round(video.duration);
+    badge.textContent = Number.isFinite(seconds) && seconds > 0
+      ? Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0')
+      : label('实机录屏', 'Recording');
+  }
+  showDuration();
+  video.addEventListener('durationchange', showDuration);
   let userPaused = false;
   let active = false;
   function sync() {
@@ -311,9 +460,8 @@ if ('IntersectionObserver' in window && !motion.matches) {
       entry.target.classList.add('revealed');
       reveal.unobserve(entry.target);
     }
-  });
-  document.querySelectorAll('.section > h2, .trust dl > div, .closing-card').forEach((element, index) => {
-    element.style.setProperty('--delay', (index % 3) * 45 + 'ms');
-    reveal.observe(element);
+  }, { threshold: 0.05, rootMargin: '0px 0px -30px 0px' });
+  document.querySelectorAll('.section > h2, .trust dl > div, .closing-card').forEach(element => {
+    if (element.getBoundingClientRect().top > window.innerHeight) reveal.observe(element);
   });
 }

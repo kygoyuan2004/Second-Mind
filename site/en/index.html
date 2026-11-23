@@ -48,7 +48,7 @@
           <div class="hero-spread">
             <div>
               <p class="release-line">
-                <span>v0.2.1</span> · Claude Agent SDK · Self-Hosted Obsidian Workspace</p>
+                <span>v0.2.1</span> · Claude Agent SDK <span class="release-context">· Self-Hosted Obsidian Workspace</span></p>
               <h1 id="hero-title">Your notes.<br><mark>Verifiable</mark> answers.</h1>
               <p class="lede">Ask your Obsidian Vault a question. Trace the answer to the exact line, review your week, and decide what belongs in tomorrow’s plan.</p>
               <div class="actions">
@@ -84,7 +84,7 @@
                 <h2>Review and coverage</h2>
                 <p>Inspect the tool calls to see which files were read and where coverage ends.</p><code>review/coverage.log</code>
               </div>
-              <a class="stage-image" data-zoom="execution" href="/Second-Mind/assets/second-mind-execution.png"><img src="/Second-Mind/assets/second-mind-execution.png" width="1440" height="1050" alt="Review and coverage · Inspect the tool calls to see which files were read and where coverage ends." loading="lazy"></a>
+              <a class="stage-image" data-zoom="execution" href="/Second-Mind/assets/second-mind-execution.png"><img src="/Second-Mind/assets/second-mind-execution.png" width="1440" height="1050" alt="Review and coverage · Inspect the tool calls to see which files were read and where coverage ends."></a>
             </div>
             <div id="stage-plan" class="panel stage-slide" role="tabpanel" aria-labelledby="stage-tab-plan" tabindex="0">
               <div class="slide-copy">
@@ -92,7 +92,7 @@
                 <h2>Draft to schedule</h2>
                 <p>Edit the items you want to keep, then add them to the day’s schedule.</p><code>drafts/plan.md</code>
               </div>
-              <a class="stage-image" data-zoom="plan" href="/Second-Mind/assets/second-mind-plan.png"><img src="/Second-Mind/assets/second-mind-plan.png" width="1280" height="960" alt="Plan drafts · Edit the items you want to keep, then add them to the day’s schedule." loading="lazy"></a>
+              <a class="stage-image" data-zoom="plan" href="/Second-Mind/assets/second-mind-plan.png"><img src="/Second-Mind/assets/second-mind-plan.png" width="1280" height="960" alt="Plan drafts · Edit the items you want to keep, then add them to the day’s schedule."></a>
             </div>
             <div id="stage-source" class="panel stage-slide" role="tabpanel" aria-labelledby="stage-tab-source" tabindex="0">
               <div class="slide-copy">
@@ -100,7 +100,7 @@
                 <h2>Line-level evidence</h2>
                 <p>Read the highlighted line in context and judge the claim for yourself.</p><code>vault/research.md</code>
               </div>
-              <a class="stage-image" data-zoom="source" href="/Second-Mind/assets/second-mind-source.png"><img src="/Second-Mind/assets/second-mind-source.png" width="1440" height="1050" alt="Line-level evidence · Read the highlighted line in context and judge the claim for yourself." loading="lazy"></a>
+              <a class="stage-image" data-zoom="source" href="/Second-Mind/assets/second-mind-source.png"><img src="/Second-Mind/assets/second-mind-source.png" width="1440" height="1050" alt="Line-level evidence · Read the highlighted line in context and judge the claim for yourself."></a>
             </div>
           </div>
         </div>
@@ -122,61 +122,101 @@
         </dl>
       </section>
       <section id="capabilities" class="section shell" data-sync-key="capabilities" aria-labelledby="capabilities-title">
-        <h2 id="capabilities-title">From a cited line to tomorrow’s plan</h2>
-        <p class="intro">Try the weekly review below. Changes apply only to this example, in this tab.</p>
-        <article class="citation card" data-tabs>
-          <div class="answer">
-            <h3>What actually got done this week?</h3>
-            <p class="static-answer">The baseline run finished. Full replication is still on the plan. The latency explanation is under review.</p>
-            <div class="tablist pills cited-answer" role="tablist" aria-label="Inspect cited passages">
-              <span>The baseline run finished. <button type="button" role="tab" id="cite-tab-0" aria-controls="cite-0" aria-selected="true" tabindex="0">[1] Lab notes.md:5</button></span>
-              <span>Full replication is still on the plan. <button type="button" role="tab" id="cite-tab-1" aria-controls="cite-1" aria-selected="false" tabindex="-1">[2] Weekly plan.md:14</button></span>
-              <span>The latency explanation is under review. <button type="button" role="tab" id="cite-tab-2" aria-controls="cite-2" aria-selected="false" tabindex="-1">[3] Reading notes.md:28</button></span>
+        <h2 id="capabilities-title">Check an answer against the note</h2>
+        <p class="intro">Send the preset question, follow a recorded search, then open the passages behind the answer. The replay runs entirely on this page.</p>
+        <article id="qa-replay" class="replay card" aria-labelledby="replay-title">
+          <div class="replay-bar">
+            <div><span class="book-sign" aria-hidden="true">▤</span><strong>LLM inference notes</strong><code>deepseek-v4-pro-0813</code></div>
+            <span class="record-label">Sampled from real SDK trace · Static replay</span>
+          </div>
+          <div class="replay-command interactive">
+            <label for="replay-question">Recorded question</label>
+            <input type="text" id="replay-question" readonly value="What is speculative decoding?">
+            <button type="button" class="button primary" data-send>Send</button>
+            <button type="button" class="button" data-skip hidden>Skip</button>
+          </div>
+          <div class="replay-layout">
+            <div class="replay-chat">
+              <h3 id="replay-title">Question and evidence</h3>
+              <div class="ready-guide interactive">
+                <p>When you press Send</p>
+                <ol><li>Find candidate notes and read the match</li><li>Follow the tool trace, including a citation retry</li><li>Open a citation and compare the answer with the source</li></ol>
+              </div>
+              <p class="question-bubble">What is speculative decoding?</p>
+              <details class="sample-log" open>
+                <summary>Tool trace <span>Full run 55.5 s</span></summary>
+                <ol>
+                  <li data-outcome="ok">
+                    <span class="log-state" aria-hidden="true"></span><span><code>KnowledgeSearch</code> <small>203 ms</small><span class="log-detail">Lexical match + BM25 · 11 candidates, embedding skipped</span></span><span class="sr-only">Completed</span>
+                  </li>
+                  <li data-outcome="ok">
+                    <span class="log-state" aria-hidden="true"></span><span><code>Read</code> <small>21 ms</small><span class="log-detail">投机解码.md · lines 1 to 621</span></span><span class="sr-only">Completed</span>
+                  </li>
+                  <li data-outcome="ok">
+                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>9 ms</small><span class="log-detail">投机解码.md · line 284</span></span><span class="sr-only">Completed</span>
+                  </li>
+                  <li data-outcome="ok">
+                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>6 ms</small><span class="log-detail">投机解码.md · line 267</span></span><span class="sr-only">Completed</span>
+                  </li>
+                  <li data-outcome="retry">
+                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>10 ms</small><span class="log-detail">Quote did not match a continuous passage. Retry requested.</span></span><span class="sr-only">Retry required</span>
+                  </li>
+                  <li data-outcome="ok">
+                    <span class="log-state" aria-hidden="true"></span><span><code>CitePassage</code> <small>4 ms</small><span class="log-detail">投机解码.md · matched on retry at line 241</span></span><span class="sr-only">Completed</span>
+                  </li>
+                </ol>
+              </details>
+              <div class="recorded-answer">
+                <h4>Recorded answer</h4>
+                <p data-answer-block><strong>Draft generation</strong> A low-cost draft model (distribution q) proposes a sequence of tokens autoregressively. This gives the target model a hypothetical prefix to verify. The draft model introduces parallelism. Its quality affects the acceptance rate but leaves the final distribution intact. <a class="ref" href="#passage-1" aria-label="Inspect source 1">[1]</a></p>
+                <p data-answer-block><strong>Parallel verification</strong> With the candidate tokens in place, the target model (distribution p) can evaluate a whole block in one forward pass. A causal mask lets it compute the target distribution at each candidate position in parallel, using one read of the weights across several positions. <a class="ref" href="#passage-2" aria-label="Inspect source 2">[2]</a></p>
+                <p data-answer-block><strong>Limits to the speedup</strong> Speculative decoding tackles the memory bottleneck during decoding. The sampled answer says that fewer sequential steps and weight reads lower time to first token. It also says total FLOPs do not fall, prefill is unaffected, and gains are greatest at low concurrency with long, memory-bound outputs. At large batch sizes or high concurrency, the gain can shrink or reverse. <a class="ref" href="#passage-3" aria-label="Inspect source 3">[3]</a></p>
+                <p class="editor-note" data-answer-block><strong>Source check</strong> The answer mentions time to first token. Line 241 identifies time per output token (TPOT/ITL) as the gain and says prefill sees little speedup. <a class="ref" href="#passage-3" aria-label="Inspect source 3">[3]</a></p>
+                <div class="source-links" role="group" aria-label="Cited passages">
+                  <a href="#passage-1">[1] 投机解码.md · L284</a>
+                  <a href="#passage-2">[2] 投机解码.md · L267</a>
+                  <a href="#passage-3">[3] 投机解码.md · L241</a>
+                </div>
+              </div>
+            </div>
+            <div class="proof" role="group" aria-label="Source verification">
+              <p class="proof-label">Knowledge source</p>
+              <div class="source-cover interactive">
+                <p class="cover-file">投机解码.md</p>
+                <p>One technical note, three exact passages. Open a highlighted line once the answer is ready.</p>
+                <ol><li><span>Draft generation</span><code>L284</code></li><li><span>Parallel verification</span><code>L267</code></li><li><span>Limits to the speedup</span><code>L241</code></li></ol>
+              </div>
+              <div class="passage" role="group" id="passage-1" tabindex="-1" aria-label="Source 1">
+                <p class="file-path">learning_doc/项目/LLM推理技术学习/投机解码.md · L283-285</p>
+                <h4>[1] Draft generation</h4>
+                <div class="note-line"><b>283</b><span lang="zh-CN">一轮的完整过程是：</span></div>
+                <div class="note-line"><b>284</b><span lang="zh-CN"><mark>Draft：草稿模型自回归生成 $x_1,\ldots,x_\gamma$，并保存每一步的 $q_i(x)$。</mark></span></div>
+                <div class="note-line"><b>285</b><span lang="zh-CN">Verify：目标模型对整个候选块运行一次前向，得到：</span></div>
+                <p class="translation"><strong>Translation</strong> Draft: The draft model generates the candidate tokens autoregressively and saves the distribution at each step.</p>
+              </div>
+              <div class="passage" role="group" id="passage-2" tabindex="-1" aria-label="Source 2">
+                <p class="file-path">learning_doc/项目/LLM推理技术学习/投机解码.md · L267-268</p>
+                <h4>[2] Parallel verification</h4>
+                <div class="note-line"><b>267</b><span lang="zh-CN">草稿一旦给出，目标模型就暂时获得了一个完整的“假设前缀”。<mark>Transformer 可以在 causal mask 下，把这些已知候选位置组成一个 block，在一次前向中并行算出每个位置的目标分布。</mark></span></div>
+                <div class="note-line"><b>268</b><span lang="zh-CN">这类似 CPU 的分支预测：先沿着可能的路径执行，再验证这条路径是否正确。</span></div>
+                <p class="translation"><strong>Translation</strong> Under a causal mask, the Transformer can group the known candidate positions into a block and compute all of their target distributions in parallel in one forward pass.</p>
+              </div>
+              <div class="passage" role="group" id="passage-3" tabindex="-1" aria-label="Source 3">
+                <p class="file-path">learning_doc/项目/LLM推理技术学习/投机解码.md · L241-243</p>
+                <h4>[3] Limits to the speedup</h4>
+                <div class="note-line"><b>241</b><span lang="zh-CN">它主要优化 Decode 的 TPOT/ITL，不会明显加速 Prefill。<mark>低并发、长输出、访存受限时最容易获益；大 batch、高并发、Prefill 占主导时收益会下降，甚至变慢。</mark></span></div>
+                <div class="note-line"><b>242</b><span lang="zh-CN">---</span></div>
+                <div class="note-line"><b>243</b><span lang="zh-CN">1. 它要解决什么问题</span></div>
+                <p class="translation"><strong>Translation</strong> Low concurrency, long outputs and memory-bound decoding offer the best gains. At large batch sizes, high concurrency, or when prefill dominates, the benefit shrinks and may reverse.</p>
+              </div>
             </div>
           </div>
-          <div class="sources">
-            <div id="cite-0" class="panel source-note" role="tabpanel" aria-labelledby="cite-tab-0" tabindex="0">
-              <p class="file-path">Vault / Lab notes.md</p>
-              <div class="note-line">
-                <b>4</b><span>## Weekly review</span>
-              </div>
-              <div class="note-line">
-                <b>5</b><span><mark>Three repeated runs produced the same baseline.</mark></span>
-              </div>
-              <div class="note-line">
-                <b>6</b><span>Save the run log.</span>
-              </div>
-            </div>
-            <div id="cite-1" class="panel source-note" role="tabpanel" aria-labelledby="cite-tab-1" tabindex="0">
-              <p class="file-path">Vault / Weekly plan.md</p>
-              <div class="note-line">
-                <b>13</b><span>## Weekly review</span>
-              </div>
-              <div class="note-line">
-                <b>14</b><span><mark>Full replication is scheduled for next week. Measurements have yet to begin.</mark></span>
-              </div>
-              <div class="note-line">
-                <b>15</b><span>Reserve Thursday afternoon for review.</span>
-              </div>
-            </div>
-            <div id="cite-2" class="panel source-note" role="tabpanel" aria-labelledby="cite-tab-2" tabindex="0">
-              <p class="file-path">Vault / Reading notes.md</p>
-              <div class="note-line">
-                <b>27</b><span>## Weekly review</span>
-              </div>
-              <div class="note-line">
-                <b>28</b><span><mark>The latency difference still needs checking against the paper’s appendix.</mark></span>
-              </div>
-              <div class="note-line">
-                <b>29</b><span>List questions for the next run.</span>
-              </div>
-            </div>
-          </div>
+          <p class="sr-only" role="status" data-replay-status></p>
         </article>
         <div class="workflow-pair">
           <article class="trace card">
             <div class="card-top">
-              <h3>Follow the tool trace</h3><button type="button" class="subtle interactive" data-replay>Replay</button>
+              <h3>Weekly review · Reading coverage</h3><button type="button" class="subtle interactive" data-replay>Replay</button>
             </div>
             <ol class="log-lines">
               <li>
@@ -206,12 +246,12 @@
                 <dd data-total="0">0</dd>
               </div>
             </dl>
-            <div class="tags">
+            <div class="legend" role="group" aria-label="Evidence status legend">
               <span>Completed</span><span>In progress</span><span>Planned only</span>
             </div>
           </article>
           <article class="draft card">
-            <h3>Approve a draft yourself</h3>
+            <h3>Draft example · Approve a write</h3>
             <div data-tabs class="draft-work">
               <div class="tablist pills" role="tablist" aria-label="Draft view">
                 <button type="button" role="tab" id="draft-tab-preview" aria-controls="draft-preview" aria-selected="true" tabindex="0">Preview Markdown</button>
@@ -220,25 +260,32 @@
               <div id="draft-preview" class="panel" role="tabpanel" aria-labelledby="draft-tab-preview" tabindex="0">
                 <div class="draft-preview">
                   <strong>Tomorrow’s plan</strong>
-                  <ul><li>Verify the experiment log</li><li>Check the paper’s appendix</li></ul>
+                  <ul><li class="task-item"><input type="checkbox" disabled aria-label="Verify the experiment log">Verify the experiment log</li><li class="task-item"><input type="checkbox" disabled aria-label="Check the paper’s appendix">Check the paper’s appendix</li></ul>
                 </div>
               </div>
               <div id="draft-edit" class="panel" role="tabpanel" aria-labelledby="draft-tab-edit" tabindex="0">
                 <label class="sr-only" for="draft-text">Draft content</label>
                 <textarea id="draft-text" rows="4">## Tomorrow’s plan
-- Verify the experiment log
-- Check the paper’s appendix</textarea>
+- [ ] Verify the experiment log
+- [ ] Check the paper’s appendix</textarea>
               </div>
               <label class="check"><input type="checkbox" checked> Also add tasks to the daily schedule</label>
               <button type="button" class="button primary interactive" data-confirm>Confirm write to Vault →</button>
             </div>
             <div class="receipt" hidden>
-              <ol>
+              <h4>Write receipt</h4>
+              <ol class="receipt-stages">
                 <li>Conflict check passed</li>
                 <li>Recovery copy created</li>
                 <li>Written to Vault</li>
                 <li>2 tasks added to the schedule</li>
               </ol>
+              <dl class="receipt-files">
+                <div><dt>Saved note</dt><dd><code>plans/tomorrow.md</code></dd></div>
+                <div><dt>Recovery copy</dt><dd><code>recovery/plans/tomorrow.md.bak</code></dd></div>
+              </dl>
+              <strong>Daily schedule</strong>
+              <ul class="saved-items"></ul><p class="schedule-empty"></p>
               <button type="button" class="button" data-reset>Reset demo</button>
             </div><span class="sr-only" role="status" data-draft-status></span>
           </article>
@@ -249,10 +296,10 @@
         <p class="intro">Pick a chapter to follow the workflow on a real product screen.</p>
         <div class="theater" data-tabs>
           <div class="tablist chapter-list" role="tablist" aria-label="Tour chapters">
-            <button type="button" role="tab" id="film-tab-hero-overview" aria-controls="film-hero-overview" aria-selected="true" tabindex="0"><strong>Workspace tour</strong><small>35s</small></button>
-            <button type="button" role="tab" id="film-tab-demo-citation" aria-controls="film-demo-citation" aria-selected="false" tabindex="-1"><strong>Trace a citation</strong><small>25s</small></button>
-            <button type="button" role="tab" id="film-tab-demo-review" aria-controls="film-demo-review" aria-selected="false" tabindex="-1"><strong>Read the coverage report</strong><small>30s</small></button>
-            <button type="button" role="tab" id="film-tab-demo-draft-schedule" aria-controls="film-demo-draft-schedule" aria-selected="false" tabindex="-1"><strong>From draft to schedule</strong><small>25s</small></button>
+            <button type="button" role="tab" id="film-tab-hero-overview" aria-controls="film-hero-overview" aria-selected="true" tabindex="0"><strong>Workspace tour</strong><small>Guided preview</small></button>
+            <button type="button" role="tab" id="film-tab-demo-citation" aria-controls="film-demo-citation" aria-selected="false" tabindex="-1"><strong>Trace a citation</strong><small>Guided preview</small></button>
+            <button type="button" role="tab" id="film-tab-demo-review" aria-controls="film-demo-review" aria-selected="false" tabindex="-1"><strong>Read the coverage report</strong><small>Guided preview</small></button>
+            <button type="button" role="tab" id="film-tab-demo-draft-schedule" aria-controls="film-demo-draft-schedule" aria-selected="false" tabindex="-1"><strong>From draft to schedule</strong><small>Guided preview</small></button>
           </div>
           <div id="film-hero-overview" class="panel chapter" role="tabpanel" aria-labelledby="film-tab-hero-overview" tabindex="0">
             <div class="theater-screen">
@@ -518,7 +565,7 @@
       </section>
       <section id="quickstart" class="deploy" data-sync-key="quickstart" aria-labelledby="quickstart-title">
         <div class="shell">
-          <h2 id="quickstart-title">Own Your Mind<span>.</span></h2>
+          <h2 id="quickstart-title">Own Your Mind.</h2>
           <div class="install-grid">
             <div>
               <h3>Open a Vault on your computer</h3>

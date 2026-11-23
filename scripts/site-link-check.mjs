@@ -78,14 +78,6 @@ async function request(fetchImpl, url, method, timeoutMs) {
   });
 }
 
-// GitHub serves installer bytes from a signed URL on its release asset host.
-function isRepositoryAssetRedirect(source, destination) {
-  if (!new URL(source).pathname.startsWith(REPOSITORY_BASE + '/releases/download/')) return false;
-  const url = new URL(destination);
-  return url.origin === 'https://release-assets.githubusercontent.com' && !url.username && !url.password
-    && url.pathname.startsWith('/github-production-release-asset/1351979511/');
-}
-
 async function validateOneLink(target, options) {
   const {
     fetchImpl,
@@ -107,7 +99,7 @@ async function validateOneLink(target, options) {
       const finalReference = response.url || target.url;
       const finalTarget = classifyExternalLink(finalReference);
       await cancelBody(response);
-      if (finalTarget.kind !== 'network' && !isRepositoryAssetRedirect(target.url, finalReference)) {
+      if (finalTarget.kind !== 'network') {
         return `${target.display}: redirect target is outside the public repository allowlist`;
       }
       if (successfulStatus(status)) return null;

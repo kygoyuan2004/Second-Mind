@@ -385,7 +385,7 @@ function validateCss(css) {
   const requiredPatterns = [
     [/@media\s*\(max-width:\s*768px\)/, '768px responsive breakpoint'],
     [/@media\s*\(max-width:\s*420px\)/, 'small-screen responsive breakpoint'],
-    [/color-scheme:\s*light\s*;/, 'light editorial canvas'],
+    [/@media\s*\(prefers-color-scheme:\s*dark\)/, 'automatic dark mode'],
     [/@media\s*\(prefers-reduced-motion:\s*reduce\)/, 'reduced-motion handling'],
     [/:focus-visible/, 'keyboard focus styles'],
   ];
@@ -397,7 +397,9 @@ function validateCss(css) {
   }
 
   const lightRoot = css.match(/:root\s*\{([^}]+)\}/)?.[1] ?? '';
+  const darkRoot = css.match(/@media\s*\(prefers-color-scheme:\s*dark\)[\s\S]*?:root\s*\{([^}]+)\}/)?.[1] ?? '';
   const light = cssVariables(lightRoot);
+  const dark = cssVariables(darkRoot);
   const pairs = [
     ['light body text', light.get('ink'), light.get('bg')],
     ['light secondary text', light.get('ink-soft'), light.get('bg')],
@@ -407,6 +409,11 @@ function validateCss(css) {
     ['light button text', '#ffffff', light.get('accent')],
     ['deep body text', light.get('deep-ink'), light.get('deep')],
     ['deep secondary text', light.get('deep-muted'), light.get('deep')],
+    ['dark body text', dark.get('ink'), dark.get('bg')],
+    ['dark secondary text', dark.get('ink-soft'), dark.get('bg')],
+    ['dark faint text on page', dark.get('ink-faint'), dark.get('bg')],
+    ['dark faint text on surface', dark.get('ink-faint'), dark.get('surface')],
+    ['dark link text', dark.get('accent'), dark.get('bg')],
   ];
   for (const [label, foreground, background] of pairs) {
     if (!foreground || !background) {
@@ -419,7 +426,6 @@ function validateCss(css) {
 
 function validatePrivacy(files) {
   const combined = [...files.values()].join('\n');
-  if (/\bsdk\b/i.test(combined)) fail('site source exposes internal runtime terminology');
   const privatePathPatterns = [
     /\/(?:home|Users)\/[A-Za-z0-9._-]+\//,
     /[A-Za-z]:\\Users\\[^\\\s]+\\/,

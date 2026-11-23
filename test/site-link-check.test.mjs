@@ -85,15 +85,3 @@ test('external link validation rejects a redirect outside the allowlist', async 
     'https://github.com/kygoyuan2004/Second-Mind: redirect target is outside the public repository allowlist',
   ]);
 });
-
-test('only a release download can resolve to this repository’s GitHub asset storage', async () => {
-  const repo = 'https://github.com/kygoyuan2004/Second-Mind';
-  const installer = repo + '/releases/download/v0.2.1/SecondMind-0.2.1-windows-x64-setup.exe';
-  const asset = 'https://release-assets.githubusercontent.com/github-production-release-asset/1351979511/example';
-  const check = (source, destination) => validateExternalLinks([source], {
-    fetchImpl: async () => response(200, destination),
-  });
-  assert.deepEqual(await check(installer, asset), []);
-  assert.equal((await check(repo, asset)).length, 1);
-  assert.equal((await check(installer, asset.replace('1351979511', '100'))).length, 1);
-});

@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, lstat, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -59,6 +59,50 @@ async function isRegularFile(filename) {
   }
 }
 
+// Only these four recordings can become active media in a chapter.
+const chapters = new Map([
+  ['hero-overview', 'qa'],
+  ['demo-citation', 'source'],
+  ['demo-review', 'execution'],
+  ['demo-draft-schedule', 'plan'],
+]);
+
+async function installVideos(assetOutput) {
+  const source = path.join(SCREENSHOT_SOURCE, 'videos');
+  const directory = await lstat(source).catch(error => {
+    if (error.code !== 'ENOENT') throw error;
+    return null;
+  });
+  if (!directory) return;
+  if (!directory.isDirectory()) throw new Error('Expected a directory at docs/assets/videos');
+
+  const entries = (await readdir(source, { withFileTypes: true })).sort(compareNames);
+  const names = new Set();
+  for (const entry of entries) {
+    if (!/\.(mp4|webm)$/i.test(entry.name)) continue;
+    if (!entry.isFile()) throw new Error(`Expected a regular video file: ${entry.name}`);
+    const destination = path.join(assetOutput, 'videos');
+    await mkdir(destination, { recursive: true });
+    await copyFile(path.join(source, entry.name), path.join(destination, entry.name));
+    names.add(entry.name);
+  }
+
+  for (const page of ['index.html', 'en/index.html']) {
+    const filename = path.join(SITE_OUTPUT, page);
+    const html = await readFile(filename, 'utf8');
+    const rendered = html.replace(/<!-- video:([a-z-]+) -->/g, (marker, chapter) => {
+      if (!chapters.has(chapter)) throw new Error(`Unknown video chapter: ${chapter}`);
+      const sources = ['mp4', 'webm'].filter(ext => names.has(`${chapter}.${ext}`))
+        .map(ext => `<source src="${SITE_BASE}assets/videos/${chapter}.${ext}" type="video/${ext}">`);
+      if (!sources.length) return marker;
+      const poster = `${SITE_BASE}assets/second-mind-${chapters.get(chapter)}.png`;
+      const label = page === 'index.html' ? '实机演示' : 'Product recording';
+      return `<video controls playsinline muted loop preload="none" poster="${poster}" aria-label="${label}">\n${sources.join('\n')}\n</video>`;
+    });
+    await writeFile(filename, rendered);
+  }
+}
+
 export async function buildSite({ log = true } = {}) {
   assertSafeOutputPath();
   await rm(SITE_OUTPUT, { recursive: true, force: true });
@@ -78,9 +122,7 @@ export async function buildSite({ log = true } = {}) {
     await copyFile(source, path.join(assetOutput, filename));
   }
 
-  for (const library of ['marked/lib/marked.umd.js', 'dompurify/dist/purify.min.js']) {
-    await copyFile(path.join(REPOSITORY_ROOT, 'node_modules', library), path.join(assetOutput, path.basename(library)));
-  }
+  await installVideos(assetOutput);
   if (log) {
     process.stdout.write(`Built static site at ${path.relative(REPOSITORY_ROOT, SITE_OUTPUT)}\n`);
     if (missingScreenshots.length > 0) {

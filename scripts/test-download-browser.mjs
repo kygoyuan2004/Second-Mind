@@ -45,6 +45,18 @@ if (live) {
   await once(server, 'listening');
   origin = 'http://127.0.0.1:' + server.address().port;
 }
+async function verifyCommand(page, block, expected, js) {
+  assert.equal(await block.locator('code').innerText(), expected);
+  const button = block.locator('button.copy');
+  if (js) {
+    await button.click();
+    await block.locator('button.success').waitFor({ timeout: 5000 });
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), expected);
+  } else {
+    assert.equal(await button.isVisible(), false);
+  }
+}
+
 let browser;
 try {
   browser = await chromium.launch({ headless: true, executablePath: process.env.SECOND_MIND_TEST_CHROME || undefined });
@@ -63,24 +75,46 @@ try {
         await cta.click();
         await page.waitForURL(origin + home + 'download/');
         assert.equal(await page.locator('.platform-row').count(), 4);
+        const readme = lang === 'zh' ? 'README.md' : 'README.en.md';
+        assert.equal(await page.locator('.download-hero .text-link').getAttribute('href'),
+          release.editions.find(edition => edition.id === 'pi').repo + '/blob/main/' + readme + '#comparison');
         assert.ok(await page.locator('body').evaluate(e => e.scrollWidth <= window.innerWidth));
         const [left, right] = await Promise.all([0,1].map(i => page.locator('#windows .edition-cell').nth(i).boundingBox()));
         assert.ok(width > 520 ? right.x > left.x + left.width - 1 : right.y >= left.y + left.height - 1);
+        if (mode.js) await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
         for (const edition of release.editions) {
           const scope = page.locator('#docker-' + edition.id);
           assert.ok((await scope.innerText()).includes('127.0.0.1:' + edition.port));
-          assert.ok((await scope.locator('pre code').first().textContent()).includes(edition.repo + '.git'));
-          assert.ok((await scope.locator('pre code').last().textContent()).includes('install.ps1'));
+          const checkout = 'git clone --depth 1 --branch v' + edition.version + ' ' + edition.repo + '.git\ncd ' + edition.repo.split('/').at(-1) + '\n';
+          const dockerCommands = scope.locator('[data-copy-block]');
+          assert.equal(await dockerCommands.count(), 2);
+          await verifyCommand(page, dockerCommands.nth(0), checkout + 'bash ./install.sh', mode.js);
+          await verifyCommand(page, dockerCommands.nth(1), checkout + 'powershell -NoProfile -ExecutionPolicy RemoteSigned -File .\\install.ps1', mode.js);
+
+          const editionHeading = page.getByRole('heading', { name: edition.name + ' v' + edition.version, exact: true });
+          const linux = page.locator('#linux .edition-cell').filter({ has: editionHeading });
+          await linux.locator('summary').click();
+          const appImage = edition.assets.find(asset => asset.format === '.AppImage').name;
+          const deb = edition.assets.find(asset => asset.format === '.deb').name;
+          const linuxCommands = linux.locator('[data-copy-block]');
+          await verifyCommand(page, linuxCommands.nth(0), 'chmod +x ' + appImage + '\n./' + appImage, mode.js);
+          await verifyCommand(page, linuxCommands.nth(1), 'sudo apt install ./' + deb, mode.js);
           for (const asset of edition.assets.filter(a => a.sha256)) {
-            assert.equal(await page.locator('a[href="' + asset.url + '"]').count(), 1);
+            const cell = page.locator('#' + asset.os + ' .edition-cell').filter({ has: editionHeading });
+            const cpu = asset.os === 'macos' ? (asset.arch === 'arm64' ? 'Apple Silicon (arm64)' : 'Intel (x64)') : asset.arch;
+            const link = cell.getByRole('link', { name: edition.name + ' · ' + cpu + ' ' + asset.format, exact: true });
+            assert.equal(await link.getAttribute('href'), asset.url);
             const disclosure = page.locator('details').filter({ has: page.locator('summary', { hasText: asset.name }) });
             await disclosure.locator('summary').click();
             assert.ok((await disclosure.innerText()).includes(asset.sha256));
+            const checksum = asset.os === 'windows' ? 'Get-FileHash .\\' + asset.name + ' -Algorithm SHA256'
+              : (asset.os === 'macos' ? 'shasum -a 256 ' : 'sha256sum ') + asset.name;
+            await verifyCommand(page, disclosure.locator('[data-copy-block]'), checksum, mode.js);
             await disclosure.locator('summary').click();
           }
         }
         const block = page.locator('#first-open [data-copy-block]');
-        assert.equal(await block.locator('code').textContent(), 'xattr -dr com.apple.quarantine "/Applications/Second Mind Pi.app"');
+        await verifyCommand(page, block, 'xattr -dr com.apple.quarantine "/Applications/Second Mind Pi.app"', mode.js);
         const contrastFailures = await page.evaluate(() => {
           const rgb = value => value.match(/[\d.]+/g).map(Number);
           const luminance = values => values.slice(0, 3).map(n => n / 255)
@@ -101,17 +135,6 @@ try {
             }).map(el => el.textContent.trim());
         });
         assert.deepEqual(contrastFailures, []);
-        if (mode.js) {
-          await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
-          for (const group of [block, page.locator('#docker-pi [data-copy-block]').last()]) {
-            await group.locator('button.copy').click();
-            await group.locator('button.success').waitFor({ timeout: 5000 });
-            const clipboard = await page.evaluate(() => navigator.clipboard.readText());
-            assert.equal(clipboard, await group.locator('code').textContent());
-          }
-        } else {
-          assert.equal(await block.locator('button').isVisible(), false);
-        }
         await page.reload();
         await page.keyboard.press('Tab');
         assert.equal(await page.evaluate(() => document.activeElement.getAttribute('href')), '#main');

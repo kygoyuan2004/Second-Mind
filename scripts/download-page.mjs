@@ -2,6 +2,13 @@ const base = '/Second-Mind/';
 const origin = 'https://kygoyuan2004.github.io';
 const platforms = ['windows', 'macos', 'linux', 'docker'];
 const labels = { windows: 'Windows', macos: 'macOS', linux: 'Linux', docker: 'Docker' };
+const packageSuffixes = {
+  'windows/x64/.exe': 'windows-x64-setup.exe',
+  'linux/x64/.AppImage': 'linux-x86_64.AppImage',
+  'linux/amd64/.deb': 'linux-amd64.deb',
+  'macos/arm64/.dmg': 'macos-arm64.dmg',
+  'macos/x64/.dmg': 'macos-x64.dmg',
+};
 const quarantine = 'xattr -dr com.apple.quarantine "/Applications/Second Mind Pi.app"';
 const escape = text => String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 
@@ -20,14 +27,16 @@ export function checkReleaseManifest(manifest, published = false) {
       throw new Error('Invalid release metadata for ' + id);
     }
     const signatures = edition.assets.map(file => [file.os, file.arch, file.format].join('/')).sort();
-    const required = ['linux/amd64/.deb', 'linux/x64/.AppImage', 'windows/x64/.exe'];
-    if (id === 'pi') required.push('macos/arm64/.dmg', 'macos/x64/.dmg');
+    const required = Object.keys(packageSuffixes).filter(key => id === 'pi' || !key.startsWith('macos/'));
     if (signatures.join() !== required.sort().join() || new Set(edition.assets.map(a => a.name)).size !== required.length) {
       throw new Error('Incomplete or duplicated platforms in ' + id);
     }
     for (const file of edition.assets) {
-      if (!/^[\w.-]+$/.test(file.name) || file.url !== releaseBase + file.name || !file.name.endsWith(file.format) ||
-          !file.name.startsWith((id === 'pi' ? 'SecondMindPi-' : 'SecondMind-') + version + '-')) throw new Error('Invalid asset name or URL');
+      const suffix = packageSuffixes[[file.os, file.arch, file.format].join('/')];
+      const prefix = id === 'pi' ? 'SecondMindPi-' : 'SecondMind-';
+      if (file.name !== prefix + version + '-' + suffix || file.url !== releaseBase + file.name) {
+        throw new Error('Asset filename or URL does not match its platform and architecture: ' + file.name);
+      }
       if (file.sha256 === null && file.bytes === null && !published && id === 'pi') continue;
       if (!/^[a-f0-9]{64}$/.test(file.sha256) || !Number.isSafeInteger(file.bytes) || file.bytes <= 0) {
         throw new Error('Release checksum or byte length missing for ' + file.name);
@@ -50,7 +59,7 @@ export function renderDownload(manifest, locale) {
     return `<div class="download-command" data-copy-block><div class="command-head"><strong>${escape(label)}</strong><button class="copy interactive" type="button">${t('复制','Copy')}</button></div><pre><code>${escape(command)}</code></pre></div>`;
   }
   function fileButton(edition, file) {
-    const arch = file.os === 'macos' ? (file.arch === 'arm64' ? 'Apple Silicon' : 'Intel') : file.arch;
+    const arch = file.os === 'macos' ? (file.arch === 'arm64' ? 'Apple Silicon (arm64)' : 'Intel (x64)') : file.arch;
     const name = edition.name + ' · ' + arch + ' ' + file.format;
     if (!file.sha256) return `<span class="download-pending">${escape(name)} · ${t('发行验收中','In release testing')}</span>`;
     return `<a class="button download-file" href="${escape(file.url)}">${escape(name)} <span aria-hidden="true">↓</span></a>`;
@@ -68,7 +77,7 @@ export function renderDownload(manifest, locale) {
       if (os === 'linux') {
         const appImage = files.find(file => file.format === '.AppImage').name;
         const deb = files.find(file => file.format === '.deb').name;
-        body += `<details class="install-hint"><summary>${t('Linux 安装步骤','Linux install steps')}</summary>${snippet('AppImage', 'chmod +x ' + appImage + '\\n./' + appImage)}${snippet('Debian / Ubuntu', 'sudo apt install ./' + deb)}</details>`;
+        body += `<details class="install-hint"><summary>${t('Linux 安装步骤','Linux install steps')}</summary>${snippet('AppImage', 'chmod +x ' + appImage + '\n./' + appImage)}${snippet('Debian / Ubuntu', 'sudo apt install ./' + deb)}</details>`;
       }
       if (os === 'windows') body += `<p>${t('下载后运行安装程序，为当前用户安装。','Run the installer for your current Windows account.')} <a href="#first-open">SmartScreen</a></p>`;
       if (os === 'macos') body += `<p>${t('开源未公证构建','Open-source, unnotarized builds')} · <a href="#first-open">${t('首次打开说明','First launch')}</a></p>`;
@@ -88,13 +97,13 @@ export function renderDownload(manifest, locale) {
     const clone = 'git clone --depth 1 --branch v' + edition.version + ' ' + edition.repo + '.git\ncd ' + repoName + '\n';
     return `<article id="docker-${edition.id}" class="install-detail"><h3>${edition.name} <small>v${edition.version}</small></h3>
 <p>${t('安装完成后，在本机浏览器访问','After setup, open')} <code>127.0.0.1:${edition.port}</code></p>
-${snippet('Linux / macOS · Bash', clone + 'powershell -NoProfile -ExecutionPolicy RemoteSigned -File ./install.sh')}
+${snippet('Linux / macOS · Bash', clone + 'bash ./install.sh')}
 ${snippet('Windows · PowerShell', clone + 'powershell -NoProfile -ExecutionPolicy RemoteSigned -File .\\install.ps1')}</article>`;
   }
   const sections = platforms.map(os => `<section class="platform-row" id="${os}" data-sync-key="platform-${os}" aria-labelledby="heading-${os}">
 <div class="platform-name"><h2 id="heading-${os}">${labels[os]}</h2><p>${escape(manifest.platforms[os][zh ? 'zh' : 'en'])}</p></div>
 ${manifest.editions.map(edition => platformCell(edition, os)).join('')}</section>`).join('\n');
-  const compare = zh ? pi.repo + '#readme' : pi.repo + '/blob/main/README.en.md#what-changed-from-second-mind';
+  const compare = pi.repo + '/blob/main/' + (zh ? 'README.md' : 'README.en.md') + '#comparison';
   return `<!DOCTYPE html>
 <html lang="${locale}">
 <head>
@@ -122,7 +131,7 @@ ${sections}
 <h3>macOS · Pi Agent</h3><p>${t('先用下方 SHA-256 清单校验 DMG。打开映像，把 Second Mind Pi.app 拖入「应用程序」。如果提示无法验证开发者或应用已损坏，重新核对哈希后，前往「系统设置 → 隐私与安全性 → 仍要打开」。也可对这一个已核验的应用使用下列命令。','Verify the DMG against the SHA-256 list below, then drag Second Mind Pi.app to Applications. If macOS reports an unidentified developer or a damaged app, recheck the hash, then choose System Settings → Privacy &amp; Security → Open Anyway. The following command also applies to this verified app alone.')}</p>
 ${snippet(t('终端 · 首次打开','Terminal · First launch'),quarantine)}
 <h3>Windows · SmartScreen</h3><p>${t('两版的 Windows 安装包均未签名。请先核对 SHA-256。若 SmartScreen 提示未知发布者，确认来源后可选「更多信息」再选「仍要运行」。','Both Windows installers are unsigned. Verify the SHA-256 first. If SmartScreen reports an unknown publisher, confirm the source, choose More info, then Run anyway.')}</p></section>
-<section id="install-docker" class="download-detail" data-sync-key="install-docker"><h2>${t('用 Docker 安装','Install with Docker')}</h2><p>${t('先安装 Git。Linux 使用 Docker Engine 和 Compose v2，macOS 与 Windows 使用 Docker Desktop。两个版本各有独立设置和数据卷。如果指向同一份 Obsidian Vault，请依次执行写入任务。','Install Git first. Use Docker Engine and Compose v2 on Linux, or Docker Desktop on macOS and Windows. The editions keep separate settings and data volumes. If both point to the same Obsidian Vault, run writing tasks one edition at a time.')}</p>
+<section id="install-docker" class="download-detail" data-sync-key="install-docker"><h2>${t('用 Docker 安装','Install with Docker')}</h2><p>${t('先安装 Git。Linux 使用 Docker Engine 和 Compose v2，macOS 与 Windows 使用 Docker Desktop。两版的运行状态和索引都保存在 Vault 之外。Docker 部署使用独立的数据卷。共用一个 Obsidian Vault 时，请依次执行写入任务。','Install Git first. Use Docker Engine and Compose v2 on Linux, or Docker Desktop on macOS and Windows. Both editions store runtime state and indexes outside the Vault. Each Docker installation uses its own data volume. If the editions share a Vault, run writing tasks one edition at a time.')}</p>
 <div class="install-grid">${manifest.editions.map(dockerInstructions).join('')}</div></section>
 <section id="checksums" class="download-detail" data-sync-key="checksums"><h2>${t('校验文件','Verify your download')}</h2>
 <p>${t('在下载目录计算文件的 SHA-256，与同版本、同文件名的记录逐字核对。','In the download folder, compute the SHA-256 and compare it with the entry for the same version and filename.')}</p>

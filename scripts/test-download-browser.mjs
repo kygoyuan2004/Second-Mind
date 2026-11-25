@@ -110,11 +110,20 @@ try {
         for (const edition of release.editions) {
           const scope = page.locator('#docker-' + edition.id);
           assert.ok((await scope.innerText()).includes('127.0.0.1:' + edition.port));
-          const checkout = 'git clone --depth 1 --branch v' + edition.version + ' ' + edition.repo + '.git\ncd ' + edition.repo.split('/').at(-1) + '\n';
+          const repoName = edition.repo.split('/').at(-1);
+          const clone = 'git clone --depth 1 --branch v' + edition.version + ' ' + edition.repo + '.git';
+          const image = 'ghcr.io/kygoyuan2004/' + repoName.toLowerCase() + ':v' + edition.version;
           const dockerCommands = scope.locator('[data-copy-block]');
           assert.equal(await dockerCommands.count(), 2);
-          await verifyCommand(page, dockerCommands.nth(0), checkout + 'bash ./install.sh', mode.js);
-          await verifyCommand(page, dockerCommands.nth(1), checkout + 'powershell -NoProfile -ExecutionPolicy RemoteSigned -File .\\install.ps1', mode.js);
+          await verifyCommand(page, dockerCommands.nth(0), clone + " &&\n  SECOND_MIND_IMAGE='" + image + "' bash ./" + repoName + '/install.sh', mode.js);
+          await verifyCommand(page, dockerCommands.nth(1), [
+            'powershell -NoProfile -ExecutionPolicy RemoteSigned -Command {',
+            '  ' + clone,
+            '  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
+            "  $env:SECOND_MIND_IMAGE = '" + image + "'",
+            '  & .\\' + repoName + '\\install.ps1',
+            '}',
+          ].join('\n'), mode.js);
 
           const editionHeading = page.getByRole('heading', { name: edition.name + ' v' + edition.version, exact: true });
           const linux = page.locator('#linux .edition-cell').filter({ has: editionHeading });

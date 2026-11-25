@@ -25,7 +25,7 @@
       "repo": "https://github.com/kygoyuan2004/Second-Mind",
       "release": "https://github.com/kygoyuan2004/Second-Mind/releases/tag/v0.2.1",
       "checksums": "https://github.com/kygoyuan2004/Second-Mind/releases/download/v0.2.1/SHA256SUMS.txt",
-      "image": "ghcr.io/kygoyuan2004/second-mind:latest",
+      "image": "ghcr.io/kygoyuan2004/second-mind:v0.2.1",
       "port": 8787,
       "assets": [
         {

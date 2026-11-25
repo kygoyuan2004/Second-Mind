@@ -23,7 +23,7 @@ export function checkReleaseManifest(manifest, published = false) {
     if (!/^\d+\.\d+\.\d+$/.test(version) || edition.repo !== repo ||
         edition.release !== repo + '/releases/tag/v' + version || edition.checksums !== releaseBase + 'SHA256SUMS.txt' ||
         edition.port !== (id === 'pi' ? 8788 : 8787) ||
-        edition.image !== 'ghcr.io/kygoyuan2004/' + repository.toLowerCase() + ':' + (id === 'pi' ? 'v' + version : 'latest')) {
+        edition.image !== 'ghcr.io/kygoyuan2004/' + repository.toLowerCase() + ':v' + version) {
       throw new Error('Invalid release metadata for ' + id);
     }
     const signatures = edition.assets.map(file => [file.os, file.arch, file.format].join('/')).sort();
@@ -94,11 +94,20 @@ export function renderDownload(manifest, locale) {
   }
   function dockerInstructions(edition) {
     const repoName = edition.repo.split('/').at(-1);
-    const clone = 'git clone --depth 1 --branch v' + edition.version + ' ' + edition.repo + '.git\ncd ' + repoName + '\n';
+    const clone = 'git clone --depth 1 --branch v' + edition.version + ' ' + edition.repo + '.git';
+    const bash = clone + " &&\n  SECOND_MIND_IMAGE='" + edition.image + "' bash ./" + repoName + '/install.sh';
+    const powershell = [
+      'powershell -NoProfile -ExecutionPolicy RemoteSigned -Command {',
+      '  ' + clone,
+      '  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
+      "  $env:SECOND_MIND_IMAGE = '" + edition.image + "'",
+      '  & .\\' + repoName + '\\install.ps1',
+      '}',
+    ].join('\n');
     return `<article id="docker-${edition.id}" class="install-detail"><h3>${edition.name} <small>v${edition.version}</small></h3>
 <p>${t('安装完成后，在本机浏览器访问','After setup, open')} <code>127.0.0.1:${edition.port}</code></p>
-${snippet('Linux / macOS · Bash', clone + 'bash ./install.sh')}
-${snippet('Windows · PowerShell', clone + 'powershell -NoProfile -ExecutionPolicy RemoteSigned -File .\\install.ps1')}</article>`;
+${snippet('Linux / macOS · Bash', bash)}
+${snippet('Windows · PowerShell', powershell)}</article>`;
   }
   const sections = platforms.map(os => `<section class="platform-row" id="${os}" data-sync-key="platform-${os}" aria-labelledby="heading-${os}">
 <div class="platform-name"><h2 id="heading-${os}">${labels[os]}</h2><p>${escape(manifest.platforms[os][zh ? 'zh' : 'en'])}</p></div>
@@ -132,6 +141,7 @@ ${sections}
 ${snippet(t('终端 · 首次打开','Terminal · First launch'),quarantine)}
 <h3>Windows · SmartScreen</h3><p>${t('两版的 Windows 安装包均未签名。请先核对 SHA-256。若 SmartScreen 提示未知发布者，确认来源后可选「更多信息」再选「仍要运行」。','Both Windows installers are unsigned. Verify the SHA-256 first. If SmartScreen reports an unknown publisher, confirm the source, choose More info, then Run anyway.')}</p></section>
 <section id="install-docker" class="download-detail" data-sync-key="install-docker"><h2>${t('用 Docker 安装','Install with Docker')}</h2><p>${t('先安装 Git。Linux 使用 Docker Engine 和 Compose v2，macOS 与 Windows 使用 Docker Desktop。两版的运行状态和索引都保存在 Vault 之外。Docker 部署使用独立的数据卷。共用一个 Obsidian Vault 时，请依次执行写入任务。','Install Git first. Use Docker Engine and Compose v2 on Linux, or Docker Desktop on macOS and Windows. Both editions store runtime state and indexes outside the Vault. Each Docker installation uses its own data volume. If the editions share a Vault, run writing tasks one edition at a time.')}</p>
+<p>${t('若要在以后重启或更新时沿用同一版本，在安装器显示的实例配置目录中打开','To keep the same version for future restarts or updates, open')} <code>.env</code>${t('，将',' in the instance directory printed by the installer and set')} <code>SECOND_MIND_IMAGE</code> ${t('设为上表中该版本的镜像。','to the image shown for your edition.')}</p>
 <div class="install-grid">${manifest.editions.map(dockerInstructions).join('')}</div></section>
 <section id="checksums" class="download-detail" data-sync-key="checksums"><h2>${t('校验文件','Verify your download')}</h2>
 <p>${t('在下载目录计算文件的 SHA-256，与同版本、同文件名的记录逐字核对。','In the download folder, compute the SHA-256 and compare it with the entry for the same version and filename.')}</p>

@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       runtime: ${{ steps.scope.outputs.runtime }}
+      test_container: ${{ steps.scope.outputs.test_container }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -30,17 +31,21 @@ jobs:
         run: |
           set -euo pipefail
           runtime=true
+          test_container=true
           if [[ "$GITHUB_REF_TYPE" != tag && -n "$BEFORE" ]] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
             git diff --name-only -z --no-renames "$BEFORE" "$GITHUB_SHA" > "$RUNNER_TEMP/changed-paths"
             runtime=false
+            test_container=false
             while IFS= read -r -d '' file; do
               case "$file" in
-                site/*|scripts/site-*.mjs|scripts/download-page.mjs|scripts/sync-download-releases.mjs|scripts/test-download-browser.mjs|test/site-*.test.mjs|.github/workflows/pages.yml|.github/workflows/ci.yml) ;;
-                *) runtime=true; break ;;
+                .github/workflows/ci.yml) test_container=true ;;
+                site/*|scripts/site-*.mjs|scripts/download-page.mjs|scripts/sync-download-releases.mjs|scripts/test-download-browser.mjs|test/site-*.test.mjs|.github/workflows/pages.yml) ;;
+                *) runtime=true; test_container=true; break ;;
               esac
             done < "$RUNNER_TEMP/changed-paths"
           fi
           echo "runtime=$runtime" >> "$GITHUB_OUTPUT"
+          echo "test_container=$test_container" >> "$GITHUB_OUTPUT"
 
   node:
     name: Node 22 · ${{ matrix.runner }}
@@ -172,7 +177,7 @@ jobs:
 
   container:
     needs: changes
-    if: needs.changes.outputs.runtime == 'true'
+    if: needs.changes.outputs.test_container == 'true'
     name: Docker SDK and installer lifecycle
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -349,8 +354,8 @@ jobs:
 
   publish:
     name: Publish verified multi-architecture image
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
-    needs: [node, history, container]
+    if: needs.changes.outputs.runtime == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    needs: [changes, node, history, container]
     permissions:
       contents: read
       packages: write

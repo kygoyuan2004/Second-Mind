@@ -73,8 +73,8 @@
           "format": ".exe",
           "name": "SecondMindPi-0.3.0-windows-x64-setup.exe",
           "url": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/v0.3.0/SecondMindPi-0.3.0-windows-x64-setup.exe",
-          "sha256": null,
-          "bytes": null
+          "sha256": "1b09d5ac88f93d79926fff4d08e0689e41311d34b94704e62ae1a0271d288f30",
+          "bytes": 322129364
         },
         {
           "os": "linux",
@@ -82,8 +82,8 @@
           "format": ".AppImage",
           "name": "SecondMindPi-0.3.0-linux-x86_64.AppImage",
           "url": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/v0.3.0/SecondMindPi-0.3.0-linux-x86_64.AppImage",
-          "sha256": null,
-          "bytes": null
+          "sha256": "5692cf5ef7dd39db543bf05faba2c986af68eace3af03cca560c338348eb8c10",
+          "bytes": 472295845
         },
         {
           "os": "linux",
@@ -91,8 +91,8 @@
           "format": ".deb",
           "name": "SecondMindPi-0.3.0-linux-amd64.deb",
           "url": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/v0.3.0/SecondMindPi-0.3.0-linux-amd64.deb",
-          "sha256": null,
-          "bytes": null
+          "sha256": "f26a90279f3bb7fdf195e970af5230096b4a2125944b969e62bc03fddecdd17d",
+          "bytes": 354116456
         },
         {
           "os": "macos",
@@ -100,8 +100,8 @@
           "format": ".dmg",
           "name": "SecondMindPi-0.3.0-macos-arm64.dmg",
           "url": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/v0.3.0/SecondMindPi-0.3.0-macos-arm64.dmg",
-          "sha256": null,
-          "bytes": null
+          "sha256": "00777554a5b6447c9ed5b853ad5718a84f947e75ad3ac3ed552eaf8ca18052ef",
+          "bytes": 297758821
         },
         {
           "os": "macos",
@@ -109,8 +109,8 @@
           "format": ".dmg",
           "name": "SecondMindPi-0.3.0-macos-x64.dmg",
           "url": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/v0.3.0/SecondMindPi-0.3.0-macos-x64.dmg",
-          "sha256": null,
-          "bytes": null
+          "sha256": "a5b5fa6b15d0413548cdbdadff5aaf7e4d6426582e8c51b600e4773d8325fa6e",
+          "bytes": 323592957
         }
       ]
     }

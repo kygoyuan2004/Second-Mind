@@ -64,7 +64,7 @@ function releaseAssetRedirect(source, destination) {
 }
 
 function successfulStatus(status) {
-  return status >= 200 && status < 400;
+  return status >= 200 && status < 300;
 }
 
 function retryableStatus(status) {

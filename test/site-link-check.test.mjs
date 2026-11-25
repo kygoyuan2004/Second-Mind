@@ -52,7 +52,7 @@ test('external link validation falls back to a bounded range GET', async () => {
   assert.equal(calls[0].method, 'HEAD');
   assert.equal(calls[1].method, 'GET');
   assert.equal(calls[1].headers.range, 'bytes=0-0');
-  assert.equal(calls[1].redirect, 'follow');
+  assert.equal(calls[1].redirect, 'manual');
   assert.ok(calls[1].signal instanceof AbortSignal);
 });
 

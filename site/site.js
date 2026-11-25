@@ -97,7 +97,7 @@ function setupCarousel(stage) {
   onScreen(stage, seen => { visible = seen; update(); });
 }
 
-setupCarousel(document.querySelector('[data-carousel]'));
+document.querySelectorAll('[data-carousel]').forEach(setupCarousel);
 
 function setupSampleReplay(workspace) {
   const send = workspace.querySelector('[data-send]');
@@ -316,7 +316,7 @@ function setupSampleReplay(workspace) {
     selectPassage(document.getElementById(link.hash.slice(1)), true, true);
   });
 }
-setupSampleReplay(document.querySelector('#qa-replay'));
+document.querySelectorAll('#qa-replay').forEach(setupSampleReplay);
 
 
 function setupTrace(trace) {
@@ -344,7 +344,7 @@ function setupTrace(trace) {
   }
   trace.querySelector('[data-replay]').addEventListener('click', play);
 }
-setupTrace(document.querySelector('.trace'));
+document.querySelectorAll('.trace').forEach(setupTrace);
 
 function setupDraft(draft) {
   const work = draft.querySelector('.draft-work');
@@ -435,7 +435,7 @@ function setupDraft(draft) {
     work.querySelector('[role="tab"]').focus();
   });
 }
-setupDraft(document.querySelector('.draft'));
+document.querySelectorAll('.draft').forEach(setupDraft);
 
 const gallery = [...document.querySelectorAll('.gallery .shot')];
 const filters = [...document.querySelectorAll('[data-filter]')];
@@ -487,7 +487,7 @@ function setupViewer(viewer) {
     move(event.key === 'ArrowRight' ? 1 : -1);
   });
 }
-setupViewer(document.querySelector('#viewer'));
+document.querySelectorAll('#viewer').forEach(setupViewer);
 
 function setupVideo(video) {
   let visible = false;
@@ -537,7 +537,7 @@ for (const button of document.querySelectorAll('.copy')) {
   const initial = button.textContent;
   let timer;
   button.addEventListener('click', async () => {
-    const value = button.closest('[role="tabpanel"]').querySelector('code').textContent;
+    const value = button.closest('[data-copy-block], [role="tabpanel"]').querySelector('code').textContent;
     let copied = false;
     try {
       await navigator.clipboard.writeText(value);

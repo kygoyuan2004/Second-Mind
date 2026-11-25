@@ -15,6 +15,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      runtime: ${{ steps.scope.outputs.runtime }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: scope
+        env:
+          BEFORE: ${{ github.event.before || github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          runtime=true
+          if [[ "$GITHUB_REF_TYPE" != tag && -n "$BEFORE" ]] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            git diff --name-only -z --no-renames "$BEFORE" "$GITHUB_SHA" > "$RUNNER_TEMP/changed-paths"
+            runtime=false
+            while IFS= read -r -d '' file; do
+              case "$file" in
+                site/*|scripts/site-*.mjs|scripts/download-page.mjs|scripts/sync-download-releases.mjs|scripts/test-download-browser.mjs|test/site-*.test.mjs|.github/workflows/pages.yml|.github/workflows/ci.yml) ;;
+                *) runtime=true; break ;;
+              esac
+            done < "$RUNNER_TEMP/changed-paths"
+          fi
+          echo "runtime=$runtime" >> "$GITHUB_OUTPUT"
+
   node:
     name: Node 22 · ${{ matrix.runner }}
     runs-on: ${{ matrix.runner }}
@@ -144,6 +171,8 @@ jobs:
         run: npm run security:history
 
   container:
+    needs: changes
+    if: needs.changes.outputs.runtime == 'true'
     name: Docker SDK and installer lifecycle
     runs-on: ubuntu-latest
     timeout-minutes: 40

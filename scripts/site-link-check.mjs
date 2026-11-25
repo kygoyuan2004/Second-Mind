@@ -1,14 +1,17 @@
 const PAGES_ORIGIN = 'https://kygoyuan2004.github.io';
 const PAGES_BASE = '/Second-Mind/';
 const REPOSITORY_ORIGIN = 'https://github.com';
-const REPOSITORY_BASE = '/kygoyuan2004/Second-Mind';
+const REPOSITORIES = new Map([
+  ['/kygoyuan2004/Second-Mind', '1351979511'],
+  ['/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE', '1471358957'],
+]);
 
 function safeLocation(url) {
   return `${url.origin}${url.pathname}`;
 }
 
 function repositoryPath(pathname) {
-  return pathname === REPOSITORY_BASE || pathname.startsWith(`${REPOSITORY_BASE}/`);
+  return [...REPOSITORIES.keys()].some(base => pathname === base || pathname.startsWith(base + '/'));
 }
 
 export function classifyExternalLink(reference) {
@@ -48,6 +51,18 @@ export function classifyExternalLink(reference) {
   };
 }
 
+function releaseAssetRedirect(source, destination) {
+  const original = new URL(source);
+  const final = new URL(destination, original);
+  if (final.origin !== 'https://release-assets.githubusercontent.com' || final.username || final.password || final.port) return false;
+  for (const [repo, id] of REPOSITORIES) {
+    if (original.pathname.startsWith(repo + '/releases/download/') &&
+        /^v\d+\.\d+\.\d+\/[\w.-]+$/.test(original.pathname.slice((repo + '/releases/download/').length)) &&
+        final.pathname.startsWith('/github-production-release-asset/' + id + '/')) return true;
+  }
+  return false;
+}
+
 function successfulStatus(status) {
   return status >= 200 && status < 400;
 }
@@ -70,12 +85,20 @@ async function request(fetchImpl, url, method, timeoutMs) {
     'user-agent': 'Second-Mind-site-check/1',
   };
   if (method === 'GET') headers.range = 'bytes=0-0';
-  return fetchImpl(url, {
-    method,
-    headers,
-    redirect: 'follow',
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  const signal = AbortSignal.timeout(timeoutMs);
+  let current = url;
+  for (let hops = 0; hops < 5; hops++) {
+    const response = await fetchImpl(current, { method, headers, redirect: 'manual', signal });
+    const location = response.headers?.get('location');
+    if (response.status < 300 || response.status >= 400 || !location) return response;
+    const next = new URL(location, current).href;
+    await cancelBody(response);
+    if (classifyExternalLink(next).kind !== 'network' && !releaseAssetRedirect(url, next)) {
+      return { status: 400, url: next };
+    }
+    current = next;
+  }
+  throw new Error('Too many redirects');
 }
 
 async function validateOneLink(target, options) {
@@ -99,7 +122,7 @@ async function validateOneLink(target, options) {
       const finalReference = response.url || target.url;
       const finalTarget = classifyExternalLink(finalReference);
       await cancelBody(response);
-      if (finalTarget.kind !== 'network') {
+      if (finalTarget.kind !== 'network' && !releaseAssetRedirect(target.url, finalReference)) {
         return `${target.display}: redirect target is outside the public repository allowlist`;
       }
       if (successfulStatus(status)) return null;

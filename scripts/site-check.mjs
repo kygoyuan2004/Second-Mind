@@ -179,15 +179,11 @@ function validateFragment(reference, html, htmlRelative) {
 }
 
 function validateMetadata(html, htmlRelative, locale) {
-  const expected = locale === 'zh-CN'
-    ? {
-        canonical: 'https://kygoyuan2004.github.io/Second-Mind/',
-        alternate: 'https://kygoyuan2004.github.io/Second-Mind/en/',
-      }
-    : {
-        canonical: 'https://kygoyuan2004.github.io/Second-Mind/en/',
-        alternate: 'https://kygoyuan2004.github.io/Second-Mind/',
-      };
+  const site = 'https://kygoyuan2004.github.io/Second-Mind/';
+  const suffix = htmlRelative.includes('download/') ? 'download/' : '';
+  const zh = site + suffix;
+  const en = site + 'en/' + suffix;
+  const expected = locale === 'zh-CN' ? { canonical: zh, alternate: en } : { canonical: en, alternate: zh };
 
   const htmlTag = tags(html, 'html')[0];
   if (attribute(htmlTag ?? '', 'lang') !== locale) fail(`${htmlRelative}: expected html lang=${locale}`);
@@ -209,13 +205,13 @@ function validateMetadata(html, htmlRelative, locale) {
 
   const alternates = linkTagsByRel(html, 'alternate');
   const languages = new Map(alternates.map((tag) => [attribute(tag, 'hreflang'), attribute(tag, 'href')]));
-  if (languages.get('zh-CN') !== 'https://kygoyuan2004.github.io/Second-Mind/') {
+  if (languages.get('zh-CN') !== zh) {
     fail(`${htmlRelative}: zh-CN hreflang is missing or incorrect`);
   }
-  if (languages.get('en') !== 'https://kygoyuan2004.github.io/Second-Mind/en/') {
+  if (languages.get('en') !== en) {
     fail(`${htmlRelative}: English hreflang is missing or incorrect`);
   }
-  if (languages.get('x-default') !== 'https://kygoyuan2004.github.io/Second-Mind/') {
+  if (languages.get('x-default') !== zh) {
     fail(`${htmlRelative}: x-default hreflang is missing or incorrect`);
   }
   if (!languages.has(locale === 'zh-CN' ? 'en' : 'zh-CN') || ![...languages.values()].includes(expected.alternate)) {
@@ -492,7 +488,7 @@ async function main() {
     else fail(message);
   }
 
-  const expectedFiles = ['.nojekyll', 'index.html', 'en/index.html', 'styles.css', 'site.js'];
+  const expectedFiles = ['.nojekyll', 'index.html', 'en/index.html', 'download/index.html', 'en/download/index.html', 'assets/second-mind-hero.png', 'styles.css', 'site.js'];
   for (const relative of expectedFiles) {
     if (!(await isFile(path.join(SITE_OUTPUT, relative)))) fail(`dist/${relative}: expected build output is missing`);
   }
@@ -504,18 +500,38 @@ async function main() {
   validatePrivacy(sourceFiles);
   validateCss(sourceFiles.get('styles.css') ?? '');
 
-  const htmlByPath = new Map([
-    ['index.html', await readFile(path.join(SITE_OUTPUT, 'index.html'), 'utf8')],
-    ['en/index.html', await readFile(path.join(SITE_OUTPUT, 'en', 'index.html'), 'utf8')],
-  ]);
+  const htmlByPath = new Map();
+  for (const page of ['index.html', 'en/index.html', 'download/index.html', 'en/download/index.html']) {
+    htmlByPath.set(page, await readFile(path.join(SITE_OUTPUT, page), 'utf8'));
+  }
+  validatePrivacy(new Map([...sourceFiles, ...htmlByPath]));
+  const releases = JSON.parse(sourceFiles.get('releases.json'));
   const externalReferences = new Set();
 
   for (const [htmlRelative, html] of htmlByPath) {
-    const locale = htmlRelative === 'index.html' ? 'zh-CN' : 'en';
+    const locale = htmlRelative.startsWith('en/') ? 'en' : 'zh-CN';
     await validateHtmlSyntax(html, htmlRelative);
     validateMetadata(html, htmlRelative, locale);
     validateAccessibility(html, htmlRelative);
-    validateClaims(html, htmlRelative, locale);
+    if (htmlRelative.includes('download/')) {
+      const keys = sectionSyncKeys(html);
+      for (const platform of ['windows', 'macos', 'linux', 'docker']) {
+        if (!keys.includes('platform-' + platform)) fail(htmlRelative + ': missing ' + platform);
+      }
+      for (const edition of releases.editions) {
+        for (const file of edition.assets.filter(asset => asset.sha256)) {
+          if (!html.includes('href="' + file.url + '"') || !html.includes(file.sha256)) fail(htmlRelative + ': missing verified file ' + file.name);
+        }
+        for (const value of [edition.image, '127.0.0.1:' + edition.port, 'v' + edition.version]) {
+          if (!html.includes(value)) fail(htmlRelative + ': missing ' + value);
+        }
+      }
+      if (!html.includes('xattr -dr com.apple.quarantine') || !html.includes('SHA256SUMS.txt')) fail(htmlRelative + ': missing installation instructions');
+    } else {
+      validateClaims(html, htmlRelative, locale);
+      const download = SITE_BASE + (locale === 'en' ? 'en/' : '') + 'download/';
+      if (!html.includes('class="button primary" href="' + download + '"')) fail(htmlRelative + ': missing home download button');
+    }
 
     if (/\son[a-z]+\s*=/i.test(html)) fail(`${htmlRelative}: inline event handlers are not allowed`);
     if (/<(?:iframe|form)\b/i.test(html)) fail(`${htmlRelative}: forms and embedded remote frames are not allowed`);
@@ -568,10 +584,10 @@ async function main() {
     fail(`external link check: ${issue}`);
   }
 
-  const chineseKeys = sectionSyncKeys(htmlByPath.get('index.html'));
-  const englishKeys = sectionSyncKeys(htmlByPath.get('en/index.html'));
-  if (JSON.stringify(chineseKeys) !== JSON.stringify(englishKeys)) {
-    fail('Chinese and English pages do not expose the same synchronized section keys');
+  for (const relative of ['index.html', 'download/index.html']) {
+    const chinese = sectionSyncKeys(htmlByPath.get(relative));
+    const english = sectionSyncKeys(htmlByPath.get('en/' + relative));
+    if (JSON.stringify(chinese) !== JSON.stringify(english)) fail(relative + ': synchronized section keys differ');
   }
 
   const screenshotHashes = new Map();

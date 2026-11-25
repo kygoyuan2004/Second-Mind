@@ -45,6 +45,16 @@ if (live) {
   await once(server, 'listening');
   origin = 'http://127.0.0.1:' + server.address().port;
 }
+
+async function tabTo(page, target) {
+  const limit = await page.locator('a[href], button, summary, input, select, textarea, [tabindex]').count() + 1;
+  for (let step = 0; step <= limit; step++) {
+    if (await target.evaluate(element => element === document.activeElement)) return;
+    await page.keyboard.press('Tab');
+  }
+  assert.fail('Tab could not reach ' + (await target.innerText()).trim());
+}
+
 async function verifyCommand(page, block, expected, js) {
   assert.equal(await block.locator('code').innerText(), expected);
   const button = block.locator('button.copy');
@@ -72,7 +82,8 @@ try {
         const cta = page.locator('#hero .button.primary');
         assert.equal((await cta.innerText()).trim(), lang === 'en' ? 'Download & Try' : '下载尝试');
         assert.equal(await page.locator('a[href="#quickstart"]').count() > 0, true);
-        await cta.click();
+        await tabTo(page, cta);
+        await page.keyboard.press('Enter');
         await page.waitForURL(origin + home + 'download/');
         assert.equal(await page.locator('.platform-row').count(), 4);
         const readme = lang === 'zh' ? 'README.md' : 'README.en.md';
@@ -82,6 +93,20 @@ try {
         const [left, right] = await Promise.all([0,1].map(i => page.locator('#windows .edition-cell').nth(i).boundingBox()));
         assert.ok(width > 520 ? right.x > left.x + left.width - 1 : right.y >= left.y + left.height - 1);
         if (mode.js) await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
+        for (const link of await page.locator('a.download-file').all()) await tabTo(page, link);
+        if (mode.js) {
+          const dockerCommand = page.locator('#docker-pi [data-copy-block]').first();
+          await tabTo(page, dockerCommand.locator('button'));
+          await page.keyboard.press('Enter');
+          await dockerCommand.locator('button.success').waitFor({ timeout: 5000 });
+          assert.equal(await page.evaluate(() => navigator.clipboard.readText()), await dockerCommand.locator('code').innerText());
+        }
+        const entry = page.locator('#checksums details.hash-entry').last();
+        await tabTo(page, entry.locator('summary'));
+        await page.keyboard.press('Space');
+        assert.equal(await entry.evaluate(details => details.open), true);
+        await page.keyboard.press('Enter');
+        assert.equal(await entry.evaluate(details => details.open), false);
         for (const edition of release.editions) {
           const scope = page.locator('#docker-' + edition.id);
           assert.ok((await scope.innerText()).includes('127.0.0.1:' + edition.port));

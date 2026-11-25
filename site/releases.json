@@ -1,0 +1,118 @@
+{
+  "platforms": {
+    "windows": {
+      "zh": "Windows 10 / 11 · x64",
+      "en": "Windows 10 / 11 · x64"
+    },
+    "linux": {
+      "zh": "64 位 Linux · Debian / Ubuntu 或 AppImage",
+      "en": "64-bit Linux · Debian / Ubuntu or AppImage"
+    },
+    "macos": {
+      "zh": "Pi 桌面版 · macOS 14 或以上",
+      "en": "Pi desktop · macOS 14 or later"
+    },
+    "docker": {
+      "zh": "Linux 容器 · amd64 / arm64",
+      "en": "Linux containers · amd64 / arm64"
+    }
+  },
+  "editions": [
+    {
+      "id": "claude",
+      "name": "Claude SDK",
+      "version": "0.2.1",
+      "repo": "https://github.com/kygoyuan2004/Second-Mind",
+      "release": "https://github.com/kygoyuan2004/Second-Mind/releases/tag/v0.2.1",
+      "checksums": "https://github.com/kygoyuan2004/Second-Mind/releases/download/v0.2.1/SHA256SUMS.txt",
+      "image": "ghcr.io/kygoyuan2004/second-mind:v0.2.1",
+      "port": 8787,
+      "assets": [
+        {
+          "os": "windows",
+          "arch": "x64",
+          "format": ".exe",
+          "name": "SecondMind-0.2.1-windows-x64-setup.exe",
+          "url": "https://github.com/kygoyuan2004/Second-Mind/releases/download/v0.2.1/SecondMind-0.2.1-windows-x64-setup.exe",
+          "sha256": "64a92b872bdd4b2428028daca551c4d1fca59d06b215e3abafdc5a0416d85ca0",
+          "bytes": 385832104
+        },
+        {
+          "os": "linux",
+          "arch": "x64",
+          "format": ".AppImage",
+          "name": "SecondMind-0.2.1-linux-x86_64.AppImage",
+          "url": "https://github.com/kygoyuan2004/Second-Mind/releases/download/v0.2.1/SecondMind-0.2.1-linux-x86_64.AppImage",
+          "sha256": "23762a40d0e670ebeeecc98b46b9baa5d2075e43bcf25736841f54428f4a58e1",
+          "bytes": 661326326
+        },
+        {
+          "os": "linux",
+          "arch": "amd64",
+          "format": ".deb",
+          "name": "SecondMind-0.2.1-linux-amd64.deb",
+          "url": "https://github.com/kygoyuan2004/Second-Mind/releases/download/v0.2.1/SecondMind-0.2.1-linux-amd64.deb",
+          "sha256": "7f078ea3df26bab5ac934639231e8e0c3eff3b31978a272e00e8a4b42a59135a",
+          "bytes": 507845840
+        }
+      ]
+    },
+    {
+      "id": "pi",
+      "name": "Pi Agent",
+      "version": "0.3.0",
+      "repo": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE",
+      "release": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/tag/v0.3.0",
+      "checksums": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/v0.3.0/SHA256SUMS.txt",
+      "image": "ghcr.io/kygoyuan2004/second_mind_piagent_optimize:v0.3.0",
+      "port": 8788,
+      "assets": [
+        {
+          "os": "windows",
+          "arch": "x64",
+          "format": ".exe",
+          "name": "SecondMindPi-0.3.0-windows-x64-setup.exe",
+          "url": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/v0.3.0/SecondMindPi-0.3.0-windows-x64-setup.exe",
+          "sha256": "1b09d5ac88f93d79926fff4d08e0689e41311d34b94704e62ae1a0271d288f30",
+          "bytes": 322129364
+        },
+        {
+          "os": "linux",
+          "arch": "x64",
+          "format": ".AppImage",
+          "name": "SecondMindPi-0.3.0-linux-x86_64.AppImage",
+          "url": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/v0.3.0/SecondMindPi-0.3.0-linux-x86_64.AppImage",
+          "sha256": "5692cf5ef7dd39db543bf05faba2c986af68eace3af03cca560c338348eb8c10",
+          "bytes": 472295845
+        },
+        {
+          "os": "linux",
+          "arch": "amd64",
+          "format": ".deb",
+          "name": "SecondMindPi-0.3.0-linux-amd64.deb",
+          "url": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/v0.3.0/SecondMindPi-0.3.0-linux-amd64.deb",
+          "sha256": "f26a90279f3bb7fdf195e970af5230096b4a2125944b969e62bc03fddecdd17d",
+          "bytes": 354116456
+        },
+        {
+          "os": "macos",
+          "arch": "arm64",
+          "format": ".dmg",
+          "name": "SecondMindPi-0.3.0-macos-arm64.dmg",
+          "url": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/v0.3.0/SecondMindPi-0.3.0-macos-arm64.dmg",
+          "sha256": "00777554a5b6447c9ed5b853ad5718a84f947e75ad3ac3ed552eaf8ca18052ef",
+          "bytes": 297758821
+        },
+        {
+          "os": "macos",
+          "arch": "x64",
+          "format": ".dmg",
+          "name": "SecondMindPi-0.3.0-macos-x64.dmg",
+          "url": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/v0.3.0/SecondMindPi-0.3.0-macos-x64.dmg",
+          "sha256": "a5b5fa6b15d0413548cdbdadff5aaf7e4d6426582e8c51b600e4773d8325fa6e",
+          "bytes": 323592957
+        }
+      ]
+    }
+  ]
+}

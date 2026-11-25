@@ -79,7 +79,12 @@ jobs:
         run: npm run security:ocr
 
       - name: Build and validate static site
-        run: npm run site:check
+        env:
+          SITE_REQUIRE_RELEASES: '1'
+        run: |
+          node scripts/sync-download-releases.mjs --check
+          npm run site:check
+          node scripts/test-download-browser.mjs
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
@@ -104,3 +109,40 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  verify-live:
+    name: Verify deployed download center
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - run: npx playwright install chromium
+      - name: Check both real home pages, installers and checksums
+        env:
+          SITE_REQUIRE_RELEASES: '1'
+        run: |
+          set -euo pipefail
+          node scripts/sync-download-releases.mjs --check
+          node scripts/test-download-browser.mjs --live
+          node --input-type=module - <<'JS' >> "$GITHUB_STEP_SUMMARY"
+          import fs from 'node:fs';
+          const data = JSON.parse(fs.readFileSync('site/releases.json'));
+          console.log('# 下载中心线上验收\n');
+          console.log('中文和英文首页均已验证。24 组浏览器检查覆盖桌面、手机、深浅色、无 JavaScript、键盘导航和剪贴板。\n');
+          console.log('| 版本 | 下载文件 | SHA-256 |\n| --- | --- | --- |');
+          for (const edition of data.editions) for (const file of edition.assets) {
+            console.log('| ' + edition.name + ' ' + edition.version + ' | [' + file.name + '](' + file.url + ') | `' + file.sha256 + '` |');
+          }
+          JS

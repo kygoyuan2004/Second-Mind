@@ -431,3 +431,54 @@ html:not(.js) .provider { display: block; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
 }
+
+/* Both editions use the same platform rows at every viewport. */
+.downloads { padding-block: clamp(2rem, 6vw, 5.75rem) 3rem; }
+.download-hero { display: grid; grid-template-columns: 1.2fr minmax(0, 1fr); align-items: center; gap: clamp(1.5rem, 5vw, 5rem); padding-bottom: clamp(2rem, 5vw, 4.5rem); }
+.download-hero h1 { font: 600 clamp(2.3rem, 4.7vw, 4.25rem)/1.08 var(--serif); margin: 0 0 1.25rem; letter-spacing: -.045em; }
+.download-hero h1 span { white-space: nowrap; }
+.download-hero p { color: var(--ink-soft); line-height: 1.65; max-width: 58ch; margin: .35rem 0; }
+.download-hero .text-link { display: inline-block; margin-top: .65rem; }
+.owl-window { padding: 0; border: 1px solid var(--line); border-radius: 13px; overflow: hidden; background: var(--deep); aspect-ratio: 1.86; }
+.owl-window img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.platform-jump { display: flex; gap: .45rem 1.35rem; flex-wrap: wrap; border-block: 1px solid var(--line); padding: .85rem 0; }
+.platform-jump a { font-weight: 650; text-decoration: none; }
+.platform-jump a:hover, .download-page a:hover { text-decoration: underline; }
+.platform-row { display: grid; grid-template-columns: minmax(140px,.75fr) repeat(2,minmax(0,1fr)); gap: clamp(1rem,3vw,2.75rem); border-bottom: 1px solid var(--line); padding: 2rem 0; scroll-margin-top: 5rem; }
+.platform-name h2, .download-detail h2 { font: 600 clamp(1.55rem,3vw,2.4rem)/1.15 var(--serif); margin: 0 0 .55rem; }
+.platform-name p, .edition-cell p { margin: .45rem 0; color: var(--ink-soft); font-size: .91rem; }
+.edition-cell h3, .install-grid h3 { margin: 0 0 .65rem; font: 650 1.04rem/1.4 system-ui,sans-serif; }
+.download-page h3 small, .hash-entry small { color: var(--ink-faint); font: .78rem var(--mono); }
+.file-list, .download-links { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
+.download-file, .download-pending { font: 600 .85rem/1.3 system-ui,sans-serif; overflow-wrap: anywhere; }
+.download-file { display: inline-flex; color: var(--accent); gap: .45rem; align-items: center; padding: .58rem .75rem; }
+.download-pending { display: block; padding: .58rem .75rem; border: 1px dashed var(--line); border-radius: 6px; color: var(--ink-faint); }
+.install-hint { margin-top: .6rem; color: var(--ink-soft); }
+.install-hint summary { cursor: pointer; font-size: .88rem; color: var(--accent); }
+.download-detail { margin-top: clamp(2.75rem,6vw,5.5rem); scroll-margin-top: 5rem; }
+.download-detail > p { max-width: 80ch; color: var(--ink-soft); }
+.download-detail h3 { margin-block: 1.15rem .4rem; }
+.install-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: clamp(1rem,4vw,3rem); }
+.install-grid > article { min-width: 0; scroll-margin-top: 5rem; }
+.download-command { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; margin: .8rem 0; min-width: 0; }
+.download-command .command-head { color: var(--ink); background: transparent; padding: .6rem .85rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); gap: .5rem; }
+.download-command .copy { color: var(--accent); background: var(--surface); border: 1px solid var(--line); }
+.download-command pre { margin: 0; color: var(--ink); border: 0; background: transparent; padding: .9rem; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+.download-page .image-ref, .hash-entry code { overflow-wrap: anywhere; font: .83rem/1.55 var(--mono); }
+.hash-entry { padding: .6rem 0; border-bottom: 1px solid var(--line); }
+.hash-entry summary { cursor: pointer; color: var(--ink); font-size: .9rem; overflow-wrap: anywhere; }
+.hash-entry code { display: block; margin-top: .35rem; }
+.download-footer { padding-block: 1.8rem; border-top: 1px solid var(--line); }
+@media (max-width: 768px) {
+  .download-hero { grid-template-columns: 1fr; gap: 1.1rem; }
+  .owl-window { aspect-ratio: 3.2; }
+  .owl-window img { object-position: center 80%; }
+  .platform-row { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .platform-name { grid-column: 1 / -1; }
+  .install-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .platform-row { grid-template-columns: 1fr; padding: 1.35rem 0; }
+  .platform-jump { gap: .45rem 1rem; }
+  .platform-name p { margin-bottom: 0; }
+}

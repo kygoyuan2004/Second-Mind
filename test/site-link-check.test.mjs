@@ -52,7 +52,7 @@ test('external link validation falls back to a bounded range GET', async () => {
   assert.equal(calls[0].method, 'HEAD');
   assert.equal(calls[1].method, 'GET');
   assert.equal(calls[1].headers.range, 'bytes=0-0');
-  assert.equal(calls[1].redirect, 'follow');
+  assert.equal(calls[1].redirect, 'manual');
   assert.ok(calls[1].signal instanceof AbortSignal);
 });
 
@@ -84,4 +84,29 @@ test('external link validation rejects a redirect outside the allowlist', async 
   assert.deepEqual(issues, [
     'https://github.com/kygoyuan2004/Second-Mind: redirect target is outside the public repository allowlist',
   ]);
+});
+
+test('verified release assets may redirect only to the matching GitHub asset store', async () => {
+  const source = 'https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/v0.3.0/SecondMindPi-0.3.0-macos-arm64.dmg';
+  const cdn = 'https://release-assets.githubusercontent.com/github-production-release-asset/';
+  const validate = async destination => {
+    const visited = [];
+    const issues = await validateExternalLinks([source], {
+      fetchImpl: async (url, options) => {
+        visited.push(url);
+        assert.equal(options.redirect, 'manual');
+        if (url === source) return { status: 302, url, headers: new Headers({ location: destination }) };
+        return response(200, url);
+      },
+    });
+    return { issues, visited };
+  };
+  const correct = cdn + '1471358957/example?signature=test';
+  assert.deepEqual(await validate(correct), { issues: [], visited: [source, correct] });
+  const foreign = await validate(cdn + '1351979511/example?signature=test');
+  assert.equal(foreign.issues.length, 1);
+  assert.deepEqual(foreign.visited, [source]);
+  assert.ok(!foreign.issues[0].includes('signature'));
+  const missing = await validateExternalLinks([source], { fetchImpl: async url => response(302, url) });
+  assert.match(missing[0], /HTTP 302/);
 });

@@ -2,6 +2,8 @@ import { copyFile, lstat, mkdir, readdir, readFile, rm, stat, writeFile } from '
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { checkReleaseManifest, renderDownload } from './download-page.mjs';
+
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 export const REPOSITORY_ROOT = path.resolve(SCRIPT_DIR, '..');
@@ -122,6 +124,14 @@ export async function buildSite({ log = true } = {}) {
     await copyFile(source, path.join(assetOutput, filename));
   }
 
+  const manifest = JSON.parse(await readFile(path.join(SITE_SOURCE, 'releases.json'), 'utf8'));
+  checkReleaseManifest(manifest, process.env.SITE_REQUIRE_RELEASES === '1');
+  await copyFile(path.join(SCREENSHOT_SOURCE, 'second-mind-hero.png'), path.join(assetOutput, 'second-mind-hero.png'));
+  for (const [locale, target] of [['zh-CN', 'download'], ['en', 'en/download']]) {
+    const directory = path.join(SITE_OUTPUT, target);
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, 'index.html'), renderDownload(manifest, locale));
+  }
   await installVideos(assetOutput);
   if (log) {
     process.stdout.write(`Built static site at ${path.relative(REPOSITORY_ROOT, SITE_OUTPUT)}\n`);

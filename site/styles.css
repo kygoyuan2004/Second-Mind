@@ -443,6 +443,9 @@ html:not(.js) .provider { display: block; }
 .owl-window img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .platform-jump { display: flex; gap: .45rem 1.35rem; flex-wrap: wrap; border-block: 1px solid var(--line); padding: .85rem 0; }
 .platform-jump a { font-weight: 650; text-decoration: none; }
+.platform-jump .preview-jump { margin-inline-start: auto; }
+.preview-release { border-block: 1px solid var(--line); padding-block: 2rem; }
+.preview-platforms { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1.5rem; margin-top: 1.5rem; }
 .platform-jump a:hover, .download-page a:hover { text-decoration: underline; }
 .platform-row { display: grid; grid-template-columns: minmax(140px,.75fr) repeat(2,minmax(0,1fr)); gap: clamp(1rem,3vw,2.75rem); border-bottom: 1px solid var(--line); padding: 2rem 0; scroll-margin-top: 5rem; }
 .platform-name h2, .download-detail h2 { font: 600 clamp(1.55rem,3vw,2.4rem)/1.15 var(--serif); margin: 0 0 .55rem; }
@@ -480,5 +483,6 @@ html:not(.js) .provider { display: block; }
 @media (max-width: 520px) {
   .platform-row { grid-template-columns: 1fr; padding: 1.35rem 0; }
   .platform-jump { gap: .45rem 1rem; }
+  .platform-jump .preview-jump { margin-inline-start: 0; }
   .platform-name p { margin-bottom: 0; }
 }

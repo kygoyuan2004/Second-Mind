@@ -11,3 +11,15 @@ test('Mac download labels must point to the file for the named CPU', async () =>
   [mac[0].arch, mac[1].arch] = [mac[1].arch, mac[0].arch];
   assert.throws(() => checkReleaseManifest(manifest), /does not match its platform and architecture/);
 });
+
+test('a preview has its own release tag, image and port', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../site/releases.json', import.meta.url)));
+  const stable = manifest.editions.find(edition => edition.id === 'pi');
+  for (const field of ['release', 'checksums', 'image', 'port']) {
+    const changed = structuredClone(manifest);
+    changed.preview[field] = stable[field];
+    assert.throws(() => checkReleaseManifest(changed), /Invalid release metadata/);
+  }
+  delete manifest.preview;
+  checkReleaseManifest(manifest, true);
+});

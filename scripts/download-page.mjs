@@ -12,32 +12,44 @@ const packageSuffixes = {
 const quarantine = 'xattr -dr com.apple.quarantine "/Applications/Second Mind Pi.app"';
 const escape = text => String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 
+export function allReleases(manifest) {
+  return manifest.preview ? [...manifest.editions, manifest.preview] : manifest.editions;
+}
+
+export function releaseTag(edition) {
+  return (edition.id === 'pi-preview' ? 'preview-v' : 'v') + edition.version;
+}
+
 export function checkReleaseManifest(manifest, published = false) {
   const expected = { claude: 'Second-Mind', pi: 'Second_Mind_PIAGENT_OPTIMIZE' };
   if (manifest.editions.map(edition => edition.id).join() !== 'claude,pi') throw new Error('Both editions are required');
-  for (const [id, repository] of Object.entries(expected)) {
-    const edition = manifest.editions.find(item => item.id === id);
+  if (manifest.preview && manifest.preview.id !== 'pi-preview') throw new Error('Invalid preview edition');
+  for (const edition of allReleases(manifest)) {
+    const id = edition.id;
+    const repository = expected[id === 'pi-preview' ? 'pi' : id];
+    const tag = releaseTag(edition);
+    const port = { claude: 8787, pi: 8788, 'pi-preview': 8789 }[id];
     const repo = 'https://github.com/kygoyuan2004/' + repository;
     const version = edition.version;
-    const releaseBase = repo + '/releases/download/v' + version + '/';
+    const releaseBase = repo + '/releases/download/' + tag + '/';
     if (!/^\d+\.\d+\.\d+$/.test(version) || edition.repo !== repo ||
-        edition.release !== repo + '/releases/tag/v' + version || edition.checksums !== releaseBase + 'SHA256SUMS.txt' ||
-        edition.port !== (id === 'pi' ? 8788 : 8787) ||
-        edition.image !== 'ghcr.io/kygoyuan2004/' + repository.toLowerCase() + ':v' + version) {
+        edition.release !== repo + '/releases/tag/' + tag || edition.checksums !== releaseBase + 'SHA256SUMS.txt' ||
+        edition.port !== port ||
+        edition.image !== 'ghcr.io/kygoyuan2004/' + repository.toLowerCase() + ':' + tag) {
       throw new Error('Invalid release metadata for ' + id);
     }
     const signatures = edition.assets.map(file => [file.os, file.arch, file.format].join('/')).sort();
-    const required = Object.keys(packageSuffixes).filter(key => id === 'pi' || !key.startsWith('macos/'));
+    const required = Object.keys(packageSuffixes).filter(key => id !== 'claude' || !key.startsWith('macos/'));
     if (signatures.join() !== required.sort().join() || new Set(edition.assets.map(a => a.name)).size !== required.length) {
       throw new Error('Incomplete or duplicated platforms in ' + id);
     }
     for (const file of edition.assets) {
       const suffix = packageSuffixes[[file.os, file.arch, file.format].join('/')];
-      const prefix = id === 'pi' ? 'SecondMindPi-' : 'SecondMind-';
+      const prefix = id === 'claude' ? 'SecondMind-' : 'SecondMindPi-';
       if (file.name !== prefix + version + '-' + suffix || file.url !== releaseBase + file.name) {
         throw new Error('Asset filename or URL does not match its platform and architecture: ' + file.name);
       }
-      if (file.sha256 === null && file.bytes === null && !published && id === 'pi') continue;
+      if (file.sha256 === null && file.bytes === null && !published && id !== 'claude') continue;
       if (!/^[a-f0-9]{64}$/.test(file.sha256) || !Number.isSafeInteger(file.bytes) || file.bytes <= 0) {
         throw new Error('Release checksum or byte length missing for ' + file.name);
       }
@@ -51,7 +63,9 @@ export function renderDownload(manifest, locale) {
   const home = base + (zh ? '' : 'en/');
   const here = home + 'download/';
   const other = base + (zh ? 'en/' : '') + 'download/';
-  const [claude, pi] = manifest.editions;
+  const pi = manifest.editions.find(edition => edition.id === 'pi');
+  const preview = manifest.preview;
+  const nameFor = edition => edition.id === 'pi-preview' ? t('Pi 测试版', 'Pi preview') : edition.name;
   const ready = edition => edition.assets.every(file => file.sha256);
   const title = t('下载 Second Mind', 'Download Second Mind');
   const description = t('按操作系统选择 Claude SDK 或 Pi Agent，下载安装程序、核对文件校验值，或用 Docker 在自己的设备上部署 Second Mind。', 'Compare Claude SDK and Pi Agent, download the installer for your device, verify the checksum, or run Second Mind with Docker.');
@@ -60,11 +74,11 @@ export function renderDownload(manifest, locale) {
   }
   function fileButton(edition, file) {
     const arch = file.os === 'macos' ? (file.arch === 'arm64' ? 'Apple Silicon (arm64)' : 'Intel (x64)') : file.arch;
-    const name = edition.name + ' · ' + arch + ' ' + file.format;
+    const name = nameFor(edition) + ' · ' + arch + ' ' + file.format;
     if (!file.sha256) return `<span class="download-pending">${escape(name)} · ${t('发行验收中','In release testing')}</span>`;
     return `<a class="button download-file" href="${escape(file.url)}">${escape(name)} <span aria-hidden="true">↓</span></a>`;
   }
-  function platformCell(edition, os) {
+  function platformCell(edition, os, platformHeading = false) {
     const key = edition.id;
     const files = edition.assets.filter(file => file.os === os);
     let body;
@@ -80,9 +94,10 @@ export function renderDownload(manifest, locale) {
         body += `<details class="install-hint"><summary>${t('Linux 安装步骤','Linux install steps')}</summary>${snippet('AppImage', 'chmod +x ' + appImage + '\n./' + appImage)}${snippet('Debian / Ubuntu', 'sudo apt install ./' + deb)}</details>`;
       }
       if (os === 'windows') body += `<p>${t('下载后运行安装程序，为当前用户安装。','Run the installer for your current Windows account.')} <a href="#first-open">SmartScreen</a></p>`;
-      if (os === 'macos') body += `<p>${t('开源未公证构建','Open-source, unnotarized builds')} · <a href="#first-open">${t('首次打开说明','First launch')}</a></p>`;
+      if (os === 'macos') body += `<p>${platformHeading ? 'macOS 14+ · ' : ''}${t('开源未公证构建','Open-source, unnotarized builds')} · <a href="#first-open">${t('首次打开说明','First launch')}</a></p>`;
     }
-    return `<div class="edition-cell"><h3>${edition.name} <small>v${edition.version}</small></h3>${body}</div>`;
+    const heading = platformHeading ? labels[os] : nameFor(edition) + ' <small>v' + edition.version + '</small>';
+    return `<div class="edition-cell" data-platform="${os}"><h3>${heading}</h3>${body}</div>`;
   }
   function releaseLinks(edition) {
     if (!ready(edition)) return `<p>${t('校验清单将在发行物验收后公布。','Checksums will be available after release verification.')}</p>`;
@@ -94,24 +109,38 @@ export function renderDownload(manifest, locale) {
   }
   function dockerInstructions(edition) {
     const repoName = edition.repo.split('/').at(-1);
-    const clone = 'git clone --depth 1 --branch v' + edition.version + ' ' + edition.repo + '.git';
-    const bash = clone + " &&\n  SECOND_MIND_IMAGE='" + edition.image + "' bash ./" + repoName + '/install.sh';
+    const isPreview = edition.id === 'pi-preview';
+    const directory = isPreview ? 'second-mind-pi-preview' : repoName;
+    const clone = 'git clone --depth 1 --branch ' + releaseTag(edition) + ' ' + edition.repo + '.git' + (isPreview ? ' ' + directory : '');
+    const installArgs = isPreview ? ' init --port ' + edition.port : '';
+    const bashEnv = isPreview ? 'SECOND_MIND_CONFIG_HOME="$HOME/.second-mind-pi-preview" ' : '';
+    const bash = clone + " &&\n  " + bashEnv + "SECOND_MIND_IMAGE='" + edition.image + "' bash ./" + directory + '/install.sh' + installArgs;
     const powershell = [
       'powershell -NoProfile -ExecutionPolicy RemoteSigned -Command {',
       '  ' + clone,
       '  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
+      ...(isPreview ? ["  $env:SECOND_MIND_CONFIG_HOME = Join-Path $env:LOCALAPPDATA 'Second Mind Pi Preview'"] : []),
       "  $env:SECOND_MIND_IMAGE = '" + edition.image + "'",
-      '  & .\\' + repoName + '\\install.ps1',
+      '  & .\\' + directory + '\\install.ps1' + installArgs,
       '}',
     ].join('\n');
-    return `<article id="docker-${edition.id}" class="install-detail"><h3>${edition.name} <small>v${edition.version}</small></h3>
+    return `<article id="docker-${edition.id}" class="install-detail"><h3>${nameFor(edition)} <small>v${edition.version}</small></h3>
 <p>${t('安装完成后，在本机浏览器访问','After setup, open')} <code>127.0.0.1:${edition.port}</code></p>
+${isPreview ? `<p>${t('管理测试实例时，运行安装脚本也要沿用下方的', 'When managing the preview instance, run the installer with the same')} <code>SECOND_MIND_CONFIG_HOME</code> ${t('和', 'and')} <code>SECOND_MIND_IMAGE</code>${t('。', '.')}</p>` : ''}
 ${snippet('Linux / macOS · Bash', bash)}
 ${snippet('Windows · PowerShell', powershell)}</article>`;
   }
   const sections = platforms.map(os => `<section class="platform-row" id="${os}" data-sync-key="platform-${os}" aria-labelledby="heading-${os}">
 <div class="platform-name"><h2 id="heading-${os}">${labels[os]}</h2><p>${escape(manifest.platforms[os][zh ? 'zh' : 'en'])}</p></div>
 ${manifest.editions.map(edition => platformCell(edition, os)).join('')}</section>`).join('\n');
+  const previewTitle = preview ? 'Pi Agent v' + preview.version + t(' 测试版', ' preview') : '';
+  const previewSection = preview ? `<section id="pi-preview" class="download-detail preview-release" data-sync-key="pi-preview" aria-labelledby="preview-title">
+<h2 id="preview-title">${previewTitle}</h2>
+<p>${t('想试用语音输入，可以先在问答框点击「下载语音模型（约 486 MB）」。下载时可以继续打字，模型就绪后点击「开始口述」。', 'To try dictation, select Download speech model (about 486 MB) in the question box. Keep typing while it downloads, then start dictation when the model is ready.')}</p>
+<p>${t('桌面测试版与 Pi 正式版使用同一应用和设置。Docker 测试版命令会创建独立配置，使用端口 8789。', 'The desktop preview uses the same app and settings as stable Pi. The Docker preview commands use a separate configuration and port 8789.')}</p>
+${releaseLinks(preview)}
+<div class="preview-platforms">${['macos', 'windows', 'linux', 'docker'].map(os => platformCell(preview, os, true)).join('')}</div>
+</section>` : '';
   const compare = pi.repo + '/blob/main/' + (zh ? 'README.md' : 'README.en.md') + '#comparison';
   return `<!DOCTYPE html>
 <html lang="${locale}">
@@ -134,18 +163,19 @@ ${manifest.editions.map(edition => platformCell(edition, os)).join('')}</section
 <p>${t('Pi Agent 版还支持 OpenAI Chat Completions，提供同轮并发检索、逐行引用核验和阅读覆盖记录。','Pi Agent also supports OpenAI Chat Completions, parallel searches in a single turn, line-verified citations and reading coverage.')}</p>
 <a class="text-link" href="${compare}">${t('比较两个版本的功能','Compare edition features')} ↗</a></div>
 <div class="owl-window"><img src="${base}assets/second-mind-hero.png" width="1672" height="941" alt="${t('Second Mind 的猫头鹰在星空书桌前整理笔记','The Second Mind owl sorting notes at a starlit desk')}"></div></section>
-<nav id="downloads" class="platform-jump" aria-label="${t('选择操作系统','Choose your platform')}">${platforms.map(os => `<a href="#${os}">${labels[os]} ↓</a>`).join('')}</nav>
+<nav id="downloads" class="platform-jump" aria-label="${t('选择操作系统','Choose your platform')}">${platforms.map(os => `<a href="#${os}">${labels[os]} ↓</a>`).join('')}${preview ? '<a class="preview-jump" href="#pi-preview">' + previewTitle + '</a>' : ''}</nav>
 ${sections}
+${previewSection}
 <section id="first-open" class="download-detail" data-sync-key="first-open"><h2>${t('首次打开桌面版','Opening a desktop app')}</h2>
 <h3>macOS · Pi Agent</h3><p>${t('先用下方 SHA-256 清单校验 DMG。打开映像，把 Second Mind Pi.app 拖入「应用程序」。如果提示无法验证开发者或应用已损坏，重新核对哈希后，前往「系统设置 → 隐私与安全性 → 仍要打开」。也可对这一个已核验的应用使用下列命令。','Verify the DMG against the SHA-256 list below, then drag Second Mind Pi.app to Applications. If macOS reports an unidentified developer or a damaged app, recheck the hash, then choose System Settings → Privacy &amp; Security → Open Anyway. The following command also applies to this verified app alone.')}</p>
 ${snippet(t('终端 · 首次打开','Terminal · First launch'),quarantine)}
 <h3>Windows · SmartScreen</h3><p>${t('两版的 Windows 安装包均未签名。请先核对 SHA-256。若 SmartScreen 提示未知发布者，确认来源后可选「更多信息」再选「仍要运行」。','Both Windows installers are unsigned. Verify the SHA-256 first. If SmartScreen reports an unknown publisher, confirm the source, choose More info, then Run anyway.')}</p></section>
 <section id="install-docker" class="download-detail" data-sync-key="install-docker"><h2>${t('用 Docker 安装','Install with Docker')}</h2><p>${t('先安装 Git。Linux 使用 Docker Engine 和 Compose v2，macOS 与 Windows 使用 Docker Desktop。两版的运行状态和索引都保存在 Vault 之外。Docker 部署使用独立的数据卷。共用一个 Obsidian Vault 时，请依次执行写入任务。','Install Git first. Use Docker Engine and Compose v2 on Linux, or Docker Desktop on macOS and Windows. Both editions store runtime state and indexes outside the Vault. Each Docker installation uses its own data volume. If the editions share a Vault, run writing tasks one edition at a time.')}</p>
 <p>${t('若要在以后重启或更新时沿用同一版本，在安装器显示的实例配置目录中打开','To keep the same version for future restarts or updates, open')} <code>.env</code>${t('，将',' in the instance directory printed by the installer and set')} <code>SECOND_MIND_IMAGE</code> ${t('设为上表中该版本的镜像。','to the image shown for your edition.')}</p>
-<div class="install-grid">${manifest.editions.map(dockerInstructions).join('')}</div></section>
+<div class="install-grid">${allReleases(manifest).map(dockerInstructions).join('')}</div></section>
 <section id="checksums" class="download-detail" data-sync-key="checksums"><h2>${t('校验文件','Verify your download')}</h2>
 <p>${t('在下载目录计算文件的 SHA-256，与同版本、同文件名的记录逐字核对。','In the download folder, compute the SHA-256 and compare it with the entry for the same version and filename.')}</p>
-<div class="install-grid">${manifest.editions.map(edition => `<article><h3>${edition.name} <small>v${edition.version}</small></h3>${releaseLinks(edition)}
+<div class="install-grid">${allReleases(manifest).map(edition => `<article><h3>${nameFor(edition)} <small>v${edition.version}</small></h3>${releaseLinks(edition)}
 ${edition.assets.filter(file => file.sha256).map(file => `<details class="hash-entry"><summary>${escape(file.name)} <small>${Math.round(file.bytes/1048576)} MiB</small></summary><code>${file.sha256}</code>${snippet(t('计算 SHA-256','Compute SHA-256'),hashCommand(file))}</details>`).join('')}</article>`).join('')}</div>
 </section>
 </main><footer class="shell download-footer"><a href="${home}">← ${t('返回 Second Mind 首页','Back to Second Mind')}</a></footer>

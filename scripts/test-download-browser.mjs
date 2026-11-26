@@ -7,7 +7,7 @@ import { once } from 'node:events';
 import { chromium } from 'playwright';
 import { SITE_BASE, SITE_OUTPUT, buildSite } from './site-build.mjs';
 import { validateExternalLinks } from './site-link-check.mjs';
-import { checkReleaseManifest } from './download-page.mjs';
+import { allReleases, checkReleaseManifest } from './download-page.mjs';
 
 await buildSite({ log: false });
 const release = JSON.parse(await fs.readFile(path.join(SITE_OUTPUT, 'releases.json')));
@@ -38,7 +38,7 @@ if (live) {
       await new Promise(resolve => setTimeout(resolve, 10000));
     }
   }
-  const links = release.editions.flatMap(e => [e.release, e.checksums, ...e.assets.map(f => f.url)]);
+  const links = allReleases(release).flatMap(e => [e.release, e.checksums, ...e.assets.map(f => f.url)]);
   assert.deepEqual(await validateExternalLinks(links), []);
 } else {
   server.listen(0, '127.0.0.1');
@@ -86,6 +86,16 @@ try {
         await page.keyboard.press('Enter');
         await page.waitForURL(origin + home + 'download/');
         assert.equal(await page.locator('.platform-row').count(), 4);
+        if (release.preview) {
+          const jump = page.locator('#downloads a[href="#pi-preview"]');
+          await tabTo(page, jump);
+          await page.keyboard.press('Enter');
+          await page.waitForURL(origin + home + 'download/#pi-preview');
+          const preview = page.locator('#pi-preview');
+          assert.ok((await preview.locator('h2').innerText()).includes(release.preview.version));
+          assert.ok((await preview.innerText()).includes(lang === 'zh' ? '下载语音模型' : 'Download speech model'));
+          await page.goBack();
+        }
         const readme = lang === 'zh' ? 'README.md' : 'README.en.md';
         assert.equal(await page.locator('.download-hero .text-link').getAttribute('href'),
           release.editions.find(edition => edition.id === 'pi').repo + '/blob/main/' + readme + '#comparison');
@@ -107,26 +117,35 @@ try {
         assert.equal(await entry.evaluate(details => details.open), true);
         await page.keyboard.press('Enter');
         assert.equal(await entry.evaluate(details => details.open), false);
-        for (const edition of release.editions) {
+        for (const edition of allReleases(release)) {
           const scope = page.locator('#docker-' + edition.id);
           assert.ok((await scope.innerText()).includes('127.0.0.1:' + edition.port));
           const repoName = edition.repo.split('/').at(-1);
-          const clone = 'git clone --depth 1 --branch v' + edition.version + ' ' + edition.repo + '.git';
-          const image = 'ghcr.io/kygoyuan2004/' + repoName.toLowerCase() + ':v' + edition.version;
+          const isPreview = edition.id === 'pi-preview';
+          const tag = (isPreview ? 'preview-v' : 'v') + edition.version;
+          const directory = isPreview ? 'second-mind-pi-preview' : repoName;
+          const clone = 'git clone --depth 1 --branch ' + tag + ' ' + edition.repo + '.git' + (isPreview ? ' ' + directory : '');
+          const image = 'ghcr.io/kygoyuan2004/' + repoName.toLowerCase() + ':' + tag;
+          const config = isPreview ? 'SECOND_MIND_CONFIG_HOME="$HOME/.second-mind-pi-preview" ' : '';
+          const args = isPreview ? ' init --port 8789' : '';
           const dockerCommands = scope.locator('[data-copy-block]');
           assert.equal(await dockerCommands.count(), 2);
-          await verifyCommand(page, dockerCommands.nth(0), clone + " &&\n  SECOND_MIND_IMAGE='" + image + "' bash ./" + repoName + '/install.sh', mode.js);
+          await verifyCommand(page, dockerCommands.nth(0), clone + " &&\n  " + config + "SECOND_MIND_IMAGE='" + image + "' bash ./" + directory + '/install.sh' + args, mode.js);
           await verifyCommand(page, dockerCommands.nth(1), [
             'powershell -NoProfile -ExecutionPolicy RemoteSigned -Command {',
             '  ' + clone,
             '  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
+            ...(isPreview ? ["  $env:SECOND_MIND_CONFIG_HOME = Join-Path $env:LOCALAPPDATA 'Second Mind Pi Preview'"] : []),
             "  $env:SECOND_MIND_IMAGE = '" + image + "'",
-            '  & .\\' + repoName + '\\install.ps1',
+            '  & .\\' + directory + '\\install.ps1' + args,
             '}',
           ].join('\n'), mode.js);
 
           const editionHeading = page.getByRole('heading', { name: edition.name + ' v' + edition.version, exact: true });
-          const linux = page.locator('#linux .edition-cell').filter({ has: editionHeading });
+          const cellFor = os => isPreview
+            ? page.locator('#pi-preview [data-platform="' + os + '"]')
+            : page.locator('#' + os + ' .edition-cell').filter({ has: editionHeading });
+          const linux = cellFor('linux');
           await linux.locator('summary').click();
           const appImage = edition.assets.find(asset => asset.format === '.AppImage').name;
           const deb = edition.assets.find(asset => asset.format === '.deb').name;
@@ -134,9 +153,10 @@ try {
           await verifyCommand(page, linuxCommands.nth(0), 'chmod +x ' + appImage + '\n./' + appImage, mode.js);
           await verifyCommand(page, linuxCommands.nth(1), 'sudo apt install ./' + deb, mode.js);
           for (const asset of edition.assets.filter(a => a.sha256)) {
-            const cell = page.locator('#' + asset.os + ' .edition-cell').filter({ has: editionHeading });
+            const cell = cellFor(asset.os);
             const cpu = asset.os === 'macos' ? (asset.arch === 'arm64' ? 'Apple Silicon (arm64)' : 'Intel (x64)') : asset.arch;
-            const link = cell.getByRole('link', { name: edition.name + ' · ' + cpu + ' ' + asset.format, exact: true });
+            const name = isPreview ? (lang === 'zh' ? 'Pi 测试版' : 'Pi preview') : edition.name;
+            const link = cell.getByRole('link', { name: name + ' · ' + cpu + ' ' + asset.format, exact: true });
             assert.equal(await link.getAttribute('href'), asset.url);
             const disclosure = page.locator('details').filter({ has: page.locator('summary', { hasText: asset.name }) });
             await disclosure.locator('summary').click();

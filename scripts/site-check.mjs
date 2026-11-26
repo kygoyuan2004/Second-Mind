@@ -1,3 +1,4 @@
+import { allReleases } from './download-page.mjs';
 import { createHash } from 'node:crypto';
 import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -518,7 +519,7 @@ async function main() {
       for (const platform of ['windows', 'macos', 'linux', 'docker']) {
         if (!keys.includes('platform-' + platform)) fail(htmlRelative + ': missing ' + platform);
       }
-      for (const edition of releases.editions) {
+      for (const edition of allReleases(releases)) {
         for (const file of edition.assets.filter(asset => asset.sha256)) {
           if (!html.includes('href="' + file.url + '"') || !html.includes(file.sha256)) fail(htmlRelative + ': missing verified file ' + file.name);
         }

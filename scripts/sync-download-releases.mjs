@@ -1,18 +1,19 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
-import { checkReleaseManifest } from './download-page.mjs';
+import { allReleases, checkReleaseManifest, releaseTag } from './download-page.mjs';
 
 const source = new URL('../site/releases.json', import.meta.url);
 const manifest = JSON.parse(await fs.readFile(source));
 const checkOnly = process.argv.includes('--check');
-for (const edition of manifest.editions) {
-  const api = await fetch('https://api.github.com/repos' + new URL(edition.repo).pathname + '/releases/tags/v' + edition.version);
+checkReleaseManifest(manifest);
+for (const edition of allReleases(manifest)) {
+  const api = await fetch('https://api.github.com/repos' + new URL(edition.repo).pathname + '/releases/tags/' + releaseTag(edition));
   if (!api.ok) throw new Error(edition.name + ' release metadata HTTP ' + api.status);
   const release = await api.json();
-  assert.equal(release.tag_name, 'v' + edition.version);
+  assert.equal(release.tag_name, releaseTag(edition));
   assert.equal(release.draft, false);
-  assert.equal(release.prerelease, false);
+  assert.equal(release.prerelease, edition.id === 'pi-preview');
   const files = new Map(release.assets.map(file => [file.name, file]));
   const sums = files.get('SHA256SUMS.txt');
   assert.equal(sums?.browser_download_url, edition.checksums);

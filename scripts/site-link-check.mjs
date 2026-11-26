@@ -56,9 +56,11 @@ function releaseAssetRedirect(source, destination) {
   const final = new URL(destination, original);
   if (final.origin !== 'https://release-assets.githubusercontent.com' || final.username || final.password || final.port) return false;
   for (const [repo, id] of REPOSITORIES) {
-    if (original.pathname.startsWith(repo + '/releases/download/') &&
-        /^v\d+\.\d+\.\d+\/[\w.-]+$/.test(original.pathname.slice((repo + '/releases/download/').length)) &&
-        final.pathname.startsWith('/github-production-release-asset/' + id + '/')) return true;
+    const prefix = repo + '/releases/download/';
+    if (!original.pathname.startsWith(prefix) || !final.pathname.startsWith('/github-production-release-asset/' + id + '/')) continue;
+    const releaseFile = original.pathname.slice(prefix.length);
+    if (/^v\d+\.\d+\.\d+\/[\w.-]+$/.test(releaseFile)) return true;
+    if (repo === '/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE' && /^preview-v\d+\.\d+\.\d+\/[\w.-]+$/.test(releaseFile)) return true;
   }
   return false;
 }

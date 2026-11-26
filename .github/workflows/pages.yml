@@ -142,7 +142,8 @@ jobs:
           console.log('# 下载中心线上验收\n');
           console.log('中文和英文首页均已验证。24 组浏览器检查覆盖桌面、手机、深浅色、无 JavaScript、键盘导航和剪贴板。\n');
           console.log('| 版本 | 下载文件 | SHA-256 |\n| --- | --- | --- |');
-          for (const edition of data.editions) for (const file of edition.assets) {
+          const { allReleases } = await import('./scripts/download-page.mjs');
+          for (const edition of allReleases(data)) for (const file of edition.assets) {
             console.log('| ' + edition.name + ' ' + edition.version + ' | [' + file.name + '](' + file.url + ') | `' + file.sha256 + '` |');
           }
           JS

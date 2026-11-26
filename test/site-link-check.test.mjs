@@ -89,13 +89,13 @@ test('external link validation rejects a redirect outside the allowlist', async 
 test('verified release assets may redirect only to the matching GitHub asset store', async () => {
   const source = 'https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/v0.3.0/SecondMindPi-0.3.0-macos-arm64.dmg';
   const cdn = 'https://release-assets.githubusercontent.com/github-production-release-asset/';
-  const validate = async destination => {
+  const validate = async (destination, link = source) => {
     const visited = [];
-    const issues = await validateExternalLinks([source], {
+    const issues = await validateExternalLinks([link], {
       fetchImpl: async (url, options) => {
         visited.push(url);
         assert.equal(options.redirect, 'manual');
-        if (url === source) return { status: 302, url, headers: new Headers({ location: destination }) };
+        if (url === link) return { status: 302, url, headers: new Headers({ location: destination }) };
         return response(200, url);
       },
     });
@@ -107,6 +107,10 @@ test('verified release assets may redirect only to the matching GitHub asset sto
   assert.equal(foreign.issues.length, 1);
   assert.deepEqual(foreign.visited, [source]);
   assert.ok(!foreign.issues[0].includes('signature'));
+  const preview = source.replace('/v0.3.0/', '/preview-v0.3.1/').replace('Pi-0.3.0-', 'Pi-0.3.1-');
+  assert.deepEqual(await validate(correct, preview), { issues: [], visited: [preview, correct] });
+  const wrong = preview.replace('Second_Mind_PIAGENT_OPTIMIZE', 'Second-Mind');
+  assert.equal((await validate(cdn + '1351979511/example', wrong)).issues.length, 1);
   const missing = await validateExternalLinks([source], { fetchImpl: async url => response(302, url) });
   assert.match(missing[0], /HTTP 302/);
 });

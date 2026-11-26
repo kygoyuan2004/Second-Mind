@@ -114,5 +114,62 @@
         }
       ]
     }
-  ]
+  ],
+  "preview": {
+    "id": "pi-preview",
+    "name": "Pi Agent Preview",
+    "version": "0.3.1",
+    "repo": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE",
+    "release": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/tag/preview-v0.3.1",
+    "checksums": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/preview-v0.3.1/SHA256SUMS.txt",
+    "image": "ghcr.io/kygoyuan2004/second_mind_piagent_optimize:preview-v0.3.1",
+    "port": 8789,
+    "assets": [
+      {
+        "os": "windows",
+        "arch": "x64",
+        "format": ".exe",
+        "name": "SecondMindPi-0.3.1-windows-x64-setup.exe",
+        "url": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/preview-v0.3.1/SecondMindPi-0.3.1-windows-x64-setup.exe",
+        "sha256": "b46c6f9662112edaf02ee86bdf9299c3f3e4e43ca9fb33092b1c8f61f1f44274",
+        "bytes": 322132852
+      },
+      {
+        "os": "linux",
+        "arch": "x64",
+        "format": ".AppImage",
+        "name": "SecondMindPi-0.3.1-linux-x86_64.AppImage",
+        "url": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/preview-v0.3.1/SecondMindPi-0.3.1-linux-x86_64.AppImage",
+        "sha256": "b685427eb9040d46f37aa2290d1013d825c7a3edbaee43ded23a32faa93d280f",
+        "bytes": 472300265
+      },
+      {
+        "os": "linux",
+        "arch": "amd64",
+        "format": ".deb",
+        "name": "SecondMindPi-0.3.1-linux-amd64.deb",
+        "url": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/preview-v0.3.1/SecondMindPi-0.3.1-linux-amd64.deb",
+        "sha256": "5ab387dbb8f7923f0df9a8ad1f5a7e780eac03d173601c564d4ca92e9f6d7c2d",
+        "bytes": 354119212
+      },
+      {
+        "os": "macos",
+        "arch": "arm64",
+        "format": ".dmg",
+        "name": "SecondMindPi-0.3.1-macos-arm64.dmg",
+        "url": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/preview-v0.3.1/SecondMindPi-0.3.1-macos-arm64.dmg",
+        "sha256": "041e37349ad9543a7323ceaa35ed28f795c3d99553a65370d65203d2c22a6cca",
+        "bytes": 297762015
+      },
+      {
+        "os": "macos",
+        "arch": "x64",
+        "format": ".dmg",
+        "name": "SecondMindPi-0.3.1-macos-x64.dmg",
+        "url": "https://github.com/kygoyuan2004/Second_Mind_PIAGENT_OPTIMIZE/releases/download/preview-v0.3.1/SecondMindPi-0.3.1-macos-x64.dmg",
+        "sha256": "e243a7fa16c81a54f2e5696e0e6fdcde354ac712e84f1345931e95fd12f30ac3",
+        "bytes": 323589972
+      }
+    ]
+  }
 }
